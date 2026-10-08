@@ -1,0 +1,90 @@
+# jobhunt.yaml — your job search settings. Everything personal lives in this workspace, never in jobhunt-kit.
+# Full reference: https://github.com/Ben0126/jobhunt-kit/blob/main/docs/configuration.md
+# Not sure what to put? Open this folder in Claude Code and say "set up my job hunt".
+
+profile:
+  name: Alex Chen                    # used in tailored PDF file names
+  pdf_name: "{name}_{id}.pdf"        # {name} = name with _ for spaces, {id} = target id
+
+language: en                         # en | zh-TW — language of the daily digest and default status names
+
+search:
+  country: US
+  employment: intern                 # intern | fulltime | any
+  term: Summer 2027                  # drop postings that name another season/year; "" = no filter
+  exclude_phd_only: true
+  # query: intern                    # keyword some career sites search with (default: intern / new grad)
+
+# Where postings come from. Listed first = trusted first when two sources list the same job.
+sources:
+  - type: simplify                   # community-maintained list with open/closed flags
+    repo: SimplifyJobs/Summer2027-Internships
+    skip_categories: [Quant, Product, Product Management]
+  # - type: simplify                 # full-time new grad roles instead / as well
+  #   name: simplify-newgrad
+  #   repo: SimplifyJobs/New-Grad-Positions
+
+  - type: ats                        # company career sites, read directly (catches what lists miss)
+    companies:
+      - {company: Waymo, ats: greenhouse, board: waymo, local_default: true}
+      - {company: Agility Robotics, ats: greenhouse, board: agilityrobotics, local_default: true}
+      - {company: Boston Dynamics, ats: workday, board: bostondynamics.wd1/Boston_Dynamics, local_default: true}
+      - {company: NVIDIA, ats: workday, board: nvidia.wd5/NVIDIAExternalCareerSite,
+         facets: {workerSubType: ["0c40f6bd1d8f10adf6dae42e46d44a17"]}}    # Intern (Fixed Term)
+      - {company: Amazon, ats: amazon}
+      - {company: Apple, ats: apple}
+
+  # - type: module                   # your own source: see sources/example_source.py
+  #   name: my-board
+  #   path: sources/example_source.py
+
+# Job categories you care about, most important first. A posting goes to the first track that matches
+# its title (regex fragments) or its company. Postings matching no track are dropped.
+tracks:
+  - id: robotics
+    label: Robotics
+    resume: robotics                 # resume variant to start from for this kind of job
+    titles: [robot, autonom, drone, perception, slam, "locali[sz]ation", "motion planning", "path planning",
+             "controls?", navigation, "sensor fusion", "state estimation", "self-driving", manipulation, embodied]
+    companies: [waymo, zoox, skydio, zipline, "boston dynamics", agility, "^figure", nuro, robotics]
+  - id: ml
+    label: ML / Embedded
+    resume: ml
+    titles: ["machine learning", "computer vision", "deep learning", "\\bml\\b", embedded, firmware, simulation, "c\\+\\+"]
+  - id: swe
+    label: Software
+    resume: swe
+    titles: [software, developer, "\\bswe\\b", backend, "full[- ]stack", engineer]
+
+notify:
+  tracks: [robotics, ml]             # only these show up as "new" in the daily digest; [] = all tracks
+
+exclude:
+  # Companies / titles you can't or won't work for. Example for international students: defense and
+  # roles that require citizenship or a clearance. Edit to fit you.
+  companies: [raytheon, "\\brtx\\b", lockheed, northrop, "general dynamics", l3harris, anduril, spacex, palantir]
+  titles: [clearance, citizen, "ts/sci", "\\bsecret\\b"]
+
+tiers:                               # company tiers shown in the digest (T1/T2/T3); regex fragments
+  1: ["^(nvidia|apple|google|alphabet|meta|microsoft|amazon|waymo|zoox|tesla)"]
+  2: [garmin, bosch, siemens, qualcomm, intel, "boston dynamics", agility]
+
+visa:
+  h1b_records: true                  # tag employers with their actual H-1B / green-card filing history (US)
+
+followup:
+  nudge_days: 10                     # applied + this many days + you have a contact → suggest a follow-up
+  ghost_days: 28                     # applied + this many days with no news → "probably ghosted"
+
+resume:
+  source: resume.yaml
+  renderer: builtin                  # or {module: tools/my_renderer.py}
+  template: classic                  # or a path to your own .html.j2 (copy the built-in one to start)
+  paper: letter                      # letter | a4
+  voice:
+    extra_words: []                  # more words to ban as AI-sounding, e.g. [synergize]
+    allow_words: []                  # built-in banned words you really need, e.g. [proven]
+
+llm:                                 # optional: lets `jobhunt tailor <job link>` draft targets with an API
+  provider: ""                       # anthropic | openai | gemini — key from ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY
+  model: ""                          # anthropic default: claude-opus-5-5; openai / gemini: the model your account uses

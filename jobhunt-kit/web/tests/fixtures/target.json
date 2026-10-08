@@ -1,0 +1,45 @@
+{
+ "id": "example-acme-perception",
+ "base_variant": "robotics",
+ "summary": "M.S. Robotics student who ships tested robot software. Built a motion planner used on 6 warehouse robots and a detector that runs at 30 FPS on a Jetson Orin.",
+ "bullet_order": {
+  "acme": [
+   "acme_planner",
+   "acme_sim"
+  ],
+  "lab": [
+   "lab_detector",
+   "lab_eval"
+  ],
+  "projects": [
+   "drone_policy",
+   "drone_eval"
+  ]
+ },
+ "bullet_overrides": {
+  "lab_detector": "Trained a YOLO pallet detector and sped it up to 30 FPS on a Jetson Orin with TensorRT."
+ },
+ "skills_order": [
+  "Robotics: ROS 2, Gazebo, motion planning, state estimation",
+  "Perception: PyTorch, TensorRT, YOLO",
+  "Languages: C++, Python"
+ ],
+ "company": "Acme Robotics (example)",
+ "role": "Perception Intern (Summer 2027)",
+ "url": "https://example.com/jobs/123",
+ "fit": "4/5",
+ "keywords_hit": [
+  "C++",
+  "ROS 2",
+  "PyTorch",
+  "TensorRT"
+ ],
+ "gaps": [
+  "CUDA kernels",
+  "multi-camera calibration"
+ ],
+ "confirm": [],
+ "application_answers": {
+  "why_us": "I want to work on perception that has to run on the robot, not only in a notebook."
+ }
+}

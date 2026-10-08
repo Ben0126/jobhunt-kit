@@ -1,0 +1,109 @@
+name: jobhunt-tailor
+# Background tailoring with any LLM API: open an issue titled "Tailor: <job link>" (or label an issue "tailor").
+# If the posting page can't be read without a browser, paste the job description into the issue body instead.
+# The Action drafts targets/<id>.yaml with `jobhunt tailor` (validated: no invented numbers, plain wording,
+# real bullet ids), builds the PDF and opens a draft pull request. You answer `confirm` and merge — nothing is
+# ever sent anywhere. Needs the secret for your provider (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY)
+# and `llm:` in jobhunt.yaml. Only issues opened by the repository owner are processed.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  tailor:
+    if: >-
+      github.event.issue.user.login == github.repository_owner &&
+      (startsWith(github.event.issue.title, 'Tailor:') || contains(github.event.issue.labels.*.name, 'tailor'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install jobhunt-kit
+        run: pip install "${{ vars.JOBHUNT_KIT_LLM || 'jobhunt-kit[llm] @ git+https://github.com/Ben0126/jobhunt-kit' }}"
+      - name: Read the issue
+        id: issue
+        # issue text is read from the event file, never pasted into the script (no injection)
+        run: |
+          python - <<'PY'
+          import json, os, re
+          ev = json.load(open(os.environ["GITHUB_EVENT_PATH"]))
+          title, body = ev["issue"]["title"], ev["issue"]["body"] or ""
+          urls = re.findall(r"https?://[^\s)>\]]+", title + "\n" + body)
+          rest = re.sub(r"https?://[^\s)>\]]+", "", body).strip()
+          if len(rest) > 400:                 # the description itself is in the body
+              open("jd.txt", "w").write(body)
+              src = "jd.txt"
+          elif urls:
+              src = urls[0]
+          else:
+              src = ""
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"source={src}\n")
+          PY
+      - name: Draft the target
+        id: tailor
+        if: steps.issue.outputs.source != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SOURCE: ${{ steps.issue.outputs.source }}
+        run: |
+          set -o pipefail
+          jobhunt tailor "$SOURCE" 2>&1 | tee tailor.txt
+          id=$(sed -n 's#^ok    targets/\(.*\)\.yaml.*#\1#p' tailor.txt | head -1)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+      - name: Build it
+        if: steps.tailor.outputs.id != ''
+        env:
+          ID: ${{ steps.tailor.outputs.id }}
+        run: jobhunt build "$ID" 2>&1 | tee -a tailor.txt
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: steps.tailor.outputs.id != ''
+        with:
+          name: resume-${{ steps.tailor.outputs.id }}
+          path: dist/targets/
+      - name: Open a draft pull request
+        if: steps.tailor.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ID: ${{ steps.tailor.outputs.id }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          git config user.name "jobhunt-bot"
+          git config user.email "jobhunt-bot@users.noreply.github.com"
+          git checkout -b "jobhunt/$ID"
+          git add "targets/$ID.yaml"
+          git commit -m "Draft target $ID (from #$ISSUE)"
+          git push -u origin "jobhunt/$ID"
+          { echo "Drafted from #$ISSUE. **Not ready to send** until every \`confirm\` item is answered and removed."
+            echo; echo '```'; cat tailor.txt; echo '```'
+            echo; echo "PDF: Actions → this run → Artifacts. Review it with a different AI or chat before applying."
+          } > pr.md
+          gh pr create --draft --title "Tailor: $ID" --body-file pr.md
+      - name: Report back on the issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+          SOURCE: ${{ steps.issue.outputs.source }}
+          ID: ${{ steps.tailor.outputs.id }}
+        run: |
+          if [ -z "$SOURCE" ]; then
+            msg="No job link or description found. Put the posting URL in the title or body, or paste the description."
+          elif [ -n "$ID" ]; then
+            msg="Drafted \`targets/$ID.yaml\` — see the draft pull request."
+          else
+            msg="Couldn't draft a valid target:"$'\n\n```\n'"$(tail -c 3000 tailor.txt 2>/dev/null)"$'\n```'
+          fi
+          gh issue comment "$ISSUE" --body "$msg"

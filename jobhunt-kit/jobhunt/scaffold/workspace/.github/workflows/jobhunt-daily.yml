@@ -1,0 +1,40 @@
+name: jobhunt-daily
+
+on:
+  schedule:
+    - cron: "40 14 * * *"     # every day 14:40 UTC (≈ 7:40 Pacific in summer) — change to your morning
+  workflow_dispatch: {}        # run it by hand from the Actions tab
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install jobhunt-kit
+        # where to install jobhunt-kit from: set the repository variable JOBHUNT_KIT (Settings → Variables)
+        run: pip install "${{ vars.JOBHUNT_KIT || 'jobhunt-kit @ git+https://github.com/Ben0126/jobhunt-kit' }}"
+      - name: Fetch jobs and follow-ups
+        run: jobhunt daily
+      - name: Commit data
+        run: |
+          git config user.name "jobhunt-bot"
+          git config user.email "jobhunt-bot@users.noreply.github.com"
+          git add data/jobs.csv data/state.json data/new_jobs.md data/followup.md
+          git diff --cached --quiet || git commit -m "jobhunt: $(date -u +%F)"
+          git push
+      # An issue → GitHub emails you. Only when there's something new, a warning, or a follow-up due.
+      - name: Open digest issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$(cat data/.notify)" = "1" ]; then
+            cat data/new_jobs.md data/followup.md > /tmp/body.md
+            gh issue create --title "Job digest $(date -u +%F)" --body-file /tmp/body.md
+          fi

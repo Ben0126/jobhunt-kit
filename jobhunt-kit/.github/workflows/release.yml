@@ -1,0 +1,30 @@
+name: release
+# Tag v* → a GitHub release with the wheel and workspace-template.zip, so people who never install Python can
+# start a workspace from the browser: new private repo → upload the template files → set the JOBHUNT_KIT variable.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build --wheel
+      - name: Workspace template
+        run: |
+          pip install dist/*.whl
+          jobhunt init workspace-template
+          (cd workspace-template && zip -qr ../workspace-template.zip . -x "dist/*" -x "submitted/*")
+          jobhunt init workspace-template-zh --language zh-TW
+          (cd workspace-template-zh && zip -qr ../workspace-template-zh-TW.zip . -x "dist/*" -x "submitted/*")
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.whl workspace-template.zip workspace-template-zh-TW.zip --generate-notes

@@ -1,0 +1,23 @@
+{
+  "numbers": [
+    ["Cut latency 40% across 12 drones in 2025, 3x faster", ["12", "3x", "40%"]],
+    ["40 percent, 2.50 ms, 3× and 5-fold", ["2.5", "3x", "40%", "5x"]],
+    ["2,000 images, Jan 2024, March 3, 2025, 2023–24, 2026-09-30", ["2000"]],
+    ["v2 of ROS 2 and C++17 on 8 GPUs", ["17", "2", "8"]],
+    ["Ran 1,250,000 steps in 0.5 h", ["0.5", "1250000"]],
+    ["Released in 2019 and 1998, used by 2021 people", []]
+  ],
+  "voice": [
+    ["Leveraged robust planning; shipped it.", ["ai_word:Leveraged", "ai_word:robust", "semicolon"]],
+    ["Built a planner (C++) that runs (on ROS 2) daily.", ["parens"]],
+    ["Built (1) a planner and (2) a test suite (in C++).", []],
+    ["Wrote a planner that cut path time by 18%.", []],
+    ["Orchestrated a seamless, innovative rollout.", ["ai_word:Orchestrated", "ai_word:seamless", "ai_word:innovative"]]
+  ],
+  "unsupported": [
+    [{"summary": "Flew 12 drones 40% faster"}, {"x": "10 drones, 40% faster"}, {"summary": ["12"]}],
+    [{"summary": "40 percent"}, {"a": "40%"}, {}],
+    [{"bullet_overrides": {"b1": "Cut time by 3x on 4 robots"}}, {"exp": [{"text": "3x faster on 4 robots"}]}, {}],
+    [{"skills_order": ["Tools: Python 3, Git"], "application_answers": {"q": "99 projects"}}, {"a": "Python"}, {"skills_order": ["3"]}]
+  ]
+}

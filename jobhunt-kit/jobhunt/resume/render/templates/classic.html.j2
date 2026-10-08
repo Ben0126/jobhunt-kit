@@ -1,0 +1,69 @@
+{#- classic: one column, Times (renders C++ cleanly), section rules. Plain text order = reading order, so ATS parsers keep
+    each date next to its school/company. Copy this file into your workspace to make your own. -#}
+<html>
+<head>
+<style>
+body { font-family: Times; font-size: {{ pt(10.8) }}; line-height: 1.18; color: #000; }
+h1 { font-size: {{ pt(20) }}; text-align: center; margin: 0 0 {{ pt(2) }} 0; font-weight: bold; }
+.contact { text-align: center; font-size: {{ pt(10) }}; margin: 0 0 {{ pt(3) }} 0; }
+.contact a { color: #000; text-decoration: none; white-space: nowrap; }
+.nw { white-space: nowrap; }
+h2 { font-size: {{ pt(11.4) }}; font-weight: bold; margin: {{ pt(7) }} 0 {{ pt(2.5) }} 0;
+     border-bottom: 0.6pt solid #000; letter-spacing: 0.6pt; }
+table { width: 100%; border-collapse: collapse; margin: {{ pt(3) }} 0 0 0; }
+td { padding: 0; vertical-align: top; }
+td.r { text-align: right; white-space: nowrap; }
+ul { margin: {{ pt(1) }} 0 0 {{ pt(13) }}; padding: 0; }
+li { margin: 0 0 {{ pt(1.2) }} 0; }
+p { margin: 0; }
+.summary { margin: {{ pt(2) }} 0 0 0; }
+.skill { margin: 0 0 {{ pt(1.2) }} 0; }
+a { color: #000; text-decoration: none; }
+</style>
+</head>
+<body>
+{% set b = doc.basics %}
+<h1>{{ b.name }}</h1>
+<p class="contact">
+{%- set parts = [] -%}
+{%- if b.location %}{% set _ = parts.append(b.location) %}{% endif -%}
+{%- if b.phone %}{% set _ = parts.append(b.phone) %}{% endif -%}
+{%- for p in parts %}<span class="nw">{{ p }}</span> · {% endfor -%}
+{%- if b.email %}<a href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif -%}
+{%- for l in b.links or [] %} · <a href="{{ l.url }}">{{ l.label or l.url }}</a>{% endfor -%}
+</p>
+{% for sec in doc.sections %}
+<h2>{{ sec.title | upper }}</h2>
+{% if sec.kind == "summary" %}
+<p class="summary">{{ sec.text }}</p>
+{% elif sec.kind == "education" %}
+{% for e in sec["items"] %}
+<table>
+<tr><td><b>{{ e.school }}</b>{% if e.location %}, {{ e.location }}{% endif %}</td><td class="r">{{ e.dates }}</td></tr>
+{% if e.degree %}<tr><td colspan="2"><i>{{ e.degree }}</i></td></tr>{% endif %}
+</table>
+{% if e.details %}<ul>{% for d in e.details %}<li>{{ d }}</li>{% endfor %}</ul>{% endif %}
+{% endfor %}
+{% elif sec.kind == "experience" %}
+{% for e in sec["items"] %}
+<table>
+<tr><td><b>{{ e.org }}</b>{% if e.role %} — {{ e.role }}{% endif %}</td><td class="r">{{ e.dates }}</td></tr>
+{% if e.location or e.team %}<tr><td colspan="2"><i>{{ [e.team, e.location] | select | join(", ") }}</i></td></tr>{% endif %}
+</table>
+{% if e.bullets %}<ul>{% for t in e.bullets %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+{% endfor %}
+{% elif sec.kind == "projects" %}
+{% for p in sec["items"] %}
+<table>
+<tr><td><b>{{ p.name }}</b>{% if p.link %} — <a href="{{ p.link }}">{{ p.link_label or p.link | replace("https://", "") }}</a>{% endif %}</td><td class="r">{{ p.dates }}</td></tr>
+</table>
+{% if p.bullets %}<ul>{% for t in p.bullets %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+{% endfor %}
+{% elif sec.kind == "skills" %}
+{% for l in sec.lines %}
+<p class="skill"><b>{{ l.label }}:</b> {{ l["items"] | join(", ") }}</p>
+{% endfor %}
+{% endif %}
+{% endfor %}
+</body>
+</html>

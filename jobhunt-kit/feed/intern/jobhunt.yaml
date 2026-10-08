@@ -1,0 +1,12 @@
+# Public feed: US internships. Built daily by .github/workflows/pages.yml; every role is kept — the web app filters.
+language: en
+search: {country: US, employment: intern, term: Summer 2027, exclude_phd_only: false}
+sources:
+  - {type: simplify, repo: SimplifyJobs/Summer2027-Internships}
+tracks:
+  - {id: all, label: All, titles: ["."]}
+exclude: {companies: [], titles: [], non_tech_titles: [], citizenship_required: false}
+tiers:
+  1: ["^(nvidia|apple|google|alphabet|meta|microsoft|amazon|openai|anthropic|waymo|tesla|netflix|stripe|databricks)"]
+  2: [qualcomm, intel, amd, adobe, salesforce, oracle, ibm, cisco, uber, airbnb, linkedin, bytedance, tiktok, "jane street", citadel]
+visa: {h1b_records: true}

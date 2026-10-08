@@ -1,0 +1,77 @@
+name: jobhunt-build
+# Checks and builds every resume whenever resume.yaml, a target or the settings change — whoever wrote them:
+# you in the GitHub web editor, a chat assistant's file you pasted, or a background agent's pull request.
+# PDFs come back as a downloadable artifact (Actions → this run → Artifacts), never committed (phone number).
+
+on:
+  push:
+    branches: [main]
+    paths: ["resume.yaml", "targets/**", "jobhunt.yaml", "playbooks/**", "AGENTS.md"]
+  pull_request:
+    paths: ["resume.yaml", "targets/**", "jobhunt.yaml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jobhunt-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install jobhunt-kit
+        run: pip install "${{ vars.JOBHUNT_KIT || 'jobhunt-kit @ git+https://github.com/Ben0126/jobhunt-kit' }}"
+      - name: Check facts and wording
+        id: check
+        run: |
+          set -o pipefail
+          jobhunt check 2>&1 | tee check.txt
+        continue-on-error: true
+      - name: Build PDFs
+        id: build
+        run: |
+          set -o pipefail
+          jobhunt build 2>&1 | tee build.txt
+        continue-on-error: true
+      - name: Chat kit
+        run: jobhunt chat-kit
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Resume checks"; echo '```'; cat check.txt 2>/dev/null; echo '```'
+            echo "## Build"; echo '```'; cat build.txt 2>/dev/null; echo '```'
+            echo "PDFs and the chat kit are under **Artifacts** below. A version ending in -draft means a source"
+            echo "wasn't committed; FAIL lines name the field to fix in resume.yaml or targets/<id>.yaml."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resumes
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chat-kit
+          path: chat-kit.zip
+          retention-days: 30
+      - name: Save new version numbers
+        if: github.event_name == 'push' && steps.build.outcome == 'success'
+        run: |
+          git config user.name "jobhunt-bot"
+          git config user.email "jobhunt-bot@users.noreply.github.com"
+          git add data/resume_versions.csv
+          git diff --cached --quiet && exit 0
+          git commit -m "jobhunt: register resume versions"
+          git pull --rebase && git push
+      - name: Fail if checks or build failed
+        if: steps.check.outcome != 'success' || steps.build.outcome != 'success'
+        run: exit 1

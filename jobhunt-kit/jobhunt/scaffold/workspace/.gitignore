@@ -1,0 +1,10 @@
+# PDFs carry your phone number: never commit dist/. submitted/ IS committed (frozen copies of what you sent) —
+# keep this repository private.
+dist/
+data/h1b/
+data/.has_new
+data/.has_todo
+data/.notify
+__pycache__/
+chat-kit/
+chat-kit.zip
