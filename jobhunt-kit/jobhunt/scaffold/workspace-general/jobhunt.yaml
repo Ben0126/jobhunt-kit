@@ -1,0 +1,10 @@
+# jobhunt.yaml：這個求職資料夾的設定。AI 只能讀，不能改。
+
+language: zh-TW        # 介面和進度表狀態用繁體中文
+market: tw             # 求職市場：tw 台灣、us 美國（給之後的正式程式用）
+paper: a4              # 紙張：a4 或 letter（給之後的正式程式用）
+kit_format: folder-v0  # 這個資料夾是「資料夾版 v0」做的（給之後的正式程式辨認、搬資料用）
+
+resume:
+  source: resume.yaml
+  paper: a4            # 給現有的 Python 工具用，要和上面的 paper 一致

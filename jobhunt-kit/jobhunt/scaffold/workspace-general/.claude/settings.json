@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": [
+      "Edit(./AGENTS.md)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./GEMINI.md)",
+      "Edit(./開場句.txt)",
+      "Edit(./開始使用.md)",
+      "Edit(./jobhunt.yaml)",
+      "Edit(./playbooks/**)",
+      "Edit(./templates/**)",
+      "Edit(./.claude/**)",
+      "Edit(./submitted/**)"
+    ],
+    "allow": [
+      "PowerShell(Start-Process *.html)",
+      "PowerShell(Invoke-Item *.html)",
+      "Bash(open *.html)"
+    ]
+  }
+}
