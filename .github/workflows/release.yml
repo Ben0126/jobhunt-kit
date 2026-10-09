@@ -1,0 +1,291 @@
+# 發布版本：推 v0.6 或 v0.6.1 這種格式的 tag 就會跑（v0.6-rc1 這種測試用 tag 不會觸發，避免測試版變成「最新版」）。
+# 1) 在 Windows / Apple 晶片 Mac / Intel Mac 上各自測試、打包程式（步驟和 app.yml 相同）。
+# 2) 把使用者要的資料夾（workspace-general）和該平台的程式一起包成「解壓縮就能用」的 job-hunt 資料夾 zip。
+# 3) 建立 GitHub Release（公開下載頁），放上三個 zip。
+# 固定下載連結：https://github.com/<repo>/releases/latest/download/job-hunt-windows.zip（另兩個同理）。
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要發布的 tag（必須已經推到 GitHub，格式像 v0.6 或 v0.6.1）"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: win
+            bin: jobhunt.exe
+            zip: job-hunt-windows.zip
+            py: python
+          - name: macos-arm64
+            os: macos-latest
+            target: mac-arm64
+            bin: jobhunt-mac-arm64
+            zip: job-hunt-mac-apple.zip
+            py: python3
+          - name: macos-x64
+            # macos-13 已退役；目前的 Intel runner 是 macos-15-intel
+            os: macos-15-intel
+            target: mac-x64
+            bin: jobhunt-mac-x64
+            zip: job-hunt-mac-intel.zip
+            py: python3
+    defaults:
+      run:
+        shell: bash
+        working-directory: jobhunt-kit/app
+    steps:
+      # 手動執行時填的 tag 也要是 v0.6 / v0.6.1 這種格式，不對就馬上停。
+      - name: Check tag format
+        working-directory: ${{ github.workspace }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "tag must look like v0.6 or v0.6.1, got: $TAG"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Build
+        run: bun build.ts --target ${{ matrix.target }}
+
+      - name: Ad-hoc codesign (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --sign - "dist/${{ matrix.bin }}"
+          codesign -v --verbose=2 "dist/${{ matrix.bin }}"
+
+      - name: Smoke test the compiled binary
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}"
+
+      # 只會帶到 git 追蹤的檔案（CI 是全新 checkout），本機的暫存檔不會被包進去。
+      - name: Assemble the ready-to-use folder
+        working-directory: ${{ github.workspace }}
+        run: |
+          rm -rf pkg
+          mkdir pkg
+          cp -R jobhunt-kit/jobhunt/scaffold/workspace-general pkg/job-hunt
+          cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/job-hunt/${{ matrix.bin }}"
+          if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/job-hunt/${{ matrix.bin }}"; fi
+          ls -la pkg/job-hunt
+
+      # Windows PowerShell 5.1 的 Compress-Archive：中文檔名寫成 UTF-8 並標上 UTF-8 旗標（已在本機 Windows 11 實測）。
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: ${{ github.workspace }}/pkg
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Compress-Archive -Path job-hunt -DestinationPath '${{ matrix.zip }}'
+
+      # ditto 保留執行權限和 UTF-8 檔名；不帶 Mac 專用的附加資料，避免多出 __MACOSX、._ 檔。
+      - name: Zip (macOS)
+        if: runner.os == 'macOS'
+        working-directory: ${{ github.workspace }}/pkg
+        run: ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt "${{ matrix.zip }}"
+
+      # 檢查 zip 裡的檔案和資料夾一模一樣（不多不少）、中文檔名沒有變亂碼、Mac 程式有執行權限。
+      - name: Verify the zip
+        working-directory: ${{ github.workspace }}/pkg
+        env:
+          ZIP: ${{ matrix.zip }}
+          SRC: job-hunt
+          BIN: ${{ matrix.bin }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          ${{ matrix.py }} - <<'PY'
+          import os, sys, zipfile
+
+          zpath, src, binname = os.environ["ZIP"], os.environ["SRC"], os.environ["BIN"]
+          is_mac = os.environ["RUNNER_OS"] == "macOS"
+
+          expected = set()
+          for root, _dirs, files in os.walk(src):
+              for f in files:
+                  expected.add(os.path.join(root, f).replace(os.sep, "/"))
+
+          problems, got, utf8_flagged = [], {}, 0
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  name = info.filename
+                  if info.flag_bits & 0x800:
+                      utf8_flagged += 1
+                  else:
+                      # 沒標 UTF-8 旗標時 Python 用 cp437 解碼；還原成原始位元組再用 UTF-8 解
+                      try:
+                          name = name.encode("cp437").decode("utf-8")
+                      except UnicodeError:
+                          problems.append("name is not UTF-8: " + ascii(name))
+                  if "\\" in name:
+                      problems.append("backslash in entry name: " + ascii(name))
+                  if name.endswith("/"):
+                      continue
+                  got[name] = info
+
+          for n in sorted(expected - set(got)):
+              problems.append("missing from zip: " + ascii(n))
+          for n in sorted(set(got) - expected):
+              problems.append("unexpected in zip: " + ascii(n))
+
+          must = [
+              "job-hunt/\u958b\u59cb\u4f7f\u7528.md",  # 開始使用.md
+              "job-hunt/\u958b\u5834\u53e5.txt",  # 開場句.txt
+              "job-hunt/AGENTS.md",
+              "job-hunt/.claude/settings.json",
+              "job-hunt/" + binname,
+          ]
+          for n in must:
+              if n not in got:
+                  problems.append("required file missing: " + ascii(n))
+
+          if is_mac and ("job-hunt/" + binname) in got:
+              mode = got["job-hunt/" + binname].external_attr >> 16
+              if not mode & 0o111:
+                  problems.append("program lost its exec bit: mode=%o" % mode)
+              else:
+                  print("exec bit ok: mode=%o" % mode)
+
+          print("%s: %d files, %d entries flagged UTF-8, %.1f MB" % (
+              zpath, len(got), utf8_flagged, os.path.getsize(zpath) / 1048576))
+          for n in sorted(got):
+              print("  " + n)
+          if problems:
+              print("\n".join("FAIL " + p for p in problems))
+              sys.exit(1)
+          PY
+
+      # 把 zip 解到另一個地方，對「解出來的程式」再測一次，確認解壓縮就能用；要上傳的 zip 不動。
+      - name: Unzip a throwaway copy (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: ${{ github.workspace }}/pkg
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive -Path '${{ matrix.zip }}' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
+
+      - name: Unzip a throwaway copy (macOS)
+        if: runner.os == 'macOS'
+        working-directory: ${{ github.workspace }}/pkg
+        run: ditto -x -k "${{ matrix.zip }}" "$RUNNER_TEMP/unzipped"
+
+      - name: Test the unzipped program
+        env:
+          BIN: ${{ matrix.bin }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/unzipped/job-hunt"
+          if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
+          bun tests/smoke.ts "$dir/$BIN"
+          # 在解出來的資料夾裡直接跑 check：程式要認得這是求職資料夾（認不得會回 2）。全新的資料夾應該回 0。
+          cd "$dir"
+          code=0
+          "./$BIN" check || code=$?
+          [ "$code" -eq 0 ] || { echo "check in the unzipped folder exited $code (expected 0)"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.zip }}
+          path: pkg/${{ matrix.zip }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: job-hunt-*.zip
+          path: out
+          merge-multiple: true
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ls -l out
+          for f in job-hunt-windows.zip job-hunt-mac-apple.zip job-hunt-mac-intel.zip; do
+            test -s "out/$f" || { echo "missing out/$f"; exit 1; }
+          done
+
+          cat > notes.md <<EOF
+          下載一個 zip，解壓縮，打開裡面的「開始使用.md」（用「記事本」就能打開），照著一步一步做。
+
+          Windows 解壓縮後常常會多一層資料夾：點進去看得到「開始使用.md」的那個 job-hunt 資料夾，才是要在 Claude 裡選的資料夾。
+
+          ## 要下載哪一個
+
+          只要下載一個。往下捲到「Assets」，點檔名就會開始下載，不用登入 GitHub：
+
+          - Windows 電腦：**job-hunt-windows.zip**
+          - Mac，晶片是 Apple（M1、M2、M3、M4 這類）：**job-hunt-mac-apple.zip**
+          - Mac，處理器是 Intel：**job-hunt-mac-intel.zip**
+
+          不確定 Mac 是哪一種：按左上角蘋果選單 →「關於這台 Mac」。看到「晶片 Apple M…」選 apple；看到「處理器」寫 Intel 選 intel。
+
+          下面的「Source code」是給開發者的原始碼，不用下載。
+
+          ## 使用前要有
+
+          - Claude 付費方案（Pro 或以上）。免費方案不能用 Code 分頁。
+          - Claude 桌面版（https://claude.ai/download），用裡面的「Code」分頁。
+
+          ## 第一次打開程式會跳警告
+
+          資料夾裡的 jobhunt 程式沒有付費向微軟或蘋果買簽章，所以第一次打開時，Windows 和 Mac 都會跳出警告。這是預期中的，怎麼處理寫在「開始使用.md」的「打開介面」那一段。
+
+          ## 更多說明
+
+          https://github.com/${REPO}#readme
+          EOF
+          cat notes.md
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; replacing its zip files."
+            gh release upload "$TAG" out/*.zip --repo "$REPO" --clobber
+            # 上次若在上傳途中失敗，可能留下草稿；確保它是正式發布的（已發布的不受影響）。
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+          else
+            # 補發比目前「最新版」還舊的版本時，不要把 latest 連結搶過去。
+            latest_flag=()
+            cur=$(gh release view --repo "$REPO" --json tagName -q .tagName 2>/dev/null || true)
+            if [ -n "$cur" ] && [ "$(printf '%s\n%s\n' "$cur" "$TAG" | sort -V | tail -n1)" = "$cur" ]; then
+              echo "Current latest is $cur, newer than $TAG; not marking $TAG as latest."
+              latest_flag=(--latest=false)
+            fi
+            gh release create "$TAG" out/*.zip --repo "$REPO" --verify-tag "${latest_flag[@]}" \
+              --title "jobhunt-kit $TAG" --notes-file notes.md
+          fi
