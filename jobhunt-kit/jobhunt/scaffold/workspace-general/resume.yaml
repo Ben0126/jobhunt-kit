@@ -1,7 +1,7 @@
 # resume.yaml：履歷上每一個事實的唯一來源（給 AI 看的檔案，不用拿給使用者看）。
 #
 # 規則（細節見 AGENTS.md「經歷怎麼變成已確認」）：
-# - 只放使用者明確說「確認 S-xxx」的內容。草稿（status: draft）不能放進來。
+# - 只放使用者明確說「確認 S-xxx」，或本人擔保舊履歷（confirmed_via: self-attest）的內容。草稿（status: draft）不能放進來。
 # - 每一條重點（bullets 底下每一項）都要有 source: S-xxx，指向 me/stories/ 裡那則已確認的經歷。
 # - 學歷、skills 也要記來源：學歷寫 source: 學歷；skills 每一行寫 sources: [S-xxx]（不要用 # 註解，程式讀不到）。
 # - 數字只能是使用者說過的，寫半形阿拉伯數字。日期、開頭是 0 的數字一律加引號，例："2024-07 – 2025-06"。

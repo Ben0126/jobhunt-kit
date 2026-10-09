@@ -122,6 +122,40 @@ test("104：來源是還沒確認的草稿 → 沒通過", async () => {
   expect(out).toContain("來源 S-003 還是草稿，本人還沒確認，不能用");
 });
 
+// 本人擔保（import-resume.md 第 8 節）：舊履歷照本人擔保直接用，故事檔 status: confirmed、confirmed_via: self-attest。
+// 程式只看 status，所以擔保過的經歷算確認；但擔保不放寬用詞，AI 腔的詞照樣擋。
+const selfAttest = (dir: string) => {
+  edit(dir, "me/stories/S-001.md", "confirmed_via: chat", "confirmed_via: self-attest");
+  edit(dir, "me/stories/S-001.md", 'confirmed_reply: "確認 S-001"', 'confirmed_reply: "我確認舊履歷內容正確"');
+};
+
+test("本人擔保：confirmed_via: self-attest 的經歷算已確認 → 客製履歷、履歷檔、104 都通過", async () => {
+  const dir = cleanFolder();
+  selfAttest(dir);
+  const { code, out } = await check(dir);
+  expect(out).toContain("全部通過");
+  expect(code).toBe(0);
+});
+
+test("本人擔保：擔保只算 status: confirmed 的，同一檔改回草稿就擋（來源還是草稿）", async () => {
+  const dir = cleanFolder();
+  selfAttest(dir);
+  edit(dir, "me/stories/S-001.md", "status: confirmed", "status: draft");
+  const { code, out } = await check(dir, "--104");
+  expect(code).toBe(1);
+  expect(out).toContain("來源 S-001 還是草稿，本人還沒確認，不能用");
+});
+
+test("本人擔保：舊履歷照抄的句子有 AI 腔的詞「熱忱」→ 照樣沒通過", async () => {
+  const dir = cleanFolder();
+  selfAttest(dir);
+  edit(dir, "resume.yaml", "text: 收銀。", "text: 以服務熱忱收銀。");
+  edit(dir, "resumes/261008-01.html", "<li>收銀。</li>", "<li>以服務熱忱收銀。</li>");
+  const { code, out } = await check(dir, "261008-01");
+  expect(code).toBe(1);
+  expect(out).toContain("用了 AI 腔的詞「熱忱」");
+});
+
 test("104：超過字數上限 → 沒通過（上限寫在檔案裡，或照 104 公布的表）", async () => {
   const dir = cleanFolder();
   const long = "我在好市多當收銀員。".repeat(101); // 1,010 字
