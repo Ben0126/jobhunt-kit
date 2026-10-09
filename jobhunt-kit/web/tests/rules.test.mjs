@@ -16,3 +16,21 @@ test("voice (parity)", () => {
 test("unsupported (parity)", () => {
   for (const [target, resume, expected] of CASES.unsupported) assert.deepEqual(R.unsupported(target, resume), expected);
 });
+test("facts skip marker fields (parity)", () => {
+  for (const [resume, expected] of CASES.facts) assert.deepEqual([...R.facts(resume)].sort(), expected);
+});
+test("application answers (parity)", () => {
+  for (const [target, resume, expected] of CASES.answers) assert.deepEqual(R.unsupported(target, resume, ["application_answers"]), expected);
+});
+test("sentences (parity)", () => {
+  for (const [text, expected] of CASES.sentences) assert.deepEqual(R.sentences(text), expected, text);
+});
+test("long sentences (parity)", () => {
+  for (const [text, expected] of CASES.long) assert.deepEqual(R.longSentences(text), expected, text);
+});
+test("id numbers (parity)", () => {
+  for (const [text, expected] of CASES.id_numbers) assert.deepEqual(R.idNumbers(text), expected, text);
+});
+test("job ids (parity)", () => {
+  for (const [text, existing, today, expected] of CASES.job_ids) assert.equal(R.jobId(text, existing, today), expected, text);
+});

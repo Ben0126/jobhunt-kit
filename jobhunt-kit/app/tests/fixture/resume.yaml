@@ -1,0 +1,105 @@
+# resume.yaml：履歷上每一個事實的唯一來源（給 AI 看的檔案，不用拿給使用者看）。
+#
+# 規則（細節見 AGENTS.md「經歷怎麼變成已確認」）：
+# - 只放使用者明確說「確認 S-xxx」的內容。草稿（status: draft）不能放進來。
+# - 每一條重點（bullets 底下每一項）都要有 source: S-xxx，指向 me/stories/ 裡那則已確認的經歷。
+# - 學歷、skills 也要記來源：學歷寫 source: 學歷；skills 每一行寫 sources: [S-xxx]（不要用 # 註解，程式讀不到）。
+# - 數字只能是使用者說過的，寫半形阿拉伯數字。日期、開頭是 0 的數字一律加引號，例："2024-07 – 2025-06"。
+#   使用者沒講月份就只寫年（例 "2025"、"2025 暑假"），不知道就留空字串，不推算。
+# - 中文內容加 variants: [tw]。英文內容加 variants: [en]，而且只能來自英文卡（playbooks/tailor-resume.md「英文版」），不要自己翻。
+# - status: deleted 的故事，它的重點不能留在這裡。
+# - id 用英文小寫和底線，整份不能重複，例：pxmart、pxmart_cashier。
+# 下面每段的「# 例：」只示範格式，不是事實，不要照抄。
+
+basics:
+  name: 李欣怡                  # 例：王小明
+  email: xinyi@example.com
+  phone: "0922-555-666"         # 加引號，例："0912-345-678"
+  location: 台中市                  # 只寫縣市，例：新北市。不寫完整地址
+  links: []                     # 有作品集或 LinkedIn 才放，例：- {label: 作品集, url: https://...}
+  # 不放生日、身分證字號、婚姻、性別、兵役（見 AGENTS.md 紅線 6）
+
+# 兩個版本：tw = 中文履歷（A4，可以超過一頁）；en = 英文履歷（外商、美國，一頁）。
+# targets/<id>.yaml 的 base_variant 從這兩個名稱選一個。
+variants:
+  tw: {title: 中文履歷, major: 1, one_page: false}
+  en: {title: English, major: 2}
+
+sections: [summary, education, experience, projects, skills]
+
+# 中文段落標題（英文版範本有自己的標題）
+section_titles:
+  summary: 自我介紹
+  education: 學歷
+  experience: 工作與社團經歷
+  projects: 專題與活動
+  skills: 專長、證照與語言
+
+# 自我介紹：這裡留空。每份履歷的自我介紹寫在 targets/<id>.yaml 的 summary，問過使用者才算數。
+summary:
+  tw: ""
+  en: ""
+
+# 學歷：放最高的 2 到 3 筆，新的在前。
+education:
+  - school: OO大學
+    degree: 中國文學系
+    dates: "2021-09 – 2025-06"
+    details: []
+    source: 學歷
+    variants: [tw]
+# 例：
+#  - school: OO 大學              # 照使用者說的字
+#    degree: 企管系                 # 不自己展開系名、不自己加「學士」
+#    dates: "2021-09 – 2025-06"
+#    details: []
+#    source: 學歷                   # 有書卷獎等 details 時改成 sources: [學歷, S-010]
+#    variants: [tw]
+
+# 工作與社團經歷：打工、實習、社團幹部。
+experience:
+  - id: s001
+    org: 好市多
+    role: 收銀員
+    dates: "2023-07 – 2025-05"
+    variants: [tw]
+    bullets:
+      - id: s001_a
+        text: 顧客的小問題先處理，大的叫主管。
+        source: S-001
+      - id: s001_b
+        text: 收銀。
+        source: S-001
+      - id: s001_c
+        text: 2024-03 獲得月度優秀員工。
+        source: S-001
+# 例：
+#  - id: pxmart
+#    org: 全聯福利中心 中和店
+#    role: 門市兼職人員
+#    location: 新北市
+#    dates: "2024-07 – 2025-06"
+#    variants: [tw]
+#    bullets:
+#      - id: pxmart_cashier
+#        text: <確認卡上「要寫進履歷的句子」>
+#        source: S-001
+
+# 專題與活動：課程專題、比賽、志工、服務學習。
+projects: []
+# 例：
+#  - id: capstone
+#    name: 畢業專題：<題目>
+#    dates: "2024"
+#    variants: [tw]
+#    bullets:
+#      - id: capstone_survey
+#        text: <確認卡上的句子>
+#        source: S-004
+
+# 專長、證照與語言：每一行一個類別。items 只放使用者說過、而且確認過的。
+skills:
+  - {label: 文書工具, items: [], sources: [], variants: [tw]}    # 例：items: [Word, Excel（樞紐分析）], sources: [S-006]
+  - {label: 語言, items: [], sources: [], variants: [tw]}        # 例：items: [英文（TOEIC 750）], sources: [S-003]
+  - {label: 證照, items: [], sources: [], variants: [tw]}        # 例：items: [門市服務丙級], sources: [S-007]
+# items 是空的那一行，做履歷檔時不要印出來。

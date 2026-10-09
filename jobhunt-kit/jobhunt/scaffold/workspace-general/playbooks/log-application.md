@@ -16,7 +16,7 @@ CSV 的 `status` 欄存英文代碼。跟使用者說話時一律講中文名稱
 | 筆試測驗 | oa |
 | 面試中 | interview |
 | 錄取 | offer |
-| 拒絕 | rejected |
+| 未錄取 | rejected |
 | 無回應 | ghosted |
 | 放棄 | withdrawn |
 

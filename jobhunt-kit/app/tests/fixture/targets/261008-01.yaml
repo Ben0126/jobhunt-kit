@@ -1,0 +1,30 @@
+id: 261008-01
+job_id: 261008-01
+base_variant: tw
+lang: zh-TW
+photo: false
+
+summary: >-
+  中國文學系 2025-06 畢業，在好市多做過收銀員，2024-03 獲得月度優秀員工。
+
+bullet_order:
+  s001: [s001_a, s001_b, s001_c]
+
+bullet_overrides: {}
+
+skills_order: []
+
+# ---- 以下是筆記，不會印在履歷上
+company: 宏遠精密股份有限公司
+role: 人資行政助理
+url: 使用者貼上
+fit: "建議先補 Excel、Word 的經驗再投"
+keywords_hit: []
+gaps:
+  - 熟 Excel、Word（確認過的資料裡沒有；舊履歷寫 Excel（精通），還是草稿 S-003）
+  - 細心（沒有別人稱讚的原話）
+  - 具服務熱忱（沒有別人稱讚的原話）
+confirm: []
+answered:
+  - {q: "自我介紹寫成「中國文學系 2025-06 畢業，在好市多做過收銀員，2024-03 獲得月度優秀員工。」這樣對嗎？", a: 是, date: "2026-10-08"}
+application_answers: {}

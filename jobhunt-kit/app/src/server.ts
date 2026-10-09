@@ -1,0 +1,266 @@
+// 本機小伺服器：只聽 127.0.0.1，每次啟動一組隨機通行碼（token），只認自己的 Host。
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import indexHtml from "../ui/index.html" with { type: "text" };
+import appJs from "../ui/app.js" with { type: "text" };
+import styleCss from "../ui/style.css" with { type: "text" };
+import { Applications, UserError } from "./applications.ts";
+import { runChecks } from "./check.ts";
+import { Folder } from "./folder.ts";
+import { stripComments } from "./htmltext.ts";
+
+export const APP_ID = "jobhunt";
+export const VERSION = "0.1.0";
+
+const ASSETS: Record<string, { body: string; type: string }> = {
+  "/": { body: indexHtml, type: "text/html; charset=utf-8" },
+  "/index.html": { body: indexHtml, type: "text/html; charset=utf-8" },
+  "/app.js": { body: appJs, type: "text/javascript; charset=utf-8" },
+  "/style.css": { body: styleCss, type: "text/css; charset=utf-8" },
+};
+
+const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; " +
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Cache-Control": "no-store",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  // A tab one of our pages opened (the print tab) loses its link back to us as soon as it lands on another site.
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+const BAD_REQUEST = "出了點問題，請關掉這個分頁，再從程式重新打開。";
+
+/** Resume files are written by the AI: shown as-is but nothing in them may run, call home or load from elsewhere.
+ * Only the one print script the app adds (with a fresh nonce) runs. Framing is allowed for the app's own preview. */
+function viewHeaders(nonce: string): Record<string, string> {
+  return {
+    ...SECURITY_HEADERS,
+    "Content-Security-Policy":
+      `default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; script-src 'nonce-${nonce}'; ` +
+      "base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Content-Type": "text/html; charset=utf-8",
+  };
+}
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/** A resume file with nothing left that could run, redirect or call out. The CSP blocks scripts too; removing them
+ * keeps the console quiet and makes sure the app's own print script is the only one. */
+export function cleanResume(html: string): string {
+  // Comments first, ended the way a browser ends them: the template's notes to the AI mention "<script>" in plain text.
+  html = stripComments(html);
+  // Until nothing changes: after one pass, <scr<script>ipt> has become a new <script>.
+  for (let prev = ""; prev !== html; ) {
+    prev = html;
+    html = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "").replace(/<script\b[^>]*>/gi, "");
+  }
+  html = html.replace(/<script\b[^>]*$/i, ""); // unclosed at the very end: it would swallow the print script
+  // <meta http-equiv="refresh"> can send the print tab to another site, and a CSP can't stop that.
+  html = html.replace(/<meta\b[^>]*http-equiv[^>]*>/gi, "");
+  // on…= handlers, one tag at a time (a single regex over the whole file got slow on files with many tags).
+  return html.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+    for (let prev = ""; prev !== tag; ) {
+      prev = tag;
+      tag = tag.replace(/[\s/]+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    }
+    return tag;
+  });
+}
+
+function viewPage(title: string, msg: string): string {
+  return `<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><title>${esc(title)}</title></head>` +
+    `<body style="font-family:sans-serif;padding:24px;line-height:1.7"><h1 style="font-size:20px">${esc(title)}</h1><p>${esc(msg)}</p></body></html>`;
+}
+
+function cookieValue(req: Request, name: string): string | null {
+  for (const part of (req.headers.get("cookie") || "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return null;
+}
+
+export function newToken(): string {
+  return randomBytes(24).toString("hex");
+}
+
+function sameToken(given: string | null, token: string): boolean {
+  if (!given) return false;
+  const a = Buffer.from(given), b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+function text(body: string, status: number): Response {
+  return new Response(body, { status, headers: { ...SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8" } });
+}
+
+export type Running = { port: number; token: string; url: string; stop: () => void };
+
+export function startServer(opts: { folder: Folder; apps?: Applications; token?: string; port?: number }): Running {
+  const folder = opts.folder;
+  const apps = opts.apps ?? new Applications(folder);
+  const token = opts.token ?? newToken();
+  // The preview cookie is a random value of its own, not the API token: cookies on 127.0.0.1 are sent to every
+  // port, so if it leaks it only shows resume previews and can't change the applications file.
+  const viewToken = newToken();
+  let port = 0;
+
+  const allowedHosts = () => new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+  const allowedOrigins = () => new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+
+  // The resume preview (iframe) and the print tab are plain page loads that can't send the token header, so a
+  // successful API call leaves an HttpOnly cookie that only the viewer accepts. Named per port: two folders open
+  // at once each keep their own.
+  const cookieName = () => `jh${port}`;
+  const withCookie = (r: Response) => {
+    r.headers.append("Set-Cookie", `${cookieName()}=${viewToken}; HttpOnly; SameSite=Strict; Path=/view`);
+    return r;
+  };
+
+  /** 姓名_履歷_公司: the print dialog offers the page title as the PDF's file name. */
+  async function pdfName(id: string): Promise<string> {
+    let person = "";
+    let company = "";
+    try {
+      const r: any = await folder.readYaml("resume.yaml");
+      person = String(r?.basics?.name ?? "");
+    } catch {}
+    for (const ext of ["yaml", "yml"]) {
+      try {
+        const t: any = await folder.readYaml(`targets/${id}.${ext}`);
+        if (t && typeof t === "object") {
+          company = String(t.company ?? "");
+          break;
+        }
+      } catch {}
+    }
+    return [person, "履歷", company]
+      .map((x) => x.replace(/[\\/:*?"<>|\r\n\t]+/g, " ").trim())
+      .filter(Boolean)
+      .join("_");
+  }
+
+  async function view(req: Request, url: URL): Promise<Response> {
+    if (req.method !== "GET" && req.method !== "HEAD") return text("Method Not Allowed", 405);
+    const nonce = randomBytes(16).toString("base64");
+    const page = (status: number, title: string, msg: string) => new Response(viewPage(title, msg), { status, headers: viewHeaders(nonce) });
+    if (!sameToken(cookieValue(req, cookieName()), viewToken)) return page(401, "要重新打開", "請回到求職小幫手的分頁再按一次；還是不行就關掉分頁，從程式重新打開。");
+    const site = req.headers.get("sec-fetch-site");
+    if (site && site !== "same-origin" && site !== "none") return page(403, "不能打開", "這個網址只能從求職小幫手裡打開。");
+    let id = "";
+    try {
+      id = decodeURIComponent(url.pathname.slice("/view/".length));
+    } catch {}
+    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.startsWith(".")) return page(404, "找不到這份履歷", "");
+    let html: string | null = null;
+    try {
+      html = await folder.readText(`resumes/${id}.html`);
+    } catch {}
+    if (html == null) return page(404, "找不到這份履歷檔", "請跟 AI 說「做成履歷檔」，做好再回來。");
+    html = cleanResume(html);
+    const name = await pdfName(id);
+    if (name)
+      html = html
+        .replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/i, "")
+        .replace(/<head\b[^>]*>/i, (head) => `${head}<title>${esc(name)}</title>`);
+    // The photo is never in the folder (the template's onerror handler that hides the empty frame can't run here).
+    // The template's yellow tip says "press Ctrl+P"; the app shows its own steps next to its PDF button instead.
+    let extra = "<style>#photo-slot{display:none !important}.print-tip{display:none !important}</style>";
+    if (url.searchParams.get("print") === "1")
+      extra += `<script nonce="${nonce}">addEventListener("load",function(){setTimeout(function(){window.print()},400)})</script>`;
+    const at = html.toLowerCase().lastIndexOf("</body>");
+    html = at >= 0 ? html.slice(0, at) + extra + html.slice(at) : html + extra;
+    return new Response(html, { headers: viewHeaders(nonce) });
+  }
+
+  async function api(req: Request, path: string): Promise<Response> {
+    if (!sameToken(req.headers.get("x-jobhunt-token"), token))
+      return json({ error: "這個分頁是舊的（程式重新打開過）。請關掉它，用程式剛打開的那個分頁。" }, 401);
+    const origin = req.headers.get("origin");
+    if (origin && !allowedOrigins().has(origin)) return json({ error: BAD_REQUEST }, 403);
+    const site = req.headers.get("sec-fetch-site");
+    if (site && site !== "same-origin" && site !== "none") return json({ error: BAD_REQUEST }, 403);
+
+    let body: any = {};
+    if (req.method === "POST") {
+      if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return json({ error: BAD_REQUEST }, 415);
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: BAD_REQUEST }, 400);
+      }
+      if (!body || typeof body !== "object") return json({ error: BAD_REQUEST }, 400);
+    }
+
+    const route = `${req.method} ${path}`;
+    try {
+      switch (route) {
+        case "GET /api/ping":
+          return json({ ok: true, app: APP_ID, version: VERSION });
+        case "GET /api/info":
+          return withCookie(json({ folder: folder.root, version: VERSION }));
+        case "GET /api/check":
+          // Read-only: the checks/<id>.md files are written by the command-line check only (the AI may be
+          // editing them at the same moment).
+          return withCookie(json(await runChecks(folder)));
+        case "GET /api/applications":
+          return json(await apps.board());
+        case "POST /api/applications/add":
+          return json(await apps.add(body));
+        case "POST /api/applications/update":
+          return json(await apps.update(body));
+        case "POST /api/applications/delete":
+          return json(await apps.remove(body));
+        default:
+          return json({ error: BAD_REQUEST }, 404);
+      }
+    } catch (e: any) {
+      if (e instanceof UserError) {
+        const extra = e.status === 409 ? { board: await apps.board().catch(() => null) } : {};
+        return json({ error: e.message, ...extra }, e.status);
+      }
+      console.error(e);
+      return json({ error: "出了點問題，沒有存檔。請再試一次；一直不行，就把黑色視窗和這個畫面截圖，傳給給你這個工具的人。" }, 500);
+    }
+  }
+
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: opts.port ?? 0,
+    maxRequestBodySize: 64 * 1024,
+    async fetch(req) {
+      const host = req.headers.get("host") || "";
+      if (!allowedHosts().has(host)) return text("Forbidden", 403);
+      const url = new URL(req.url);
+      const path = url.pathname;
+      if (path.startsWith("/api/")) return api(req, path);
+      if (path.startsWith("/view/")) return view(req, url);
+      if (req.method !== "GET" && req.method !== "HEAD") return text("Method Not Allowed", 405);
+      const asset = ASSETS[path];
+      if (!asset) return text("Not Found", 404);
+      return new Response(asset.body, { headers: { ...SECURITY_HEADERS, "Content-Type": asset.type } });
+    },
+    error(e) {
+      console.error(e);
+      return text("Internal Error", 500);
+    },
+  });
+  port = server.port!;
+  return {
+    port,
+    token,
+    url: `http://127.0.0.1:${port}/?t=${token}`,
+    stop: () => server.stop(true),
+  };
+}

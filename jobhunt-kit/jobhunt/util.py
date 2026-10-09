@@ -4,6 +4,8 @@ from __future__ import annotations
 import csv
 import re
 import subprocess
+import unicodedata
+from datetime import date
 from pathlib import Path
 
 _CO_STOP = re.compile(r"\b(inc|incorporated|llc|ltd|limited|corp|corporation|co|com|company|companies|the|plc|group|"
@@ -36,6 +38,23 @@ def req_tokens(s: str) -> list[str]:
 
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
+
+
+def job_id(text: str, existing=(), today: date | str | None = None) -> str:
+    """Id for a job from "公司 職稱": English letters/digits as before (cathay-hr-assistant); none → YYMMDD-NN
+    (next free number that day, e.g. 261008-01); an id already taken gets -2, -3…  Same as rules.js jobId.
+    Only characters that are safe in Windows and Mac file names."""
+    taken = set(existing or ())
+    base = slug(unicodedata.normalize("NFKC", str(text)))
+    if base:
+        out, n = base, 2
+        while out in taken:
+            out, n = f"{base}-{n}", n + 1
+        return out
+    day = today if isinstance(today, str) else (today or date.today()).isoformat()
+    prefix = day[2:10].replace("-", "")
+    used = [int(m.group(1)) for t in taken if (m := re.fullmatch(prefix + r"-([0-9]{2,})(?:-[0-9]+)?", t))]
+    return f"{prefix}-{max(used, default=0) + 1:02d}"
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict]]:

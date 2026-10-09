@@ -1,0 +1,5 @@
+job_id,company,role,track,tier,resume_version,status,applied_date,last_update,next_action,next_action_date,contact,source,notes,resume_file,resume_commit,resume_rev,link
+261008-01,宏遠精密股份有限公司,人資行政助理,,,targets/261008-01,applied,2026-10-01,2026-10-01,,,,104,,,,,https://www.104.com.tw/job/example1
+261008-02,全家便利商店,門市儲備幹部,,,,todo,,2026-10-08,,,,,"備註有逗號, 也有""引號""",,,,
+261005-01,國泰人壽,人資助理,,,,interview,2026-09-20,2026-10-03,10/7 下午 2 點面試,2026-10-07,人資王小姐,學校徵才,,,,,
+261002-01,誠品生活,行政專員,,,,rejected,2026-09-15,2026-10-02,,,,,,,,,

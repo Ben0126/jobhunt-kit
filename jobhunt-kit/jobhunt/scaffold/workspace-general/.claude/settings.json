@@ -11,12 +11,25 @@
       "Edit(./playbooks/**)",
       "Edit(./templates/**)",
       "Edit(./.claude/**)",
-      "Edit(./submitted/**)"
+      "Edit(./submitted/**)",
+      "Edit(./jobhunt.exe)",
+      "Edit(./jobhunt-mac-arm64)",
+      "Edit(./jobhunt-mac-x64)"
     ],
     "allow": [
       "PowerShell(Start-Process *.html)",
       "PowerShell(Invoke-Item *.html)",
-      "Bash(open *.html)"
+      "Bash(open *.html)",
+      "PowerShell(.\\jobhunt.exe check)",
+      "PowerShell(.\\jobhunt.exe check *)",
+      "PowerShell(./jobhunt.exe check)",
+      "PowerShell(./jobhunt.exe check *)",
+      "Bash(./jobhunt.exe check)",
+      "Bash(./jobhunt.exe check *)",
+      "Bash(./jobhunt-mac-arm64 check)",
+      "Bash(./jobhunt-mac-arm64 check *)",
+      "Bash(./jobhunt-mac-x64 check)",
+      "Bash(./jobhunt-mac-x64 check *)"
     ]
   }
 }

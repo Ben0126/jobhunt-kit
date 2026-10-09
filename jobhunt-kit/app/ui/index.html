@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>求職小幫手</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>求職小幫手</h1>
+  <nav class="tabs" aria-label="分頁">
+    <a href="#progress" data-tab="progress">進度</a>
+    <a href="#resumes" data-tab="resumes">履歷</a>
+    <a href="#104" data-tab="104">104</a>
+  </nav>
+  <p class="folder" id="folder"></p>
+</header>
+
+<main>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+  <section id="page-progress" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="add-open" class="primary">＋ 新增一筆</button>
+    </div>
+
+    <form id="add-form" class="add-form" hidden>
+      <label>公司 <span class="req">必填</span><input name="company" autocomplete="off" required></label>
+      <label>職稱 <span class="req">必填</span><input name="role" autocomplete="off" required></label>
+      <label>職缺網址 <span class="opt">可以不填</span><input name="link" type="text" inputmode="url" autocomplete="off" placeholder="貼上 104 職缺的網址"></label>
+      <div class="actions">
+        <button type="submit" class="primary">新增</button>
+        <button type="button" id="add-cancel">取消</button>
+      </div>
+    </form>
+
+    <section id="follow" class="follow" hidden>
+      <h2>該追蹤了</h2>
+      <ul id="follow-list"></ul>
+    </section>
+
+    <p id="progress-empty" class="blank" hidden>還沒有記錄任何職缺。投了之後跟 AI 說「我投了某某公司」，它會幫你記在這裡；也可以按「＋ 新增一筆」自己加。</p>
+
+    <div id="board" class="board"></div>
+
+    <details id="closed" class="closed">
+      <summary>已結束：未錄取、無回應、放棄（<span id="closed-count">0</span>）</summary>
+      <div id="board-closed" class="board"></div>
+    </details>
+  </section>
+
+  <section id="page-resumes" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="recheck-resumes">重新檢查</button>
+      <span id="at-resumes" class="hint"></span>
+    </div>
+    <p id="resumes-empty" class="blank" hidden>還沒有客製履歷。跟 AI 說「幫我針對這個職缺改履歷」，做好之後會出現在這裡。</p>
+    <div id="resumes" class="resumes">
+      <ul id="resume-list" class="resume-list" aria-label="履歷版本"></ul>
+      <div id="resume-detail" class="resume-detail"></div>
+    </div>
+  </section>
+
+  <section id="page-104" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="recheck-104">重新檢查</button>
+      <span id="at-104" class="hint"></span>
+    </div>
+    <p class="hint lead">一欄一張卡，照順序一欄一欄貼。按「複製」只會複製要貼到 104 的文字。貼上後以 104 網站顯示的字數為準。</p>
+    <p id="empty-104" class="blank" hidden>還沒有要貼到 104 的文字。跟 AI 說「104 怎麼填」或「幫我寫應徵信」，寫好之後會出現在這裡。</p>
+    <div id="cards-104"></div>
+  </section>
+
+  <section id="page-nokey" class="page placeholder" hidden>
+    <h2>要重新打開</h2>
+    <p>這個分頁沒辦法連到程式。請關掉這個分頁，再到求職資料夾點兩下程式打開。</p>
+  </section>
+</main>
+
+<dialog id="edit">
+  <form id="edit-form" method="dialog">
+    <h2 id="edit-title">修改</h2>
+    <div class="grid">
+      <label>公司<input name="company" required autocomplete="off"></label>
+      <label>職稱<input name="role" required autocomplete="off"></label>
+      <label>狀態<select name="status" id="edit-status"></select></label>
+      <label>投遞日期<input name="applied_date" type="date"></label>
+      <label class="wide">下一步<input name="next_action" autocomplete="off" placeholder="例如：10/15 下午 2 點面試"></label>
+      <label>下一步日期<input name="next_action_date" type="date"></label>
+      <label class="wide">備註<input name="notes" autocomplete="off"></label>
+      <label class="wide">職缺網址<input name="link" type="text" inputmode="url" autocomplete="off" placeholder="貼上 104 職缺的網址"></label>
+    </div>
+    <p class="hint">改成「已投遞」時，沒填投遞日期會自動填今天。</p>
+    <p id="edit-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="submit" value="save" class="primary">儲存</button>
+      <button type="button" id="edit-cancel">取消</button>
+      <span class="spacer"></span>
+      <button type="button" id="edit-delete" class="danger">刪除這一筆</button>
+      <span id="edit-nodelete" class="hint" hidden>已經存過投遞當時的履歷，不能刪。不想看到可以改成「放棄」。</span>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

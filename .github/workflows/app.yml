@@ -1,0 +1,80 @@
+# 本機程式（jobhunt-kit/app）：測試、打包 Windows / macOS 執行檔、對執行檔跑冒煙測試。
+# Mac 版一律在 Mac 機器上打包並做 ad-hoc 簽章（免費、不向 Apple 註冊的自簽）。
+name: app
+
+on:
+  push:
+    paths:
+      - "jobhunt-kit/app/**"
+      - "jobhunt-kit/web/js/core/rules.js" # bundled into the app (jobhunt check)
+      - "jobhunt-kit/jobhunt/scaffold/workspace-general/templates/*.html" # the check compares resume files with them
+      - ".github/workflows/app.yml"
+  pull_request:
+    paths:
+      - "jobhunt-kit/app/**"
+      - "jobhunt-kit/web/js/core/rules.js" # bundled into the app (jobhunt check)
+      - "jobhunt-kit/jobhunt/scaffold/workspace-general/templates/*.html" # the check compares resume files with them
+      - ".github/workflows/app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: win
+            bin: jobhunt.exe
+          - name: macos-arm64
+            os: macos-latest
+            target: mac-arm64
+            bin: jobhunt-mac-arm64
+          - name: macos-x64
+            # macos-13 已退役；目前的 Intel runner 是 macos-15-intel
+            os: macos-15-intel
+            target: mac-x64
+            bin: jobhunt-mac-x64
+    defaults:
+      run:
+        shell: bash
+        working-directory: jobhunt-kit/app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Build
+        run: bun build.ts --target ${{ matrix.target }}
+
+      - name: Ad-hoc codesign (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --sign - "dist/${{ matrix.bin }}"
+          codesign -v --verbose=2 "dist/${{ matrix.bin }}"
+
+      - name: Smoke test the compiled binary
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}"
+
+      - name: Package (macOS keeps the exec bit with ditto)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/${{ matrix.bin }}" "dist/${{ matrix.bin }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            jobhunt-kit/app/dist/${{ runner.os == 'macOS' && format('{0}.zip', matrix.bin) || matrix.bin }}
+          if-no-files-found: error
+          retention-days: 14

@@ -435,7 +435,7 @@ skills:
 - 書卷獎、獎學金寫進 `education` 的 `details` 時，那一筆學歷加 `sources: [學歷, S-010]`（取代原本的 `source: 學歷`）。
 - 中文內容在項目上加 `variants: [tw]`，重點本身不用加。不改 `basics`、`variants`、`sections`、`section_titles`、`summary`。
 - 原本是空的段落（例如 `experience: []`），就把 `[]` 換成清單。
-- 寫完重新讀一次 `resume.yaml`：縮排對齊、每個 `id` 沒有重複、日期有引號、`text` 和職稱都和卡片一樣。這一版沒有檢查程式，不要說「檢查通過」。
+- 寫完重新讀一次 `resume.yaml`：縮排對齊、每個 `id` 沒有重複、日期有引號、`text` 和職稱都和卡片一樣。程式不檢查 `resume.yaml` 本身，不要說「檢查通過」。
 - **英文內容不在這裡寫。** 不要自己在 `resume.yaml` 加 `variants: [en]` 的項目；英文版照 `tailor-resume.md` 的「英文版」做。
 - 還沒做成履歷檔，不要說「放進履歷了」。接著出下一張卡，或問下一個經驗，跟記好了的那一句放在同一則。
 

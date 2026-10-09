@@ -1,0 +1,13 @@
+{
+  "name": "jobhunt-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "求職小幫手：放在求職資料夾裡的本機程式（進度看板、履歷版本、104 卡片、程式檢查）",
+  "scripts": {
+    "dev": "bun src/main.ts --dir ../jobhunt/scaffold/workspace-general",
+    "test": "bun test",
+    "build": "bun build.ts",
+    "smoke": "bun tests/smoke.ts"
+  }
+}
