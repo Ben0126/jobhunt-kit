@@ -1,8 +1,8 @@
 // 冒煙測試：對「打包好的執行檔」跑，不是對原始碼跑。
 //   bun tests/smoke.ts <執行檔路徑> [測試資料夾，預設 tests/fixture]
 // 步驟：複製測試資料夾 → 把執行檔放進去 → --no-open 啟動 → 從 lock 檔讀埠和通行碼 →
-//       /api/ping → 改一筆狀態 → 確認進度表真的改了 → 履歷存一份 → 第二次啟動要導向第一份 → 關掉。
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+//       read 讀 Word 舊履歷 → /api/ping → 改一筆狀態 → 確認進度表真的改了 → 履歷存一份 → 第二次啟動要導向第一份 → 關掉。
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -70,6 +70,30 @@ try {
   check(ck2.code === 2 && ck2.out.includes("找不到這些職缺代號"), "`check <unknown id>` → exit 2", `exit=${ck2.code}`);
   const ck3 = await runToEnd([placeBinary(notFolder), "check"], 30000);
   check(ck3.code === 2 && ck3.out.includes("不是求職資料夾"), "`check` outside a job-hunt folder → exit 2", `exit=${ck3.code}`);
+
+  // read 指令：讀 inbox 裡的 Word 舊履歷（另一套工具打包的測試檔），只印不存；資料夾外面的不讀
+  mkdirSync(join(folder, "inbox"), { recursive: true });
+  copyFileSync(join(import.meta.dir, "fixture-docx", "範例舊履歷.docx"), join(folder, "inbox", "範例舊履歷.docx"));
+  const filesBefore = readdirSync(folder, { recursive: true }).length;
+  const rd = await runToEnd([exe, "read", join("inbox", "範例舊履歷.docx")], 30000);
+  check(
+    rd.code === 0 && rd.out.startsWith("＝＝ 範例舊履歷.docx 的文字") && rd.out.includes("範例科技大學") && rd.out.includes("[已遮住身分證字號]") && !rd.out.includes("A123456789"),
+    "`read inbox/<file>.docx` prints the text with the ID masked, exit 0",
+    `exit=${rd.code}`,
+  );
+  check(readdirSync(folder, { recursive: true }).length === filesBefore, "`read` writes nothing");
+  const rd2 = await runToEnd([exe, "read", join(work, "not-a-folder", "x.docx")], 30000);
+  check(rd2.code === 2 && rd2.out.includes("資料夾外面"), "`read` outside the folder → exit 2", `exit=${rd2.code}`);
+  // --dir 指到別的資料夾（也有 AGENTS.md）：執行檔不接受，read 和 check 都一樣（這兩個指令 AI 跑的時候不會跳詢問）
+  const other = join(work, "other-project");
+  mkdirSync(other, { recursive: true });
+  writeFileSync(join(other, "AGENTS.md"), "# another project\n");
+  copyFileSync(join(import.meta.dir, "fixture-docx", "範例舊履歷.docx"), join(other, "private.docx"));
+  for (const args of [["read", "--dir", other, "private.docx"], ["read", `--dir=${other}`, "private.docx"], ["read", "--folder", other, "private.docx"], ["check", "--dir", other]]) {
+    const r = await runToEnd([exe, ...args], 30000);
+    check(r.code === 2 && r.out.includes("--dir") && !r.out.includes("範例科技大學"), `\`${args[0]} ${args[1].split("=")[0]} <other folder>\` refused by the compiled program, exit 2`, `exit=${r.code}`);
+  }
+  check(!existsSync(join(other, "checks")), "`check --dir <other folder>` wrote nothing there");
 
   // 3) 正式啟動
   const csv = join(folder, "data", "applications.csv");

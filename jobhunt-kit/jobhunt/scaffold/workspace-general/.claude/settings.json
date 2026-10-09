@@ -29,7 +29,12 @@
       "Bash(./jobhunt-mac-arm64 check)",
       "Bash(./jobhunt-mac-arm64 check *)",
       "Bash(./jobhunt-mac-x64 check)",
-      "Bash(./jobhunt-mac-x64 check *)"
+      "Bash(./jobhunt-mac-x64 check *)",
+      "PowerShell(.\\jobhunt.exe read *)",
+      "PowerShell(./jobhunt.exe read *)",
+      "Bash(./jobhunt.exe read *)",
+      "Bash(./jobhunt-mac-arm64 read *)",
+      "Bash(./jobhunt-mac-x64 read *)"
     ]
   }
 }

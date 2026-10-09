@@ -1,12 +1,13 @@
 # 求職小幫手（本機程式）
 
-放在求職資料夾裡的單一執行檔。點兩下會在 `127.0.0.1` 開一個小伺服器並打開瀏覽器；`jobhunt check [職缺代號 ...] [--104] [--all]` 是命令列的程式檢查（給 AI 照 AGENTS.md 呼叫）。規格見 `../docs/plan-v1-local-app.zh-TW.md` 第 10 節。
+放在求職資料夾裡的單一執行檔。點兩下會在 `127.0.0.1` 開一個小伺服器並打開瀏覽器；`jobhunt check [職缺代號 ...] [--104] [--all]` 是命令列的程式檢查，`jobhunt read <檔案>` 印出 Word 舊履歷的文字（都給 AI 照 AGENTS.md 呼叫）。規格見 `../docs/plan-v1-local-app.zh-TW.md` 第 10 節。
 
 ## 開發
 
 ```
 bun src/main.ts --dir ../jobhunt/scaffold/workspace-general   # 開介面（加 --no-open 不開瀏覽器）
 bun src/main.ts check --dir <求職資料夾> [代號 ...] [--104]      # 程式檢查（結束碼：0 通過、1 有問題、2 用法或資料夾不對）
+bun src/main.ts read --dir <求職資料夾> inbox/舊履歷.docx       # 印出 Word 舊履歷的文字給 AI 讀（結束碼：0 印出、2 檔案不對或讀不了）
 bun test                                                     # 單元測試
 bun build.ts                                                 # 打包這台電腦的版本到 dist/
 bun build.ts --target win|mac-arm64|mac-x64|all
@@ -37,6 +38,20 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 草稿或已刪除經歷的名稱（`me/stories` 的 `org`、`title`）出現在文字裡就擋；104 段落來源只有「學歷／求職方向」卻寫到 `resume.yaml` 的工作經歷也擋。
 - `skills_order` 每一項都要是 `resume.yaml` `skills` 裡的一項，那一行的來源要已確認。
 - `104/履歷欄位.md`、`jobs/<id>/104-apply.md`：照 `playbooks/fill-104.md` 的格式切成一欄一張卡（`src/blocks104.ts`），複製的文字不含來源行；每段要有來源行、來源要是已確認的經歷；字數上限用檔案裡的「上限」，沒寫就用 104 公布的表。下拉選單、建議留空、自己填的欄位只查數字和身分證字號，不能複製。
+
+## 讀 Word 舊履歷（`src/docx.ts`）
+
+`jobhunt read <檔案>`（Windows `.\jobhunt.exe read inbox\舊履歷.docx`、Mac `./jobhunt-mac-arm64 read inbox/舊履歷.docx`）：把 .docx 的文字印到畫面（UTF-8）給 AI 讀，什麼都不寫進資料夾。使用者的電腦沒有 Python，所以不用 markitdown；也不用外部套件。
+
+- 檔案要在求職資料夾裡面（建議 `inbox/`）；相對路徑以資料夾為準，不是以目前所在的位置。捷徑（symlink、Windows junction）實際指到外面的也不讀。資料夾外面、找不到、不是求職資料夾 → 白話說明，結束碼 2。
+- 編譯好的程式跑 `read`、`check` 不接受 `--dir`／`--folder`（結束碼 2）：這兩個指令在 `.claude/settings.json` 預先允許、AI 跑的時候不會跳詢問，所以只能處理程式所在的資料夾。`--dir` 只給開發（`bun src/main.ts`）和打開介面用。
+- 檔案被別的程式獨佔（OneDrive 同步中、防毒、還在下載）或沒權限讀 → 白話說明，結束碼 2，不會印出程式碼。
+- ZIP 自己讀（中央目錄 + `node:zlib` 的 `inflateRawSync`），有上限：整個檔案 50 MB、最多 5000 個項目、每個解開的部分 20 MB、加起來 40 MB、超過 1 MB 的部分壓縮比不能超過 200（防 zip bomb）。解壓時 `maxOutputLength` 只給宣稱的大小多 1 個位元組，宣稱很小、解開很大的檔案會直接停；大小和 CRC 對不上當成壞掉。
+- 讀 `word/document.xml`（照 `_rels/.rels` 找主文件）和 `word/header*.xml`、`word/footer*.xml`（電話、Email 常放在頁首）。順序：頁首、本文、頁尾；一模一樣的頁首頁尾只印一次。
+- 一段一行；`w:tab` → tab、`w:br` → 換行；表格一列一行、格子用「 ｜ 」接（空格子不印，一格兩段用空白接）；但一格有 3 段以上、或有清單又有別的段落（整頁塞在一列兩格的兩欄版型）時，那一列改成一格一格分段印、格子之間空一行，標題和清單才不會擠成一行；有編號或樣式帶編號的段落前面加「• 」；文字方塊印一次（`mc:AlternateContent` 只取 Choice，不印 Fallback 的重複內容）；追蹤修訂刪掉的字和列不印、插入的保留；在 Word 裡設成隱藏的文字（`w:vanish`）不印；XML 字元（`&amp;`、`&#x4E2D;`）還原。XML 照命名空間判斷，不看前綴。
+- 身分證字號（和 `rules.js` 的 `idNumbers` 同一種樣子，全形也算）換成「[已遮住身分證字號]」，有遮才在最後印一行遮了幾個。
+- .doc（舊版 Word）→ 請他另存新檔成 .docx 或 PDF；.pdf → AI 直接讀；有密碼的 .docx（其實是 CFB 檔，不是 ZIP）→ 請他拿掉密碼或另存沒密碼的；壞掉、太大 → 請他另存新檔或複製文字。都是結束碼 2。副檔名 .doc 但內容其實是 .docx 的照樣讀。
+- 測試：`tests/docx.test.ts`，測試檔大多用 `tests/ziptools.ts` 現做（stored 和 deflate 都有，也能故意寫錯大小和 CRC）；`tests/fixture-docx/範例舊履歷.docx` 是用 .NET 的 `System.IO.Compression` 從手寫的 `parts/` 打包的（`make-fixture.ps1`，內容虛構），免得只測到自己寫 ZIP 的習慣。
 
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 

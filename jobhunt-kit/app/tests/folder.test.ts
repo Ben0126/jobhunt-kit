@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Folder, isCompiledBinary, looksLikeJobhuntFolder, resolveDataDir } from "../src/folder.ts";
+import { dirFlagRefused, Folder, isCompiledBinary, looksLikeJobhuntFolder, resolveDataDir } from "../src/folder.ts";
 import { cleanup, copyFixture, emptyTemp } from "./helpers.ts";
 
 const dirs: string[] = [];
@@ -79,6 +79,17 @@ test("找資料夾：--dir 優先；編譯後用執行檔所在的資料夾；�
   expect(resolveDataDir([], "C:/x/bun.exe")).toBeNull();
   expect(isCompiledBinary("/usr/local/bin/bun")).toBe(false);
   expect(isCompiledBinary("C:/x/jobhunt.exe")).toBe(true);
+});
+
+test("編譯好的程式：check 和 read 不接受 --dir/--folder（只能用程式所在的資料夾）；開發模式和打開介面照舊", () => {
+  const exe = "D:/求職/jobhunt.exe";
+  for (const argv of [["read", "--dir", "D:/other", "a.docx"], ["read", "--dir=D:/other", "a.docx"], ["read", "a.docx", "--folder", "x"], ["check", "--folder=x"]])
+    expect({ argv, refused: dirFlagRefused(argv[0], argv, exe) }).toEqual({ argv, refused: true });
+  expect(dirFlagRefused("read", ["read", "inbox/a.docx"], exe)).toBe(false);
+  expect(dirFlagRefused("read", ["read", "inbox/--dir.docx"], exe)).toBe(false);
+  expect(dirFlagRefused("read", ["--dir", "x", "read", "a.docx"], "C:/bun/bun.exe")).toBe(false);
+  expect(dirFlagRefused("check", ["check", "--dir", "x"], "/usr/local/bin/bun")).toBe(false);
+  expect(dirFlagRefused(undefined, ["--dir", "x", "--no-open"], exe)).toBe(false);
 });
 
 test("沒有 AGENTS.md 就不是求職資料夾", () => {

@@ -1,6 +1,6 @@
-// 入口：沒有參數 → 打開介面；`check` → 命令列檢查。
+// 入口：沒有參數 → 打開介面；`check` → 命令列檢查；`read <檔案>` → 印出 Word 舊履歷的文字（給 AI 讀，不存檔）。
 // 開發時：bun src/main.ts --dir <求職資料夾> [--no-open]
-import { resolveDataDir } from "./folder.ts";
+import { dirFlagRefused, resolveDataDir } from "./folder.ts";
 import { launch } from "./launch.ts";
 
 const argv = process.argv.slice(2);
@@ -16,18 +16,26 @@ function waitForEnter() {
 }
 
 async function main(): Promise<number> {
+  if (dirFlagRefused(command, argv)) {
+    console.log(`「${command}」不接受 --dir／--folder：只處理程式所在的這個求職資料夾。請在求職資料夾裡執行，不要加 --dir。`);
+    return 2;
+  }
   const dir = resolveDataDir(argv);
 
   if (command === "check") {
     const { runCheck } = await import("./check.ts");
     return runCheck(argv, dir);
   }
+  if (command === "read") {
+    const { runRead } = await import("./docx.ts");
+    return runRead(argv, dir);
+  }
   // Opening the UI keeps the program running: a mistyped flag (--help, or --104 without "check") must not do that,
   // or the AI's command never returns.
   const unknown = argv.filter((a, i) => a.startsWith("-") && !/^--(?:dir|folder)(?:=.*)?$/.test(a) && a !== "--no-open" && !/^-psn_/.test(a) && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
   if (command || unknown.length) {
     console.log(`不認得「${command ?? unknown.join(" ")}」。`);
-    console.log("用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104）。");
+    console.log("用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」。");
     return 2;
   }
   if (!dir) {

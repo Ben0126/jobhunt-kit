@@ -80,6 +80,7 @@
 
 - 第一次用、「開始」、只說想找什麼工作 → `onboarding.md`
 - 傳來或貼上舊履歷（不是你做的）、「檢視這份履歷」 → `import-resume.md`；說舊履歷都正確、不用再審 → 同一份第 8 節
+- 舊履歷是 `inbox/` 裡的 Word（.docx），資料夾裡有 jobhunt 程式 → 照這樣跑 `.\jobhunt.exe read "inbox\<檔名>"`（Mac：`./jobhunt-mac-arm64 read "inbox/<檔名>"`，程式檔名照資料夾裡那一個），前面不加 `cd` 或完整路徑。印出的文字當成他貼上的舊履歷，照 `import-resume.md` 做，來源寫 `import:<檔名>`。結束碼 2 就照它印的話請他做。`.pdf` 直接讀檔；`.doc` 請他用 Word「另存新檔」成 .docx 或 PDF；沒有程式就請他複製文字貼上。
 - 「我沒什麼經歷」「繼續問我」 → `dig-experience.md`
 - 任何時候貼上職缺、「這個適合我嗎」 → `tailor-resume.md`（存好馬上分析）
 - 「做成履歷檔」「我要 PDF」「做成 Word」（只給 PDF） → `make-resume-file.md`
