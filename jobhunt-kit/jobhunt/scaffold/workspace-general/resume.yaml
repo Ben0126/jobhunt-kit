@@ -19,7 +19,7 @@ basics:
   links: []                     # 有作品集或 LinkedIn 才放，例：- {label: 作品集, url: https://...}
   # 不放生日、身分證字號、婚姻、性別、兵役（見 AGENTS.md 紅線 6）
 
-# 兩個版本：tw = 中文履歷（A4，可以超過一頁）；en = 英文履歷（外商、美國，一頁）。
+# 兩個版本：tw = 中文履歷（A4，目標一頁，超過只提醒、不擋）；en = 英文履歷（外商、美國，一頁）。
 # targets/<id>.yaml 的 base_variant 從這兩個名稱選一個。
 variants:
   tw: {title: 中文履歷, major: 1, one_page: false}

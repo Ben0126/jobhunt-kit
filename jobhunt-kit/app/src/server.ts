@@ -84,6 +84,121 @@ function cookieValue(req: Request, name: string): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------- 履歷頁的補充資料（只讀）
+
+export type DiffPart = { t: "same" | "add" | "del"; s: string };
+
+/** Character-level diff (longest common subsequence over code points). Chinese has no spaces to split words on,
+ * so one character at a time is the unit. Long inputs fall back to "all removed, all added". */
+export function charDiff(before: string, after: string, max = 1500): DiffPart[] {
+  const a = Array.from(before), b = Array.from(after);
+  const out: DiffPart[] = [];
+  const push = (t: DiffPart["t"], s: string) => {
+    if (!s) return;
+    const last = out[out.length - 1];
+    if (last && last.t === t) last.s += s;
+    else out.push({ t, s });
+  };
+  if (a.length > max || b.length > max) {
+    push("del", before);
+    push("add", after);
+    return out;
+  }
+  // lcs[i][j] = length of the LCS of a[i..] and b[j..]
+  const w = b.length + 1;
+  const lcs = new Uint16Array((a.length + 1) * w);
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      lcs[i * w + j] = a[i] === b[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+  let i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      push("same", a[i]);
+      i++;
+      j++;
+    } else if (lcs[(i + 1) * w + j] >= lcs[i * w + j + 1]) push("del", a[i++]);
+    else push("add", b[j++]);
+  }
+  push("del", a.slice(i).join(""));
+  push("add", b.slice(j).join(""));
+  return out;
+}
+
+const squash = (s: unknown) => String(s ?? "").split(/\s+/).filter(Boolean).join(" ");
+
+function frontMatter(text: string): any {
+  const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  if (!m) return null;
+  try {
+    return Bun.YAML.parse(m[1]);
+  } catch {
+    // A broken header still says what it is.
+    const st = /^status:\s*["']?(\w+)/m.exec(m[1]);
+    const ti = /^title:\s*["']?([^"'\r\n]*)/m.exec(m[1]);
+    return st ? { status: st[1], title: ti ? ti[1] : "" } : null;
+  }
+}
+
+export type Rewrite = { bullet: string; before: string | null; after: string; parts: DiffPart[] };
+export type ResumeInfo = {
+  drafts: { id: string; title: string }[];
+  items: Record<string, { confirm: number; rewrites: Rewrite[]; saved: string[] }>;
+};
+
+/** For the resume page: experiences still waiting to be confirmed (me/stories, status: draft), questions not yet
+ * asked (targets/<id>.yaml confirm), and each reworded bullet next to the confirmed sentence in resume.yaml. */
+export async function resumeInfo(folder: Folder): Promise<ResumeInfo> {
+  const drafts: ResumeInfo["drafts"] = [];
+  for (const name of folder.list("me/stories", "file")) {
+    if (!/\.md$/i.test(name)) continue;
+    let text: string | null = null;
+    try {
+      text = await folder.readText(`me/stories/${name}`);
+    } catch {}
+    const fm = text ? frontMatter(text) : null;
+    if (fm && String(fm.status ?? "").trim() === "draft")
+      drafts.push({ id: String(fm.id ?? name.replace(/\.md$/i, "")), title: String(fm.title ?? "").trim() });
+  }
+
+  const confirmed = new Map<string, string>();
+  try {
+    const r: any = await folder.readYaml("resume.yaml");
+    if (r && typeof r === "object")
+      for (const sec of Object.values(r))
+        if (Array.isArray(sec))
+          for (const it of sec)
+            if (it && Array.isArray(it.bullets))
+              for (const b of it.bullets) if (b && b.id != null && b.text != null) confirmed.set(String(b.id), squash(b.text));
+  } catch {}
+
+  const saved = folder.list("submitted", "file");
+  const items: ResumeInfo["items"] = {};
+  for (const name of folder.list("targets", "file")) {
+    const m = /^(.+)\.ya?ml$/i.exec(name);
+    if (!m) continue;
+    let t: any = null;
+    try {
+      t = await folder.readYaml(`targets/${name}`);
+    } catch {}
+    if (!t || typeof t !== "object") continue;
+    const id = m[1];
+    const rewrites: Rewrite[] = [];
+    const ov = t.bullet_overrides;
+    if (ov && typeof ov === "object" && !Array.isArray(ov))
+      for (const [bullet, text] of Object.entries(ov)) {
+        const after = squash(text);
+        const before = confirmed.get(bullet) ?? null;
+        rewrites.push({ bullet, before, after, parts: before == null ? [{ t: "add", s: after }] : charDiff(before, after) });
+      }
+    items[id] = {
+      confirm: Array.isArray(t.confirm) ? t.confirm.length : 0,
+      rewrites,
+      saved: saved.filter((n) => n.endsWith(`_${id}.html`) && /^\d{4}-\d{2}-\d{2}_/.test(n)),
+    };
+  }
+  return { drafts, items };
+}
+
 export function newToken(): string {
   return randomBytes(24).toString("hex");
 }
@@ -222,6 +337,12 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
           return json(await apps.update(body));
         case "POST /api/applications/delete":
           return json(await apps.remove(body));
+        case "GET /api/resume-info":
+          return json(await resumeInfo(folder));
+        case "POST /api/archive/preview":
+          return json(await apps.archivePreview(body));
+        case "POST /api/archive":
+          return json(await apps.archive(body));
         default:
           return json({ error: BAD_REQUEST }, 404);
       }

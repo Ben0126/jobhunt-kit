@@ -346,6 +346,56 @@ test("專長照確認過的履歷資料寫 → 通過；那一行的來源是草
   expect(r.out).toContain("來源 S-003 還是草稿");
 });
 
+test("回歸：專長括號裡有頓號、逗號（Excel（加總、篩選、簡單表格））→ 當成一項，不被切開", async () => {
+  // 兩次實跑（2026-10-09）都卡在這裡：括號裡的「、」「，」被當成分隔，確認過的專長被判成不在資料裡。
+  const dir = cleanFolder();
+  write(dir, "me/stories/S-005.md", `---
+id: S-005
+title: 文書工具與英文
+type: 證照語言
+org: ""
+dates: ""
+status: confirmed
+confirmed: "2026-10-09"
+confirmed_via: chat
+confirmed_reply: "確認 S-005"
+source: "chat"
+---
+
+## 你說的原話
+
+> 會加總、篩選、做簡單的表。
+> TOEIC 650，2024 年 12 月考的。
+
+## 要寫進履歷的句子
+
+1. Excel（加總、篩選、簡單表格）
+2. 英文（TOEIC 650，2024 年 12 月）
+
+## 數字（只有你說過的）
+
+- 650：實際分數。2024 年 12 月：考試日期。
+
+## 確認時的句子（不能改）
+
+1. Excel（加總、篩選、簡單表格）
+2. 英文（TOEIC 650，2024 年 12 月）
+`);
+  edit(dir, "resume.yaml", "{label: 文書工具, items: [], sources: [], variants: [tw]}", "{label: 文書工具, items: [Word, 'Excel（加總、篩選、簡單表格）'], sources: [S-005], variants: [tw]}");
+  edit(dir, "resume.yaml", "{label: 語言, items: [], sources: [], variants: [tw]}", "{label: 語言, items: ['英文（TOEIC 650，2024 年 12 月）'], sources: [S-005], variants: [tw]}");
+  edit(dir, T, "skills_order: []", "skills_order: ['文書工具: Excel（加總、篩選、簡單表格）、Word', '語言: 英文（TOEIC 650，2024 年 12 月）']");
+  edit(dir, HTML, "</main>", `<section class="block"><h2>專長、證照與語言</h2><ul class="skills"><li><span class="label">文書工具：</span>Excel（加總、篩選、簡單表格）、Word</li><li><span class="label">語言：</span>英文（TOEIC 650，2024 年 12 月）</li></ul></section>\n</main>`);
+  const r = await check(dir, "261008-01");
+  expect(r.out).not.toContain("不在確認過的履歷資料裡");
+  expect(r.out).toContain("全部通過");
+  expect(r.code).toBe(0);
+  // 括號外的頓號照樣分開：沒確認過的 PowerPoint 還是擋下，括號是半形也一樣
+  edit(dir, T, "Excel（加總、篩選、簡單表格）、Word'", "Excel（加總、篩選、簡單表格）、Word、PowerPoint (簡報、動畫)'");
+  const out = await fails(dir, "261008-01");
+  expect(out).toContain("專長「PowerPoint (簡報、動畫)」不在確認過的履歷資料裡");
+  expect(out).not.toContain("專長「Excel");
+});
+
 test("專長那一行寫錯格式時，訊息講清楚要用半形冒號", async () => {
   const dir = cleanFolder();
   edit(dir, T, "skills_order: []", "skills_order: ['文書工具：Word']");

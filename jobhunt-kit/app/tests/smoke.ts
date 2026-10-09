@@ -1,8 +1,8 @@
 // 冒煙測試：對「打包好的執行檔」跑，不是對原始碼跑。
 //   bun tests/smoke.ts <執行檔路徑> [測試資料夾，預設 tests/fixture]
 // 步驟：複製測試資料夾 → 把執行檔放進去 → --no-open 啟動 → 從 lock 檔讀埠和通行碼 →
-//       /api/ping → 改一筆狀態 → 確認進度表真的改了 → 第二次啟動要導向第一份 → 關掉。
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+//       /api/ping → 改一筆狀態 → 確認進度表真的改了 → 履歷存一份 → 第二次啟動要導向第一份 → 關掉。
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -128,6 +128,26 @@ try {
     const vh = await v.text();
     check(v.status === 200 && vh.includes("window.print()") && (v.headers.get("content-security-policy") || "").includes("nonce-"), "resume viewer serves the file with print script");
     check((await fetch(`${base}/view/${encodeURIComponent(firstHtml.id)}`)).status === 401, "resume viewer without cookie → 401");
+  }
+
+  // 履歷頁的補充資料，和「我投了這份，存一份」（先預覽、確定才存、不會蓋掉）
+  const ri: any = await (await fetch(`${base}/api/resume-info`, { headers: H })).json();
+  check(Array.isArray(ri.drafts) && ri.drafts.length > 0 && typeof ri.items === "object", "/api/resume-info lists unconfirmed stories", `${ri.drafts?.length} drafts`);
+  if (firstHtml) {
+    const submittedDir = join(folder, "submitted");
+    const before = existsSync(submittedDir) ? readdirSync(submittedDir).sort() : [];
+    const pv: any = await (await fetch(`${base}/api/archive/preview`, { method: "POST", headers: H, body: JSON.stringify({ id: firstHtml.id }) })).json();
+    const afterPreview = existsSync(submittedDir) ? readdirSync(submittedDir).sort() : [];
+    check(typeof pv.to === "string" && pv.to.startsWith("submitted/") && JSON.stringify(afterPreview) === JSON.stringify(before), "archive preview writes nothing", pv.to ?? pv.error);
+    const ar = await fetch(`${base}/api/archive`, { method: "POST", headers: H, body: JSON.stringify({ id: firstHtml.id, to: pv.to, version: pv.version }) });
+    const savedPath = join(folder, ...String(pv.to).split("/"));
+    check(
+      ar.status === 200 && existsSync(savedPath) && readFileSync(savedPath).equals(readFileSync(join(folder, "resumes", `${firstHtml.id}.html`))),
+      "archive copies the resume into submitted/", String(pv.to),
+    );
+    check(readFileSync(csv, "utf-8").includes(String(pv.to)), "archive records resume_file in applications.csv");
+    const again = await fetch(`${base}/api/archive`, { method: "POST", headers: H, body: JSON.stringify({ id: firstHtml.id, to: pv.to, version: ((await ar.json()) as any).board?.version }) });
+    check(again.status === 409, "second archive refused (never overwrites)", `status ${again.status}`);
   }
 
   // 4) 第二次啟動：導向第一份，自己結束

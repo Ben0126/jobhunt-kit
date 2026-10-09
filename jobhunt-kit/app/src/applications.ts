@@ -27,7 +27,9 @@ export const EDITABLE = ["company", "role", "status", "applied_date", "next_acti
 type Editable = (typeof EDITABLE)[number];
 const DATE_FIELDS = new Set(["applied_date", "next_action_date"]);
 
-export const FOLLOW_UP_DAYS = 7;
+/** Same numbers as the owner's own tracker (jobtracker/followup.py): ask after 10 days, give up after 28. */
+export const FOLLOW_UP_DAYS = 10;
+export const GHOST_DAYS = 28;
 
 /** A problem to show the user as-is (plain Chinese). */
 export class UserError extends Error {
@@ -67,7 +69,7 @@ function versionOf(bytes: Uint8Array | null): string {
 }
 
 export type Row = Record<string, string> & { _index: number; _deletable: boolean };
-export type FollowUp = { index: number; company: string; role: string; kind: "applied" | "interview"; message: string };
+export type FollowUp = { index: number; company: string; role: string; kind: "applied" | "ghost" | "interview" | "deadline"; message: string };
 
 export type Board = {
   version: string;
@@ -82,27 +84,34 @@ function shortDate(s: string, today: string): string {
   return y === Number(today.slice(0, 4)) ? `${m}/${d}` : `${y}/${m}/${d}`;
 }
 
-/** 「該追蹤了」：投了 7 天以上沒更新的「已投遞」；面試日期已過的「面試中」。 */
+/** 「該追蹤了」：
+ * - 已投遞：10 天以上沒更新 → 問進度；28 天以上 → 可能石沉大海（不需要聯絡人）。
+ * - 面試中：約好的日期已過。
+ * - 待投遞：截止日（下一步日期）是今天或已經過了。 */
 export function followUps(rows: Record<string, string>[], today: string): FollowUp[] {
   const out: FollowUp[] = [];
   rows.forEach((r, index) => {
     const status = (r.status || "").trim();
+    const base = { index, company: r.company || "", role: r.role || "" };
     if (status === "applied") {
       const ref = [r.last_update, r.applied_date].filter((d) => d && isValidDate(d)).sort().pop();
       if (!ref) return;
       const days = daysBetween(ref, today);
-      if (days >= FOLLOW_UP_DAYS)
-        out.push({
-          index, company: r.company || "", role: r.role || "", kind: "applied",
-          message: `已經 ${days} 天沒有消息。可以寫信問進度，或改成「無回應」。`,
-        });
+      if (days >= GHOST_DAYS)
+        out.push({ ...base, kind: "ghost", message: `已經 ${days} 天沒有消息，可能石沉大海。可以改成「無回應」，把力氣放在別的職缺。` });
+      else if (days >= FOLLOW_UP_DAYS)
+        out.push({ ...base, kind: "applied", message: `已經 ${days} 天沒有消息。可以寫信或打電話問進度。` });
     } else if (status === "interview") {
       const d = r.next_action_date;
       if (d && isValidDate(d) && daysBetween(d, today) > 0)
-        out.push({
-          index, company: r.company || "", role: r.role || "", kind: "interview",
-          message: `約好的日期（${shortDate(d, today)}）已經過了。結果如何？記得更新狀態。`,
-        });
+        out.push({ ...base, kind: "interview", message: `約好的日期（${shortDate(d, today)}）已經過了。結果如何？記得更新狀態。` });
+    } else if (status === "todo") {
+      const d = r.next_action_date;
+      if (!d || !isValidDate(d)) return;
+      const late = daysBetween(d, today);
+      if (late === 0) out.push({ ...base, kind: "deadline", message: `今天（${shortDate(d, today)}）是截止日。要投的話今天投。` });
+      else if (late > 0)
+        out.push({ ...base, kind: "deadline", message: `截止日（${shortDate(d, today)}）已經過了。投了就改成「已投遞」；不投了就改成「放棄」。` });
     }
   });
   return out;
@@ -139,12 +148,20 @@ export class Applications {
     if (given !== current) throw new UserError("進度表剛剛被改過（可能是 AI 改的）。畫面已經更新，請再改一次。", 409);
   }
 
-  /** Names (without .json) of frozen snapshots in submitted/, e.g. "261008-01_2". */
+  /** Names of what is saved in submitted/: frozen snapshots ("261008-01_2.json" → "261008-01_2") and resume
+   * copies the app saved ("2026-10-09_261008-01.html" → "261008-01"). */
   private submittedIds(): string[] {
-    return this.folder.list("submitted", "file").filter((n) => /\.json$/i.test(n)).map((n) => n.replace(/\.json$/i, ""));
+    const out: string[] = [];
+    for (const n of this.folder.list("submitted", "file")) {
+      if (/\.json$/i.test(n)) out.push(n.replace(/\.json$/i, ""));
+      const m = /^\d{4}-\d{2}-\d{2}_(.+)\.html$/i.exec(n);
+      if (m) out.push(m[1]);
+    }
+    return out;
   }
 
-  private hasSnapshot(jobId: string, submitted: string[]): boolean {
+  private hasSnapshot(jobId: string, submitted: string[], resumeFile = ""): boolean {
+    if (/^submitted\//.test(resumeFile.trim())) return true;
     return !!jobId && submitted.some((s) => s === jobId || s.startsWith(jobId + "_"));
   }
 
@@ -155,7 +172,7 @@ export class Applications {
     const objs = doc.rows.map((r) => rowToObject(doc.header, r));
     const rows = objs.map((o, i) => {
       const full: Row = { ...Object.fromEntries(KIT_HEADER.map((k) => [k, ""])), ...o, _index: i, _deletable: false } as Row;
-      full._deletable = !this.hasSnapshot((o.job_id || "").trim(), submitted);
+      full._deletable = !this.hasSnapshot((o.job_id || "").trim(), submitted, o.resume_file || "");
       return full;
     });
     return { version, today, statuses: STATUSES, rows, followUps: followUps(objs, today) };
@@ -269,13 +286,13 @@ export class Applications {
 
       const statusChanged = next.status !== undefined && next.status !== get("status");
       if (statusChanged && next.status === "applied" && !(next.applied_date ?? get("applied_date"))) next.applied_date = today;
-      let datesChanged = false;
-      for (const k of DATE_FIELDS) if (next[k as Editable] !== undefined && next[k as Editable] !== get(k)) datesChanged = true;
 
       const writes: Record<string, string> = {};
       for (const [k, v] of Object.entries(next)) if (v !== get(k)) writes[k] = v as string;
       if (!Object.keys(writes).length) return this.board();
-      if (statusChanged || datesChanged) writes.last_update = today;
+      // Only a status change restarts the clock (like the owner's tracker): adding a note or a date must not hide
+      // the "no news for N days" reminder.
+      if (statusChanged) writes.last_update = today;
       // Columns the file lacks are appended in the kit's order.
       for (const k of KIT_HEADER) if (k in writes) set(k, writes[k]);
       await this.save(doc);
@@ -290,11 +307,89 @@ export class Applications {
       const row = this.pick(doc, input.index, input.job_id);
       const ji = doc.header.indexOf("job_id");
       const jobId = ji >= 0 ? (row[ji] || "").trim() : "";
-      if (this.hasSnapshot(jobId, this.submittedIds()))
+      const fi = doc.header.indexOf("resume_file");
+      if (this.hasSnapshot(jobId, this.submittedIds(), fi >= 0 ? row[fi] || "" : ""))
         throw new UserError("這一筆已經存過投遞當時的履歷，不能刪。不想再看到它，可以把狀態改成「放棄」。", 403);
       doc.rows.splice(doc.rows.indexOf(row), 1);
       await this.save(doc);
       return this.board();
+    });
+  }
+
+  // ---- 「我投了這份，存一份」：resumes/<id>.html → submitted/<今天>_<id>.html，並記在進度表那一列的 resume_file
+
+  /** The row this resume belongs to: job_id = id, otherwise resume_version = targets/<id>. */
+  private rowForResume(doc: CsvDoc, id: string): number {
+    const col = (k: string) => doc.header.indexOf(k);
+    const ji = col("job_id"), vi = col("resume_version");
+    const byJob = ji >= 0 ? doc.rows.flatMap((r, i) => ((r[ji] || "").trim() === id ? [i] : [])) : [];
+    const hits = byJob.length ? byJob : vi >= 0 ? doc.rows.flatMap((r, i) => ((r[vi] || "").trim() === `targets/${id}` ? [i] : [])) : [];
+    if (!hits.length)
+      throw new UserError("進度表裡找不到這個職缺，所以不知道要記在哪一筆。先到「進度」頁按「＋ 新增一筆」，或跟 AI 說「我投了這家」，再回來存。", 404);
+    if (hits.length > 1) throw new UserError("進度表裡有好幾筆都對到這份履歷，不知道要記在哪一筆。請跟 AI 說「進度表有重複的職缺，幫我整理」。", 409);
+    return hits[0];
+  }
+
+  private async archivePlan(input: { id?: unknown }) {
+    const id = typeof input.id === "string" ? input.id : "";
+    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.includes("\u0000") || id.startsWith(".") || id.length > 120) throw new UserError("找不到這份履歷檔。", 404);
+    const from = `resumes/${id}.html`;
+    if (!this.folder.exists(from)) throw new UserError("找不到這份履歷檔。請跟 AI 說「做成履歷檔」，做好再回來存。", 404);
+    const { doc, version } = await this.load();
+    const index = this.rowForResume(doc, id);
+    const o = rowToObject(doc.header, doc.rows[index]);
+    const to = `submitted/${this.today()}_${id}.html`;
+    const existing = await this.folder.readArchived(to);
+    return { id, from, to, doc, version, index, row: o, existing };
+  }
+
+  /** What the button will do; writes nothing. */
+  async archivePreview(input: { id?: unknown }) {
+    const p = await this.archivePlan(input);
+    return {
+      id: p.id, from: p.from, to: p.to, index: p.index, job_id: p.row.job_id || "",
+      company: p.row.company || "", role: p.row.role || "", status: p.row.status || "",
+      already: (p.row.resume_file || "").trim(), exists: !!p.existing, version: p.version,
+    };
+  }
+
+  async archive(input: { id?: unknown; to?: unknown; version?: unknown }): Promise<{ saved: string; board: Board }> {
+    return this.serial(async () => {
+      const p = await this.archivePlan(input);
+      if (input.to !== p.to) throw new UserError("日期已經換了一天，要存的檔名也跟著變。請再按一次「我投了這份，存一份」。", 409);
+      this.checkVersion(p.version, input.version);
+      const already = (p.row.resume_file || "").trim();
+      if (already) throw new UserError(`這一筆已經存過一份了（${already}），為了不蓋掉，不會再存。`, 409);
+      const current = await this.folder.readBytes(p.from);
+      if (p.existing) {
+        // Same bytes: an earlier save copied the file but couldn't write the applications file. Only record it.
+        if (!current || !sameBytes(p.existing, current)) throw new UserError(`今天已經存過這份履歷了（${p.to}），為了不蓋掉，不會再存。`, 409);
+      } else {
+        try {
+          this.folder.archiveCopy(p.from, p.to);
+        } catch (e: any) {
+          if (e && e.code === "EEXIST") throw new UserError(`今天已經存過這份履歷了（${p.to}），為了不蓋掉，不會再存。`, 409);
+          throw e;
+        }
+      }
+      const fi = ensureColumn(p.doc, "resume_file");
+      p.doc.rows[p.index][fi] = p.to;
+      // Saving the sent copy means it was sent: a 待投遞 row becomes 已投遞 (owner decision 2026-10-09).
+      // Rows already further along (筆試、面試…) are never moved back.
+      if ((p.row.status || "").trim() === "todo") {
+        const today = this.today();
+        p.doc.rows[p.index][ensureColumn(p.doc, "status")] = "applied";
+        const ai = ensureColumn(p.doc, "applied_date");
+        if (!(p.doc.rows[p.index][ai] || "").trim()) p.doc.rows[p.index][ai] = today;
+        p.doc.rows[p.index][ensureColumn(p.doc, "last_update")] = today;
+      }
+      try {
+        await this.save(p.doc);
+      } catch (e: any) {
+        const why = e instanceof UserError ? e.message : "";
+        throw new UserError(`履歷已經存好（${p.to}），但進度表沒有記上。${why}之後再按一次就會補記。`, e instanceof UserError ? e.status : 500);
+      }
+      return { saved: p.to, board: await this.board() };
     });
   }
 
@@ -307,6 +402,12 @@ export class Applications {
       throw new UserError("找不到這一筆，畫面已經更新，請再試一次。", 409);
     return row;
   }
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 function cleanLine(v: unknown): string {

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" data-paper="a4">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  ============================================================
+  給 AI 的填寫說明（英文一頁版：美國、台灣外商。這個範本不能改，只能複製成 resumes/<id>.html 再填）
+  ============================================================
+  1. 照 playbooks/make-resume-file.md 第 2 步算出內容，再把每個用兩層大括號包起來的佔位字換成英文內容。
+     存好的檔案裡不能剩下任何兩層大括號（這些說明裡也故意沒有）。文字裡的 & < > 要寫成 &amp; &lt; &gt; 。
+  2. 每一句英文（含職稱）都必須是 resume.yaml 裡 variants: [en] 的項目，也就是使用者在英文卡上回「確認英文 S-xxx」的句子
+     （見 playbooks/tailor-resume.md 的「英文版」）。不要在這裡臨時翻譯。數字和中文原句完全一樣。
+     學校、公司、社團的英文名稱用 targets/<id>.yaml 的 en_names，沒有就問使用者，不要自己翻。
+  3. 不放照片、生日、性別、婚姻、身分證字號、地址。
+  4. 紙張（兩個地方要一起改）：
+       - 台灣外商（預設）：上面 <html> 的 data-paper="a4"，下面 <style> 裡保留 @page { size: A4; ... }
+       - 美國：<html> 改成 data-paper="letter"，<style> 裡改成 @page { size: letter; ... }
+  5. 一定要一頁。超過一頁就回去刪掉最不相關的重點，不要縮小字或改邊界。
+  6. 標著「重複區塊」的地方：每筆資料複製一次。沒有內容的段落整個 <section> 刪掉。
+  7. 單欄、純文字，這樣應徵系統才讀得到。不要加表格、圖示、外部字型或圖片。不要改 <style> 和 <script>。
+-->
+<title>{{Full Name}} Resume</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #444;
+    --rule: #777;
+    --paper-w: 210mm;
+    --paper-h: 297mm;
+    --margin: 15mm;
+  }
+  html[data-paper="letter"] { --paper-w: 8.5in; --paper-h: 11in; --margin: 0.6in; }
+
+  /* 紙張：A4（台灣外商）。美國改成下一行被註解掉的那個，並把 <html> 的 data-paper 改成 letter */
+  @page { size: A4; margin: 15mm; }
+  /* @page { size: letter; margin: 0.6in; } */
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #e9e9e9;
+    color: var(--ink);
+    font-family: Calibri, Carlito, "Helvetica Neue", Helvetica, Arial, "Microsoft JhengHei", "PingFang TC",
+                 "Noto Sans TC", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.35;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-tip {
+    max-width: var(--paper-w);
+    margin: 16px auto 0;
+    padding: 10px 14px;
+    background: #fff8d6;
+    border: 1px solid #e0c96a;
+    border-radius: 6px;
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+  }
+  .print-tip strong { color: #7a5a00; }
+  .print-tip .warn { display: none; color: #a33; font-weight: bold; }
+  .print-tip.long .warn { display: inline; }
+
+  .page {
+    width: var(--paper-w);
+    min-height: var(--paper-h);
+    margin: 16px auto 32px;
+    padding: var(--margin);
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  }
+
+  header.top { text-align: center; margin-bottom: 3mm; }
+  .name { margin: 0; font-size: 20pt; font-weight: bold; line-height: 1.2; }
+  .contact { margin: 1mm 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 10pt; }
+  .contact li { display: inline; }
+  .contact li + li::before { content: " | "; color: var(--rule); }
+
+  section.block { margin-top: 3mm; }
+  section.block > h2 {
+    margin: 0 0 1.5mm;
+    padding-bottom: .5mm;
+    border-bottom: 1px solid var(--rule);
+    font-size: 11.5pt;
+    font-weight: bold;
+    letter-spacing: .03em;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .summary { margin: 0; }
+
+  .entry { margin-bottom: 2mm; break-inside: avoid; page-break-inside: avoid; }
+  .entry-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; }
+  .entry-title { font-weight: bold; }
+  .entry-title .role { font-weight: normal; }
+  .entry-title .role::before { content: ", "; }
+  .entry-date { flex: none; color: var(--muted); white-space: nowrap; }
+  .entry-sub { color: var(--muted); }
+  .entry ul { margin: .8mm 0 0; padding-left: 1.2em; }
+  .entry li { margin: .4mm 0; }
+
+  .skills { margin: 0; padding: 0; list-style: none; }
+  .skills li { margin: .5mm 0; }
+  .skills .label { font-weight: bold; }
+
+  @media screen and (max-width: 820px) {
+    .page { width: auto; min-height: 0; margin: 12px; padding: 16px; }
+    .print-tip { margin: 12px; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .print-tip { display: none !important; }
+    .page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-tip" id="print-tip">
+  <strong>存成 PDF 的方法：</strong>按 Ctrl+P（Mac 按 ⌘+P）→ 目的地選「另存為 PDF」→
+  紙張選 <strong id="paper-name">A4</strong> → 「更多設定」裡<strong>取消勾選「頁首和頁尾」</strong>→ 儲存。
+  這個黃色提醒不會印出來。
+  <span class="warn" id="len-warn"></span>
+</div>
+
+<main class="page" id="page">
+
+  <header class="top">
+    <h1 class="name">{{Full Name}}</h1>
+    <!-- 聯絡方式：照 resume.yaml 的 basics。沒有的那一項整個 <li> 刪掉。
+         LinkedIn 要寫成看得到的網址文字，例如 linkedin.com/in/xxx -->
+    <ul class="contact">
+      <li>{{City, Country}}</li>
+      <li>{{Phone, e.g. +886 912 345 678}}</li>
+      <li>{{Email}}</li>
+      <li>{{linkedin.com/in/xxx}}</li>
+    </ul>
+  </header>
+
+  <!-- 段落順序：Summary、Education、Experience、Projects & Activities、Skills & Certifications -->
+
+  <section class="block">
+    <h2>Summary</h2>
+    <p class="summary">{{1–2 sentences}}</p>
+  </section>
+
+  <section class="block">
+    <h2>Education</h2>
+    <!-- 重複區塊：每筆學歷一個 div.entry -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{School (official English name)}}<span class="role">{{Degree and Major}}</span></div>
+        <div class="entry-date">{{Sep 2022 – Jun 2026}}</div>
+      </div>
+      <!-- details 有內容才保留這個 ul；沒有就整個 ul 刪掉 -->
+      <ul>
+        <li>{{detail}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <section class="block">
+    <h2>Experience</h2>
+    <!-- 重複區塊：每筆一個 div.entry（打工、實習、社團幹部）；重點照 bullet_order 的順序 -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{Organization}}<span class="role">{{Title (from the English card, word for word)}}</span></div>
+        <div class="entry-date">{{Jul 2024 – Jun 2025}}</div>
+      </div>
+      <!-- 地點：resume.yaml 有寫 location 才保留這一行 -->
+      <div class="entry-sub">{{City, Country}}</div>
+      <ul>
+        <li>{{Bullet (the confirmed English sentence)}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <section class="block">
+    <h2>Projects &amp; Activities</h2>
+    <!-- 重複區塊：每筆一個 div.entry（課程專題、競賽、志工） -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{Project or activity name}}</div>
+        <div class="entry-date">{{2025}}</div>
+      </div>
+      <ul>
+        <li>{{Bullet}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <section class="block">
+    <h2>Skills &amp; Certifications</h2>
+    <ul class="skills">
+      <!-- 重複區塊：每一類一個 li，例如 Languages: / Certifications: / Software: -->
+      <li><span class="label">{{Label}}:</span> {{item, item}}</li>
+      <!-- 重複區塊結束 -->
+    </ul>
+  </section>
+
+</main>
+
+<script>
+  /* 只在螢幕上估算是否超過一頁，提醒使用者。不影響列印，不連網。 */
+  (function () {
+    function mm(n) { return n * 96 / 25.4; }
+    function check() {
+      var page = document.getElementById('page');
+      var tip = document.getElementById('print-tip');
+      var warn = document.getElementById('len-warn');
+      var paper = document.getElementById('paper-name');
+      if (!page || !tip || !warn) return;
+      var letter = document.documentElement.getAttribute('data-paper') === 'letter';
+      if (paper) paper.textContent = letter ? 'Letter' : 'A4';
+      if (window.innerWidth <= 820) return;
+      var usable = letter ? (11 - 0.6 * 2) * 96 : mm(297 - 15 * 2);
+      var style = getComputedStyle(page);
+      var last = page.lastElementChild;
+      if (!last) return;
+      var content = last.getBoundingClientRect().bottom - page.getBoundingClientRect().top - parseFloat(style.paddingTop);
+      if (content > usable * 1.01) {
+        warn.textContent = '　估計超過一頁。英文履歷要一頁，請 AI 刪掉最不相關的重點。';
+        tip.className = 'print-tip long';
+      } else {
+        warn.textContent = '';
+        tip.className = 'print-tip';
+      }
+    }
+    window.addEventListener('load', check);
+    window.addEventListener('resize', check);
+  })();
+</script>
+</body>
+</html>

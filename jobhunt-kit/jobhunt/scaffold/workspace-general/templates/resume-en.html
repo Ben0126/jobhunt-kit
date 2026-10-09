@@ -225,7 +225,8 @@
       var last = page.lastElementChild;
       if (!last) return;
       var content = last.getBoundingClientRect().bottom - page.getBoundingClientRect().top - parseFloat(style.paddingTop);
-      if (content > usable * 1.01) {
+      // 一頁就是要放得下：超過 1 像素（只差一行也算）就提醒，不留寬限，不然印出來是 2 頁卻沒提醒
+      if (content > usable + 1) {
         warn.textContent = '　估計超過一頁。英文履歷要一頁，請 AI 刪掉最不相關的重點。';
         tip.className = 'print-tip long';
       } else {

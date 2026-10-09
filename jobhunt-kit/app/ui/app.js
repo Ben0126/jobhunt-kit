@@ -292,6 +292,7 @@ function openEdit(row) {
   sel.replaceChildren(...statusSelect(row.status, () => {}).children);
   for (const k of FIELDS) if (f[k]) f[k].value = row[k] || "";
   $("edit-error").hidden = true;
+  $("edit-save").disabled = false;
   $("edit-delete").hidden = !row._deletable;
   $("edit-nodelete").hidden = row._deletable;
   $("edit").showModal();
@@ -313,16 +314,33 @@ $("edit-form").addEventListener("submit", async (e) => {
     render(b);
     notice(savedMessage({ company: f.company.value.trim(), role: f.role.value.trim() }, changes));
   } catch (err) {
+    // The window stays open with what was typed: nothing the user entered is thrown away.
+    let msg = err.message;
     if (err.data && err.data.board) {
       render(err.data.board);
-      $("edit").close();
-      fail(err);
-    } else {
-      $("edit-error").textContent = err.message;
-      $("edit-error").hidden = false;
+      const fresh = findRow(err.data.board, editing);
+      if (fresh) {
+        editing = fresh; // the next save compares with the file as it is now
+        msg = `${err.message}你剛剛打的內容還在，看一下沒問題就再按一次「儲存」。`;
+      } else {
+        msg = "這一筆在進度表裡已經找不到了（可能被 AI 改掉或刪掉）。你剛剛打的內容還在畫面上，需要的話先複製起來，再按「取消」。";
+        $("edit-save").disabled = true;
+      }
     }
+    $("edit-error").textContent = msg;
+    $("edit-error").hidden = false;
   }
 });
+
+/** The same row in a newer board: same job id (or, without one, same place and company). */
+function findRow(b, row) {
+  if (row.job_id) {
+    const hits = b.rows.filter((r) => r.job_id === row.job_id);
+    return hits.length === 1 ? hits[0] : null;
+  }
+  const r = b.rows[row._index];
+  return r && r.company === row.company && r.role === row.role ? r : null;
+}
 
 $("edit-delete").addEventListener("click", async () => {
   if (!editing) return;
@@ -376,12 +394,13 @@ function sayToAi(words, after) {
   return h("p", { class: "next-step" }, "請跟 AI 說", h("strong", { class: "say" }, `「${words}」`), after);
 }
 
-async function runCheck(button, render, at) {
+async function runCheck(button, render, at, also) {
   button.disabled = true;
   button.textContent = "檢查中…";
   if (at) at.textContent = "檢查中…";
   try {
-    render(await api("GET", "/api/check"));
+    const [r] = await Promise.all([api("GET", "/api/check"), also ? also() : null]);
+    render(r);
     loaded();
   } catch (e) {
     fail(e);
@@ -395,8 +414,12 @@ async function runCheck(button, render, at) {
 // ---- 履歷
 let selectedResume = null;
 
+let resumeExtra = { drafts: [], items: {} };
+
 function loadResumes() {
-  return runCheck($("recheck-resumes"), renderResumes, $("at-resumes"));
+  return runCheck($("recheck-resumes"), renderResumes, $("at-resumes"), async () => {
+    resumeExtra = (await api("GET", "/api/resume-info").catch(() => null)) || { drafts: [], items: {} };
+  });
 }
 $("recheck-resumes").addEventListener("click", () => {
   hideNotice();
@@ -428,13 +451,136 @@ function renderResumes(r) {
           h("span", { class: "company" }, i.company || "（沒寫公司）"),
           h("span", { class: "role" }, i.role || ""),
           h("span", { class: "meta" }, i.updated ? `更新：${i.updated.slice(5).replace("-", "/")}` : ""),
-          pill(i.resumeProblems),
+          h("span", { class: "pills" }, pill(i.resumeProblems), ...waitingPills(i)),
         ),
       ),
     ),
   );
   const item = items.find((i) => i.id === selectedResume);
   $("resume-detail").replaceChildren(...(item ? resumeDetail(item) : []).filter(Boolean));
+}
+
+/** 「未確認 N 段」（還是草稿的經歷，每份履歷都一樣）、「待回答 N 題」（這份履歷還沒問的題目）. */
+function waitingPills(item) {
+  const out = [];
+  const drafts = resumeExtra.drafts.length;
+  const extra = resumeExtra.items[item.id];
+  if (drafts) out.push(h("span", { class: "pill wait" }, `未確認 ${drafts} 段`));
+  if (extra && extra.confirm) out.push(h("span", { class: "pill wait" }, `待回答 ${extra.confirm} 題`));
+  return out;
+}
+
+function waitingNote(item) {
+  const drafts = resumeExtra.drafts;
+  const extra = resumeExtra.items[item.id];
+  const lines = [];
+  if (drafts.length) {
+    const names = drafts.map((d) => d.title || d.id).join("、");
+    lines.push(h("p", {}, h("strong", {}, `還有 ${drafts.length} 段經歷沒確認：`), names, "。這份履歷不會有這幾段。"));
+  }
+  if (extra && extra.confirm) lines.push(h("p", {}, h("strong", {}, `還有 ${extra.confirm} 題沒回答。`), "AI 改寫的句子要你回答過才能放進履歷。"));
+  if (!lines.length) return null;
+  return h(
+    "div",
+    { class: "result wait" },
+    ...lines,
+    sayToAi(drafts.length ? "幫我確認還沒確認的經歷" : "問我還沒回答的題目", "，確認完再請 AI 重做這份履歷，會比較完整。"),
+  );
+}
+
+/** Each reworded sentence against the confirmed one, one character at a time. Read only. */
+function rewritesView(item) {
+  const extra = resumeExtra.items[item.id];
+  if (!extra || !extra.rewrites.length) return null;
+  const row = (rw) =>
+    h(
+      "li",
+      {},
+      rw.before == null
+        ? h("p", { class: "hint" }, "找不到你確認過的原句，下面整句都當成新的。請跟 AI 說「這句的原句在哪裡」。")
+        : h("p", { class: "orig" }, h("span", { class: "tag" }, "原句"), rw.before),
+      h(
+        "p",
+        { class: "diff" },
+        h("span", { class: "tag" }, "這份履歷"),
+        rw.parts.map((p) => (p.t === "add" ? h("ins", {}, p.s) : p.t === "del" ? h("del", {}, p.s) : p.s)),
+      ),
+    );
+  return h(
+    "details",
+    { class: "rewrites", open: true },
+    h("summary", {}, `AI 改寫的句子（${extra.rewrites.length} 句）`),
+    h("p", { class: "hint" }, "綠底的字是加上去的，畫刪除線的字是拿掉的。這裡只能看；要改請跟 AI 說。"),
+    h("ol", {}, extra.rewrites.map(row)),
+  );
+}
+
+// ---- 「我投了這份，存一份」：先看會存成什麼，確定才存，不會蓋掉
+function archiveArea(item) {
+  if (!item.hasHtml) return null;
+  const extra = resumeExtra.items[item.id];
+  const saved = extra ? extra.saved : [];
+  const box = h("div", { class: "archive-box", hidden: true });
+  const btn = h("button", { type: "button", onclick: () => previewArchive(item, btn, box) }, "我投了這份，存一份");
+  return h(
+    "div",
+    { class: "archive" },
+    h("div", { class: "row" }, btn, h("span", { class: "hint" }, "投出去之後按，留一份寄出的版本，之後才查得到寄給這家的是哪一版。")),
+    saved.length ? h("p", { class: "hint" }, `已經存過：${saved.join("、")}`) : null,
+    box,
+  );
+}
+
+async function previewArchive(item, btn, box) {
+  btn.disabled = true;
+  try {
+    const p = await api("POST", "/api/archive/preview", { id: item.id });
+    const name = p.to.replace(/^submitted\//, "");
+    const blocked = p.already || p.exists;
+    const parts = [];
+    if (p.already) parts.push(h("p", {}, h("strong", {}, "這一筆已經存過一份了"), `（${p.already}）。為了不蓋掉，不會再存。`));
+    else if (p.exists) parts.push(h("p", {}, h("strong", {}, "今天已經存過這份履歷了"), `（${name}）。為了不蓋掉，不會再存。`));
+    else {
+      parts.push(
+        h("p", {}, "會把現在這份履歷複製一份，存到求職資料夾的「submitted」資料夾：", h("strong", {}, name)),
+        h("p", {}, `並記在進度表「${p.company} ${p.role}」那一筆。存好的檔案不會被改，也不會被蓋掉。`),
+      );
+      if (item.resumeProblems.length)
+        parts.push(h("p", { class: "warn-text" }, `這份履歷還有 ${item.resumeProblems.length} 個問題沒修。如果你已經用這一版投出去了，還是可以存，記下你寄出的是哪一版。`));
+      if (p.status === "todo") parts.push(h("p", { class: "hint" }, "進度表上這一筆會一起改成「已投遞」，投遞日記今天。"));
+    }
+    const close = () => {
+      box.hidden = true;
+      btn.disabled = false;
+      btn.focus();
+    };
+    const actions = blocked
+      ? [h("button", { type: "button", onclick: close }, "知道了")]
+      : [
+          h("button", { type: "button", class: "primary", onclick: (e) => doArchive(item, p, e.target, close) }, "確定，存一份"),
+          h("button", { type: "button", onclick: close }, "先不要"),
+        ];
+    box.replaceChildren(...parts, h("div", { class: "actions" }, ...actions));
+    box.hidden = false;
+    box.querySelector("button").focus();
+  } catch (e) {
+    btn.disabled = false;
+    fail(e);
+  }
+}
+
+async function doArchive(item, p, okBtn, close) {
+  okBtn.disabled = true;
+  try {
+    const r = await api("POST", "/api/archive", { id: item.id, to: p.to, version: p.version });
+    if (r.board) board = r.board;
+    close();
+    await loadResumes();
+    notice(`已經存好：${r.saved.replace(/^submitted\//, "")}，也記在進度表了。`);
+  } catch (e) {
+    okBtn.disabled = false;
+    fail(e);
+  }
 }
 
 function openPrint(item) {
@@ -476,6 +622,13 @@ function pdfArea(item, pages) {
     `存成 PDF（還有 ${n} 個問題）`,
   );
   return h("div", { class: "pdf" }, btn, pages, box);
+}
+
+/** Taiwan resumes aim for 1 page: say so above that, but saving the PDF still works. */
+function pageNote(p) {
+  return p > 1
+    ? `估計會印成 ${p} 頁。台灣的履歷最好 1 頁：可以跟 AI 說「幫我把履歷縮成一頁」。（還是可以照樣存成 PDF）`
+    : `估計會印成 ${p} 頁。`;
 }
 
 /** The same page estimate the template makes (it can't run inside the preview): A4, 15 mm margins. */
@@ -528,13 +681,13 @@ function resumeDetail(item) {
         onload: (e) => {
           const p = estimatePages(e.target);
           if (!p) return;
-          pages.textContent = p > 2 ? `估計會印成 ${p} 頁，重點盡量放在第一頁。` : `估計會印成 ${p} 頁。`;
-          pages.className = "pages" + (p > 2 ? " long" : "");
+          pages.textContent = pageNote(p);
+          pages.className = "pages" + (p > 1 ? " long" : "");
           pages.hidden = false;
         },
       })
     : h("p", { class: "blank" }, "還沒有履歷檔。跟 AI 說「做成履歷檔」，做好之後按「重新檢查」。");
-  return [head, result, pdfArea(item, pages), photo, preview];
+  return [head, result, waitingNote(item), pdfArea(item, pages), archiveArea(item), photo, rewritesView(item), preview];
 }
 
 // ---- 104

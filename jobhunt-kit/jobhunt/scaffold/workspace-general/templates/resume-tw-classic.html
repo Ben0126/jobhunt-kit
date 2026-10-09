@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  ============================================================
+  給 AI 的填寫說明（中文版「精緻單欄」樣式：targets/<id>.yaml 的 template 是 tw-classic 時用這份。這個範本不能改，只能複製成 resumes/<id>.html 再填）
+  ============================================================
+  1. 照 playbooks/make-resume-file.md 第 2 步算出內容，再把每個用兩層大括號包起來的佔位字換成內容。
+     存好的檔案裡不能剩下任何兩層大括號（這些說明裡也故意沒有）。
+  2. 文字裡的 & < > 要寫成 &amp; &lt; &gt; 。
+  3. 標著「重複區塊」的地方：每筆資料複製一次，順序照 targets/<id>.yaml 的 bullet_order。
+     日期照 resume.yaml 一字不差，不改格式；日期是空的就刪掉那個日期 div。
+     沒有內容的段落（例如沒有專題）整個 <section> 刪掉。
+  4. 照片：targets/<id>.yaml 是 photo: false → 把「照片區塊」整段刪掉。
+     photo: true → 保留，不要動。不要開啟、查看或描述任何照片檔。
+     照片檔名固定是 photo.jpg，放在和這個 html 同一個資料夾；沒有這個檔案時，照片格會自動不顯示。
+  5. 不要加任何外部連結的字型、圖片或程式。不要改 <style> 和 <script>。
+  6. 頁數：台灣履歷以 1 頁為目標。螢幕上的黃色提醒估計超過 1 頁時會說，照 make-resume-file.md 第 6 步問他要拿掉哪幾條重點。
+     不縮小字、不改邊界。他要保留就照留，超過也可以投。
+  7. 這些註解說明留著沒關係，畫面和列印都看不到。
+-->
+<title>{{姓名}} 履歷</title>
+<style>
+  :root {
+    --ink: #1b1d21;
+    --ink-2: #3a3e45;
+    --muted: #61666e;
+    --rule: #b9bec6;
+    --hair: #d9dde3;
+    --accent: #1e3d63;
+    --paper-w: 210mm;
+    --paper-h: 297mm;
+    --margin: 15mm;
+  }
+  @page { size: A4; margin: 15mm; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: #e6e8eb;
+    color: var(--ink);
+    font-family: "Microsoft JhengHei", "微軟正黑體", "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC",
+                 "Heiti TC", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.62;
+    font-style: normal;
+    text-transform: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  em, i, cite, address { font-style: normal; }
+
+  /* 只在螢幕上出現的列印提醒 */
+  .print-tip {
+    max-width: var(--paper-w);
+    margin: 16px auto 0;
+    padding: 10px 14px;
+    background: #fff8d6;
+    border: 1px solid #e0c96a;
+    border-radius: 6px;
+    font-size: 10.5pt;
+    line-height: 1.7;
+  }
+  .print-tip strong { color: #7a5a00; }
+  .print-tip .warn { display: none; color: #a33; font-weight: bold; }
+  .print-tip.long .warn { display: inline; }
+
+  .page {
+    width: var(--paper-w);
+    min-height: var(--paper-h);
+    margin: 16px auto 32px;
+    padding: var(--margin);
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.10);
+  }
+
+  /* ---- 抬頭：左側一條深色粗線，名字大而穩 ---- */
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8mm;
+    padding-bottom: 4.5mm;
+    border-bottom: 0.75pt solid var(--rule);
+    margin-bottom: 1mm;
+  }
+  .who {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5mm 0 0.5mm 5mm;
+    border-left: 2mm solid var(--accent);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .name {
+    margin: 0;
+    font-size: 27pt;
+    font-weight: bold;
+    letter-spacing: .14em;
+    line-height: 1.2;
+    color: var(--accent);
+  }
+  .want {
+    margin: 2mm 0 2.2mm;
+    font-size: 11pt;
+    font-weight: bold;
+    letter-spacing: .04em;
+    color: var(--accent);
+  }
+  .contact {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: 9.5pt;
+    line-height: 1.7;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .contact li { display: inline; }
+  .contact li + li::before {
+    content: "";
+    display: inline-block;
+    width: 1.1mm;
+    height: 1.1mm;
+    margin: 0 2.4mm 0.45mm;
+    border: 0.55mm solid var(--rule);
+    border-radius: 50%;
+    vertical-align: middle;
+    box-sizing: border-box;
+  }
+  .photo {
+    flex: none;
+    width: 35mm;
+    height: 45mm;
+    overflow: hidden;
+    border: 0.75pt solid var(--rule);
+    padding: 0.8mm;
+    background: #fff;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* ---- 段落標題：小方塊 ＋ 加寬字距 ＋ 延伸細線 ---- */
+  section.block { margin-top: 5mm; }
+  section.block > h2 {
+    display: flex;
+    align-items: center;
+    gap: 2.6mm;
+    margin: 0 0 2.4mm;
+    font-size: 12pt;
+    font-weight: bold;
+    line-height: 1.4;
+    letter-spacing: .12em;
+    color: var(--accent);
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  section.block > h2::before {
+    content: "";
+    flex: none;
+    width: 0;
+    height: 0;
+    border: 1.1mm solid var(--accent);
+  }
+  section.block > h2::after {
+    content: "";
+    flex: 1;
+    height: 0;
+    border-top: 0.75pt solid var(--hair);
+    margin-left: 0.6mm;
+  }
+  .summary { margin: 0; text-align: justify; color: var(--ink-2); }
+  .summary, .entry li { text-wrap: pretty; }
+
+  .entry {
+    margin-bottom: 3mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .entry:last-child { margin-bottom: 0; }
+  .entry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 5mm;
+  }
+  .entry-title { font-weight: bold; font-size: 11pt; color: var(--ink); }
+  .entry-title .role { font-weight: normal; color: var(--ink-2); }
+  .entry-title .role::before {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: .85em;
+    margin: 0 .65em 0 .7em;
+    border-left: 0.75pt solid var(--rule);
+    vertical-align: -0.08em;
+  }
+  .entry-date {
+    flex: none;
+    color: var(--muted);
+    font-size: 9.5pt;
+    letter-spacing: .03em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .entry-sub { color: var(--muted); font-size: 9.5pt; }
+  .entry ul { margin: 1.2mm 0 0; padding-left: 1.25em; list-style: none; }
+  .entry li { position: relative; margin: .7mm 0; color: var(--ink-2); }
+  .entry li::before {
+    content: "";
+    position: absolute;
+    left: -1.0em;
+    top: .68em;
+    width: 0;
+    height: 0;
+    border: 0.55mm solid var(--accent);
+  }
+
+  .skills { margin: 0; padding: 0; list-style: none; }
+  .skills li {
+    margin: .9mm 0;
+    padding-left: 5.6em;
+    text-indent: -5.6em;
+    color: var(--ink-2);
+    break-inside: avoid;
+  }
+  .skills .label { display: inline-block; min-width: 5.6em; text-indent: 0; font-weight: bold; color: var(--ink); }
+
+  @media screen and (max-width: 820px) {
+    .page { width: auto; min-height: 0; margin: 12px; padding: 16px; }
+    .print-tip { margin: 12px; }
+    header.top { flex-direction: column-reverse; align-items: stretch; gap: 4mm; }
+    .skills li { padding-left: 0; text-indent: 0; }
+    .skills .label { display: inline; min-width: 0; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .print-tip { display: none !important; }
+    .page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-tip" id="print-tip">
+  <strong>存成 PDF 的方法：</strong>按 Ctrl+P（Mac 按 ⌘+P）→ 目的地選「另存為 PDF」→ 紙張選「A4」→
+  「更多設定」裡<strong>取消勾選「頁首和頁尾」</strong>→ 儲存。這個黃色提醒不會印出來。
+  <span class="warn" id="len-warn"></span>
+</div>
+
+<main class="page" id="page">
+
+  <header class="top">
+    <div class="who">
+      <h1 class="name">{{姓名}}</h1>
+      <!-- 希望職稱：me/profile.md 裡他親口說的想找的工作（不用 targets 的 role）。只有推定或未定就刪掉這一行 -->
+      <p class="want">希望職稱：{{希望職稱}}</p>
+      <!-- 聯絡方式：照 resume.yaml 的 basics。沒有的那一項整個 <li> 刪掉。
+           不放生日、性別、婚姻、身分證字號、地址（使用者主動要求才加，身分證字號一律不加） -->
+      <ul class="contact">
+        <li>手機 {{手機}}</li>
+        <li>{{Email}}</li>
+        <li>{{居住縣市}}</li>
+      </ul>
+    </div>
+    <!-- ===== 照片區塊開始（photo: false 就把這一整段 div 刪掉）===== -->
+    <div class="photo" id="photo-slot">
+      <img src="photo.jpg" alt="大頭照" onerror="var s=document.getElementById('photo-slot'); if (s) s.remove();">
+    </div>
+    <!-- ===== 照片區塊結束 ===== -->
+  </header>
+
+  <!-- 段落順序照 make-resume-file.md 第 2 步（resume.yaml 的 sections）。預設順序：自我介紹、學歷、經歷、專題、專長 -->
+
+  <!-- ===== 自我介紹（summary）===== -->
+  <section class="block">
+    <h2>自我介紹</h2>
+    <p class="summary">{{自我介紹，2 到 3 句，照 targets 的 summary 一字不差}}</p>
+  </section>
+
+  <!-- ===== 學歷（education）：最高學歷在前，最多 2 到 3 筆 ===== -->
+  <section class="block">
+    <h2>學歷</h2>
+    <!-- 重複區塊：每筆學歷一個 div.entry -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{學校}}<span class="role">{{科系與學位}}</span></div>
+        <div class="entry-date">{{日期，照 resume.yaml 一字不差，例如 2022-09 – 2026-06；空的就刪掉這個 div}}</div>
+      </div>
+      <!-- details 有內容才保留這個 ul，一項一個 li；沒有就整個 ul 刪掉 -->
+      <ul>
+        <li>{{details 的一項}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <!-- ===== 工作與社團經歷（experience）：打工、實習、社團幹部 ===== -->
+  <section class="block">
+    <h2>工作與社團經歷</h2>
+    <!-- 重複區塊：每筆經歷一個 div.entry；重點照 bullet_order 的順序，一條一個 li -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{公司或社團}}<span class="role">{{職稱}}</span></div>
+        <div class="entry-date">{{日期}}</div>
+      </div>
+      <!-- 職稱：resume.yaml 的 role 是空的，就把上面整個 <span class="role">…</span> 刪掉（不然會多印一條分隔線） -->
+      <!-- 地點：resume.yaml 有寫 location 才保留這一行 -->
+      <div class="entry-sub">{{地點}}</div>
+      <ul>
+        <li>{{重點（bullet_overrides 有就用改寫版，否則用 resume.yaml 原句）}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <!-- ===== 專題與活動（projects）：課程專題、競賽、志工 ===== -->
+  <section class="block">
+    <h2>專題與活動</h2>
+    <!-- 重複區塊：每筆一個 div.entry -->
+    <div class="entry">
+      <div class="entry-head">
+        <div class="entry-title">{{專題或活動名稱}}</div>
+        <div class="entry-date">{{日期}}</div>
+      </div>
+      <ul>
+        <li>{{重點}}</li>
+      </ul>
+    </div>
+    <!-- 重複區塊結束 -->
+  </section>
+
+  <!-- ===== 專長、證照與語言（skills）：一行一類，例如「證照：」「語言：」「文書工具：」 ===== -->
+  <section class="block">
+    <h2>專長、證照與語言</h2>
+    <ul class="skills">
+      <!-- 重複區塊：每一類一個 li。類別後面接全形「：」，項目照 skills_order 冒號後面的文字一字不差印出（resume.yaml 的 skills 就用「、」連接） -->
+      <li><span class="label">{{類別}}：</span>{{項目、項目}}</li>
+      <!-- 重複區塊結束 -->
+    </ul>
+  </section>
+
+</main>
+
+<script>
+  /* 只在螢幕上估算頁數，超過 1 頁就提醒使用者（只提醒，不擋）。不影響列印，不連網。 */
+  (function () {
+    function mm(n) { return n * 96 / 25.4; }
+    function check() {
+      var page = document.getElementById('page');
+      var tip = document.getElementById('print-tip');
+      var warn = document.getElementById('len-warn');
+      if (!page || !tip || !warn || window.innerWidth <= 820) return;
+      var usable = mm(297 - 15 * 2);
+      var style = getComputedStyle(page);
+      var last = page.lastElementChild;
+      if (!last) return;
+      var content = last.getBoundingClientRect().bottom - page.getBoundingClientRect().top - parseFloat(style.paddingTop);
+      // 1 頁就是要放得下：超過 1 像素（只差一行也算）就提醒，不留寬限，不然印出來是 2 頁卻沒提醒
+      var pages = content > usable + 1 ? Math.max(2, Math.ceil(content / usable - 0.02)) : 1;
+      if (pages > 1) {
+        warn.textContent = '　估計會印成 ' + pages + ' 頁。台灣履歷以 1 頁為目標，想縮短就跟 AI 說，超過也可以投。';
+        tip.className = 'print-tip long';
+      } else {
+        warn.textContent = '';
+        tip.className = 'print-tip';
+      }
+    }
+    window.addEventListener('load', check);
+    window.addEventListener('resize', check);
+  })();
+</script>
+</body>
+</html>

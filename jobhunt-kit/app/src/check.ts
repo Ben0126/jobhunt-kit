@@ -5,10 +5,15 @@
 import * as R from "../../web/js/core/rules.js";
 import tplEn from "../../jobhunt/scaffold/workspace-general/templates/resume-en.html" with { type: "text" };
 import tplTw from "../../jobhunt/scaffold/workspace-general/templates/resume-tw.html" with { type: "text" };
+import tplTwClassic from "../../jobhunt/scaffold/workspace-general/templates/resume-tw-classic.html" with { type: "text" };
+// Templates as they were on 2026-10-08 (Chinese tip at 2 pages, English tip with 1% slack): resume files already made
+// with them stay valid. Only their <script> differs from today's; the printed words are the same.
+import tplTwOld from "./legacy/resume-tw-2026-10-08.html" with { type: "text" };
+import tplEnOld from "./legacy/resume-en-2026-10-08.html" with { type: "text" };
 import { copyText, isPasted, limitFor, paragraphs, parse104, SOURCE_LINE, splitSources } from "./blocks104.ts";
 import { replaceSection, SECTION } from "./checksfile.ts";
 import { Folder, FolderError, looksLikeJobhuntFolder } from "./folder.ts";
-import { leftoverSlots, oddMarkup, scriptsOf, templateWords, visibleLines } from "./htmltext.ts";
+import { leftoverSlots, oddMarkup, scriptsOf, stripComments, stylesOf, templateWords, visibleLines } from "./htmltext.ts";
 
 /** detail: technical words for the AI (ids, parser errors) — in the checks file and the command line, not the UI. */
 export type Problem = { where: string; message: string; quote?: string; detail?: string };
@@ -128,9 +133,41 @@ const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
 // 「連續 6 月」「每 3 月」: a count of months, not a date (with 個 it is already a counted number)
 const MONTH_COUNT = /(?:連續|每|共|累計|長達|將近|超過|前後)\s?([0-9]+|[一二兩三四五六七八九十]+)\s?月/g;
 
-const TEMPLATES = [tplTw, tplEn];
-const TEMPLATE_SCRIPTS = new Set(TEMPLATES.flatMap(scriptsOf));
-const TEMPLATE_WORDS = [...new Set(TEMPLATES.flatMap(templateWords))];
+// ---------------------------------------------------------------- resume templates
+// targets/<id>.yaml `template` (make-resume-file.md 第 1 步第 7 點、第 5 步): tw (or none) = 深色抬頭, tw-classic = 精緻單欄,
+// en = English. A resume file may print only its own template's fixed words and run only its own template's script.
+
+export type TemplateKind = "tw" | "tw-classic" | "en";
+export const TEMPLATE_NAMES: Record<TemplateKind, string> = { tw: "深色抬頭", "tw-classic": "精緻單欄", en: "英文版" };
+type Template = { kind: TemplateKind; styles: Set<string>; scripts: Set<string>; words: string[] };
+
+function template(kind: TemplateKind, versions: string[]): Template {
+  return {
+    kind,
+    styles: new Set(versions.flatMap(stylesOf)),
+    scripts: new Set(versions.flatMap(scriptsOf)),
+    words: [...new Set(versions.flatMap(templateWords))],
+  };
+}
+
+const TEMPLATES: Template[] = [template("tw", [tplTw, tplTwOld]), template("tw-classic", [tplTwClassic]), template("en", [tplEn, tplEnOld])];
+const byKind = (k: TemplateKind) => TEMPLATES.find((t) => t.kind === k)!;
+
+/** The template a resume file was made from: the file's own <style> when it is exactly a template's, else the
+ * target's `template`, else English when the target or the page is English, else 深色抬頭. The style wins over the
+ * field because make-resume-file.md falls back to resume-tw.html when the chosen template file is missing. */
+export function templateFor(html: string, target: any): { kind: TemplateKind; how: "style" | "field" | "guess" } {
+  const styles = stylesOf(html);
+  const hit = TEMPLATES.find((t) => styles.length > 0 && styles.every((s) => t.styles.has(s)));
+  if (hit) return { kind: hit.kind, how: "style" };
+  const field = String(target?.template ?? "").trim();
+  if (Object.hasOwn(TEMPLATE_NAMES, field)) return { kind: field as TemplateKind, how: "field" };
+  const en =
+    /^en\b/i.test(String(target?.lang ?? "")) ||
+    String(target?.base_variant ?? "") === "en" ||
+    /<html\b[^>]*\slang\s*=\s*["']?en\b/i.test(stripComments(html));
+  return { kind: en ? "en" : "tw", how: "guess" };
+}
 
 const norm = (s: string) => String(s).normalize("NFKC").replace(/\s+/g, " ").trim();
 
@@ -316,6 +353,20 @@ function dedupe(ps: Problem[]): Problem[] {
 
 const FIELD_NAMES: Record<string, string> = { summary: "自我介紹", skills_order: "專長", bullet_overrides: "改寫的重點", application_answers: "應徵問答" };
 
+/** Split a skills line into items at 、 , ， — but not inside brackets: 「Excel（加總、篩選、簡單表格）」 is one item. */
+export function splitSkillItems(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0, cur = "";
+  for (const ch of text) {
+    if (ch === "（" || ch === "(") depth++;
+    else if ((ch === "）" || ch === ")") && depth > 0) depth--;
+    if (depth === 0 && (ch === "、" || ch === "," || ch === "，")) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
 /** Every skills_order item must be a skills item of resume.yaml whose line has confirmed sources
  * (tailor-resume.md: 「每一項要和 resume.yaml 的 skills 一字不差」). */
 async function skillsProblems(ctx: Context, target: any, where: string): Promise<Problem[]> {
@@ -336,7 +387,7 @@ async function skillsProblems(ctx: Context, target: any, where: string): Promise
       const line = String(raw ?? "");
       const i = line.indexOf(":");
       if (i < 0) continue; // the format problem is reported by tailor
-      for (const raw of line.slice(i + 1).replace(/\.$/, "").split(/[、,，]/)) {
+      for (const raw of splitSkillItems(line.slice(i + 1).replace(/\.$/, ""))) {
         const item = norm(raw);
         if (!item) continue;
         const home = lines.find((l: any) => asArray(l.items).some((x: any) => norm(String(x)) === item));
@@ -355,6 +406,9 @@ async function checkTargetFile(ctx: Context, id: string, target: any, hasHtml: b
   const out: Problem[] = [];
   if (!target || typeof target !== "object" || Array.isArray(target)) return [{ where: W, message: "這個檔案的格式壞了，程式讀不懂" }];
   if (String(target.id ?? "") !== id) out.push({ where: W, message: `檔案裡寫的代號和檔名不一樣`, detail: `id: ${target.id ?? ""}，檔名 ${id}` });
+  const tplField = String(target.template ?? "").trim();
+  if (tplField && !Object.hasOwn(TEMPLATE_NAMES, tplField))
+    out.push({ where: W, message: "履歷樣式寫錯了，只能是深色抬頭（tw）、精緻單欄（tw-classic）或英文版（en）", detail: `template: ${target.template}` });
 
   let structural: any[] = [];
   try {
@@ -404,7 +458,7 @@ async function checkTargetFile(ctx: Context, id: string, target: any, hasHtml: b
 }
 
 /** What the resume file may print: the tailored resume (R.tailor + R.resolve) and the template's own words. */
-function expectedText(ctx: Context, target: any): string[] | null {
+function expectedText(ctx: Context, target: any, tpl: Template): string[] | null {
   let doc: any;
   try {
     doc = R.resolve(R.tailor(ctx.resume, target), target.base_variant);
@@ -430,13 +484,13 @@ function expectedText(ctx: Context, target: any): string[] | null {
       add(l.label);
       for (const x of l.items) {
         add(x);
-        add(String(x).split(/[、,，]/));
+        add(splitSkillItems(String(x)));
       }
     }
   }
   // English version: school and company names come from the target's en_names (make-resume-file.md 第 5 步)
   if (target.en_names && typeof target.en_names === "object") add(Object.values(target.en_names));
-  out.push(...TEMPLATE_WORDS.map(norm));
+  out.push(...tpl.words.map(norm));
   return [...new Set(out)].sort((a, b) => b.length - a.length);
 }
 
@@ -449,14 +503,14 @@ function lineBacked(line: string, expected: string[]): boolean {
   return /^[\s\p{P}\p{S}]*$/u.test(rest);
 }
 
-async function checkHtml(ctx: Context, html: string, target: any): Promise<Problem[]> {
+async function checkHtml(ctx: Context, html: string, target: any, tpl: Template): Promise<Problem[]> {
   const W = "履歷檔";
   const out: Problem[] = [];
-  for (const m of oddMarkup(html, TEMPLATE_SCRIPTS))
+  for (const m of oddMarkup(html, tpl.scripts))
     out.push({ where: W, message: `${m}。照範本重做履歷檔，不要加範本以外的寫法` });
   const lines = visibleLines(html);
   if (!lines.length) out.push({ where: W, message: "履歷檔上看不到任何字" });
-  const expected = target && typeof target === "object" ? expectedText(ctx, target) : null;
+  const expected = target && typeof target === "object" ? expectedText(ctx, target, tpl) : null;
   for (const l of lines) {
     if (SOURCE_LINE.test(l.text)) {
       out.push({ where: W, message: "履歷檔上不該有「來源：」這一行（它會印出來）", quote: excerpt(l.text) });
@@ -582,10 +636,11 @@ export async function checkItem(ctx: Context, id: string): Promise<Item> {
   if (targetRel && target != null) item.problems.push(...(await checkTargetFile(ctx, id, target, !!htmlRel)));
 
   if (htmlRel) {
-    item.checked.push(`履歷檔 ${htmlRel} 上看得到的每一行字`);
+    const html = (await folder.readText(htmlRel)) ?? "";
+    const tpl = templateFor(html, target);
+    item.checked.push(`履歷檔 ${htmlRel} 上看得到的每一行字（範本：${TEMPLATE_NAMES[tpl.kind]}${tpl.how === "style" ? "" : "，照設定或語言判斷"}）`);
     if (!targetRel) item.problems.push({ where: "履歷檔", message: "找不到這份履歷檔的客製履歷設定，程式沒辦法對照它是照什麼做的" });
-    const html = await folder.readText(htmlRel);
-    item.problems.push(...(await checkHtml(ctx, html ?? "", target)));
+    item.problems.push(...(await checkHtml(ctx, html, target, byKind(tpl.kind))));
   }
 
   item.resumeProblems = dedupe(item.problems);

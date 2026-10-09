@@ -1,5 +1,5 @@
 // Where the job-hunt folder is, and the only doors the app may use to read or write inside it.
-import { existsSync, mkdirSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { constants, copyFileSync, existsSync, mkdirSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 /** Files the app may read (paths relative to the folder, forward slashes). */
@@ -22,10 +22,17 @@ const WRITE_RULES: RegExp[] = [
   /^checks\/[^/]+\.md$/, // only the「## 程式檢查」section is replaced (src/checksfile.ts)
 ];
 
+/** 「我投了這份，存一份」: the only way into submitted/ is a new copy of a resume file (archiveCopy), never an
+ * overwrite. writeText can't reach these paths (they are not in WRITE_RULES). */
+const ARCHIVE_SOURCE = /^resumes\/[^/]+\.html$/;
+const ARCHIVE_RULES: RegExp[] = [/^submitted\/\d{4}-\d{2}-\d{2}_[^/]+\.html$/];
+
 /** Folders whose file names the app may list (names only; contents still go through READ_RULES). */
 const LIST_RULES: RegExp[] = [/^targets$/, /^resumes$/, /^104$/, /^jobs$/, /^jobs\/[^/]+$/, /^checks$/, /^submitted$/, /^me\/stories$/];
 
 export class FolderError extends Error {}
+
+type Mode = "read" | "write" | "list" | "archive";
 
 export function isCompiledBinary(execPath = process.execPath): boolean {
   return !/^bun(\.exe)?$/i.test(basename(execPath));
@@ -69,19 +76,19 @@ export class Folder {
     this.realRoot = realpathSync(this.root);
   }
 
-  static allowed(rel: string, mode: "read" | "write" | "list"): boolean {
+  static allowed(rel: string, mode: Mode): boolean {
     let r: string;
     try {
       r = normalizeRel(rel);
     } catch {
       return false;
     }
-    const rules = mode === "read" ? READ_RULES : mode === "write" ? WRITE_RULES : LIST_RULES;
+    const rules = mode === "read" ? READ_RULES : mode === "write" ? WRITE_RULES : mode === "archive" ? ARCHIVE_RULES : LIST_RULES;
     return rules.some((re) => re.test(r));
   }
 
   /** Absolute path for a whitelisted relative path; refuses anything else, including symlinks that leave the folder. */
-  path(rel: string, mode: "read" | "write" | "list"): string {
+  path(rel: string, mode: Mode): string {
     const r = normalizeRel(rel);
     if (!Folder.allowed(r, mode)) throw new FolderError(`not allowed: ${r}`);
     const abs = join(this.root, ...r.split("/"));
@@ -162,6 +169,25 @@ export class Folder {
       } catch {}
       throw e;
     }
+  }
+
+  /** Copy a resume file into submitted/ as a new file. Fails (code EEXIST) if the target is already there: a
+   * saved copy is never replaced. Both paths go through the whitelist and the symlink check. */
+  archiveCopy(fromRel: string, toRel: string): void {
+    const r = normalizeRel(fromRel);
+    if (!ARCHIVE_SOURCE.test(r)) throw new FolderError(`not allowed: ${r}`);
+    const src = this.path(r, "read");
+    const dest = this.path(toRel, "archive");
+    mkdirSync(dirname(dest), { recursive: true });
+    this.path(toRel, "archive"); // again, now that the folder exists (it must not lead outside)
+    copyFileSync(src, dest, constants.COPYFILE_EXCL);
+  }
+
+  /** Bytes of a saved copy in submitted/, or null when there is none. */
+  async readArchived(toRel: string): Promise<Uint8Array | null> {
+    const f = Bun.file(this.path(toRel, "archive"));
+    if (!(await f.exists())) return null;
+    return new Uint8Array(await f.arrayBuffer());
   }
 
   // ---- lock file (.jobhunt/app.lock): the app's own bookkeeping, not user data

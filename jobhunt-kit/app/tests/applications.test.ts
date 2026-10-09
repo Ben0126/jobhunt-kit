@@ -32,17 +32,18 @@ test("看板：讀出每一列、版本、今天、可不可以刪", async () =>
   expect(b.rows.map((r) => r._deletable)).toEqual([true, true, false, true]);
 });
 
-test("該追蹤了：已投遞 7 天沒更新、面試日期已過；6 天和今天的面試不算", async () => {
-  const { apps } = setup("2026-10-08");
+// 規格改過（業主 2026-10-09）：7 天改成 10 天，和業主自己的系統一致（細節見 board_rules.test.ts）。
+test("該追蹤了：已投遞 10 天沒更新、面試日期已過；9 天和今天的面試不算", async () => {
+  const { apps } = setup("2026-10-11");
   const f = (await apps.board()).followUps;
   expect(f.map((x) => [x.company, x.kind])).toEqual([
     ["宏遠精密股份有限公司", "applied"],
     ["國泰人壽", "interview"],
   ]);
-  expect(f[0].message).toContain("7 天");
+  expect(f[0].message).toContain("10 天");
 
   const rows = [
-    { status: "applied", applied_date: "2026-10-03", last_update: "2026-10-03" }, // 6 天
+    { status: "applied", applied_date: "2026-09-30", last_update: "2026-09-30" }, // 9 天
     { status: "applied", applied_date: "2026-09-01", last_update: "2026-10-05" }, // 最近有更新
     { status: "applied", applied_date: "", last_update: "" }, // 沒日期不提醒
     { status: "interview", next_action_date: "2026-10-09" }, // 今天
@@ -113,7 +114,8 @@ test("改成已投遞但已經有投遞日期：不覆蓋", async () => {
   expect(rowsOf(dir)[3]).toMatchObject({ status: "applied", applied_date: "2026-09-15", last_update: "2026-10-09" });
 });
 
-test("last_update 只在狀態或日期改變時更新；改公司、下一步、備註不更新", async () => {
+// 規格改過（業主 2026-10-09）：只有狀態改變才更新 last_update，改日期也不更新。
+test("last_update 只在狀態改變時更新；改公司、下一步、備註、日期都不更新", async () => {
   const { apps, dir } = setup("2026-10-20");
   let b = await apps.board();
   b = await apps.update({
@@ -122,7 +124,7 @@ test("last_update 只在狀態或日期改變時更新；改公司、下一步�
   });
   expect(rowsOf(dir)[0]).toMatchObject({ company: "宏遠精密", next_action: "寄感謝信", notes: "人很好", last_update: "2026-10-01" });
   b = await apps.update({ index: 0, job_id: "261008-01", version: b.version, changes: { status: "applied", next_action_date: "2026-10-25" } });
-  expect(rowsOf(dir)[0]).toMatchObject({ next_action_date: "2026-10-25", last_update: "2026-10-20" });
+  expect(rowsOf(dir)[0]).toMatchObject({ next_action_date: "2026-10-25", last_update: "2026-10-01" });
   // 狀態相同、日期相同 → 不算改變，也不寫檔
   const snap = readCsv(dir);
   await apps.update({ index: 0, job_id: "261008-01", version: b.version, changes: { status: "applied", applied_date: "2026-10-01" } });

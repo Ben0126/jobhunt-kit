@@ -146,6 +146,12 @@ export function scriptsOf(html: string): string[] {
   return [...src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((m) => squash(m[1]));
 }
 
+/** Contents of every <style> (whitespace squashed): which template a resume file was made from. */
+export function stylesOf(html: string): string[] {
+  const src = stripComments(html);
+  return [...src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)].map((m) => squash(m[1]));
+}
+
 /** Words the templates print around the slots ({{…}}): headings like 「學歷」, labels like 「手機」「希望職稱：」. */
 export function templateWords(html: string): string[] {
   const out = new Set<string>();
