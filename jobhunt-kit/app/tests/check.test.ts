@@ -504,3 +504,17 @@ test("英文版用 targets 的 en_names（學校、公司的英文名稱）：�
   const r = await check(dir, "261008-01");
   expect(r.out).toContain("全部通過");
 });
+
+test("回歸：資料夾裡的檔案是 Windows 換行（CRLF，例如 git 在 Windows 取出、或 AI 用記事本格式寫）→ 結果和 LF 一樣", async () => {
+  const dir = cleanFolder();
+  const lf = await check(dir);
+  const { readdirSync, statSync } = await import("node:fs");
+  const walk = (d: string): string[] => readdirSync(d).flatMap((n) => {
+    const p = join(d, n);
+    return statSync(p).isDirectory() ? walk(p) : /\.(md|ya?ml|html|csv)$/.test(n) ? [p] : [];
+  });
+  for (const p of walk(dir)) writeFileSync(p, readFileSync(p, "utf-8").replace(/\r?\n/g, "\r\n"));
+  const crlf = await check(dir);
+  expect(lf.code).toBe(0);
+  expect(crlf.code).toBe(0);
+});

@@ -1,0 +1,10 @@
+# Keep text files LF in every checkout (Windows included): tests, templates and the
+# program's checker compare text, and CRLF checkouts broke the Windows CI run.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.docx binary
+*.png binary
+*.jpg binary
+*.pdf binary
+*.exe binary
+*.zip binary

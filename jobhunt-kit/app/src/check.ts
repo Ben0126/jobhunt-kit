@@ -150,7 +150,9 @@ function template(kind: TemplateKind, versions: string[]): Template {
   };
 }
 
-const TEMPLATES: Template[] = [template("tw", [tplTw, tplTwOld]), template("tw-classic", [tplTwClassic]), template("en", [tplEn, tplEnOld])];
+// Templates are compared with resume files line by line; normalise line endings like Folder.readText does.
+const lf = (s: string) => s.replace(/\r\n?/g, "\n");
+const TEMPLATES: Template[] = [template("tw", [tplTw, tplTwOld].map(lf)), template("tw-classic", [tplTwClassic].map(lf)), template("en", [tplEn, tplEnOld].map(lf))];
 const byKind = (k: TemplateKind) => TEMPLATES.find((t) => t.kind === k)!;
 
 /** The template a resume file was made from: the file's own <style> when it is exactly a template's, else the

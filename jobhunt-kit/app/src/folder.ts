@@ -121,7 +121,9 @@ export class Folder {
     const p = this.path(rel, "read");
     const f = Bun.file(p);
     if (!(await f.exists())) return null;
-    return await f.text();
+    // Text files may come with Windows line endings (Notepad, a CRLF git checkout): everything that reads them
+    // parses lines, so hand out LF only.
+    return (await f.text()).replace(/\r\n?/g, "\n");
   }
 
   async readBytes(rel: string): Promise<Uint8Array | null> {
