@@ -16,9 +16,9 @@ import { replaceSection, SECTION, SECTION_EN } from "./checksfile.ts";
 import { Folder, FolderError, looksLikeJobhuntFolder } from "./folder.ts";
 import { englishYearMonths, EN_PLACEHOLDERS, factText, moreThanClaims, normEnglish, vagueAmounts } from "./english.ts";
 import { extraIdMatches, replaceExtraIds, starMask } from "./ids.ts";
-import { type Language, type Market, type MarketConfig, readMarket, readMarketSync, TW_DEFAULTS } from "./market.ts";
+import { type Language, type Market, type MarketConfig, readMarket, readMarketSync, TW_DEFAULTS, unrecognisedLanguage } from "./market.ts";
 import { type CheckText, textFor } from "./check.text.ts";
-import { visaWords } from "./visa.ts";
+import { maskVisaWords, visaWords } from "./visa.ts";
 import {
   bodyLineProblem,
   canonSource,
@@ -179,8 +179,10 @@ const lf = (s: string) => s.replace(/\r\n?/g, "\n");
 const TEMPLATES: Template[] = [template("tw", [tplTw, tplTwOld].map(lf)), template("tw-classic", [tplTwClassic].map(lf)), template("en", [tplEn, tplEnOld].map(lf)), template("us", [tplUs].map(lf))];
 const byKind = (k: TemplateKind) => TEMPLATES.find((t) => t.kind === k)!;
 
-/** A `template` value that exists in this market: `us` only in a US folder (a Taiwan folder has no resume-us.html). */
-const validTemplate = (field: string, market: Market) => Object.hasOwn(TEMPLATE_NAMES, field) && (field !== "us" || market === "us");
+/** A `template` value that exists in this market: `us` only in a US folder (a Taiwan folder has no resume-us.html),
+ * and `tw` / `tw-classic` never in a US folder (those are the A4 Taiwan layouts). */
+const validTemplate = (field: string, market: Market) =>
+  Object.hasOwn(TEMPLATE_NAMES, field) && (field !== "us" || market === "us") && (market !== "us" || (field !== "tw" && field !== "tw-classic"));
 
 /** The template a resume file was made from: the file's own <style> when it is exactly a template's, else the
  * target's `template`, else English when the target or the page is English, else 深色抬頭. The style wins over the
@@ -404,7 +406,7 @@ class Context {
   }
 
   /** checkText on each line (sentences never run across lines), as Problems. */
-  textProblems(text: string, where: string, opts: { skills?: boolean; only?: string[] } = {}): Problem[] {
+  textProblems(text: string, where: string, opts: { skills?: boolean; only?: string[]; visaCovered?: boolean } = {}): Problem[] {
     const out: Problem[] = [];
     for (const line of String(text).split(/\r?\n/)) {
       if (!line.trim() || SOURCE_LINE.test(line)) continue; // 來源： / Source: lines are not text (rules.js only knows the first)
@@ -424,17 +426,18 @@ class Context {
         if (us && p.code === "numbers") continue; // read the English way below
         out.push({ where, ...fromRule(p, line, this.T) });
       }
-      if (us) out.push(...this.englishProblems(probe, line, where, opts.only));
+      // opts.visaCovered: visaProblems reports the visa words of this text, so their digits ("F-1", "H-1B") are not "numbers" too.
+      if (us) out.push(...this.englishProblems(probe, line, where, opts.only, opts.visaCovered ? maskVisaWords(probe, this.workNames) : probe));
       if (!opts.only || opts.only.includes("numbers")) out.push(...this.dateProblems(probe, where));
     }
     return out;
   }
 
   /** market us: numbers read the English way on both sides, "50+" only when the user said it, and English placeholders. */
-  englishProblems(probe: string, line: string, where: string, only?: string[]): Problem[] {
+  englishProblems(probe: string, line: string, where: string, only?: string[], numberProbe: string = probe): Problem[] {
     const out: Problem[] = [];
     if (!only || only.includes("numbers")) {
-      const missing = [...new Set([...R.numbers(normEnglish(probe)), ...vagueAmounts(probe)])].filter((n) => !this.factsEn.has(n)).sort();
+      const missing = [...new Set([...R.numbers(normEnglish(numberProbe)), ...vagueAmounts(probe)])].filter((n) => !this.factsEn.has(n)).sort();
       if (missing.length) out.push({ where, ...fromRule({ code: "numbers", numbers: missing }, line, this.T) });
       for (const c of moreThanClaims(probe))
         if (this.factsEn.has(c.n) && !this.moreThanFacts.has(c.n))
@@ -658,7 +661,7 @@ async function checkHtml(ctx: Context, html: string, target: any, tpl: Template)
       out.push({ where: W, message: T.sourceLineOnPage, quote: excerpt(l.text) });
       continue;
     }
-    out.push(...ctx.textProblems(l.text, W, { skills: l.skills }), ...ctx.visaProblems(l.text, W));
+    out.push(...ctx.textProblems(l.text, W, { skills: l.skills, visaCovered: true }), ...ctx.visaProblems(l.text, W));
     if (!expected) continue;
     const want = /^希望職稱\s*[:：]\s*(.+)$/.exec(norm(l.text));
     if (want) {
@@ -873,8 +876,8 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
         // "Skills: Spanish (native), English (fluent)" is a skills line: the one-pair-of-parentheses rule is for sentences
         const isSkills = (l: string) => /^\s*Skills:/i.test(l);
         const tl = t.split(/\r?\n/);
-        bp.push(...ctx.textProblems(tl.filter((l) => !isSkills(l)).join("\n"), where, { only }), ...ctx.textProblems(tl.filter(isSkills).join("\n"), where, { skills: true, only }));
-      } else bp.push(...ctx.textProblems(t, where, { skills: !!spec.list || name === "Headline", only }));
+        bp.push(...ctx.textProblems(tl.filter((l) => !isSkills(l)).join("\n"), where, { only, visaCovered: true }), ...ctx.textProblems(tl.filter(isSkills).join("\n"), where, { skills: true, only, visaCovered: true }));
+      } else bp.push(...ctx.textProblems(t, where, { skills: !!spec.list || name === "Headline", only, visaCovered: true }));
       bp.push(...ctx.mentionProblems(t, where));
       for (const p of ps) {
         bp.push(...(await ctx.paragraphProblems(p, where, "Source:")));
@@ -1095,12 +1098,12 @@ export function parseCheckArgs(argv: string[]): CheckArgs {
 
 export async function runCheck(argv: string[], dir: string | null, print: (s: string) => void = (s) => console.log(s)): Promise<number> {
   const args = parseCheckArgs(argv);
-  // A folder the program does not recognise has no jobhunt.yaml to read: the Taiwan (Chinese) wording is the default.
+  // A folder the program does not recognise has no jobhunt.yaml to read: Chinese is the default, English when the path names the US kit.
   const folderOk = !!dir && looksLikeJobhuntFolder(dir);
-  const lang: Language = dir && folderOk ? readMarketSync(dir).language : "zh-TW";
+  const lang: Language = dir && folderOk ? readMarketSync(dir).language : unrecognisedLanguage(dir);
   const T = textFor(lang);
   // The English wording of a US folder leaves out the Taiwan-only parts (the 104 site). The Chinese table ignores this.
-  const usEn = !!dir && folderOk && readMarketSync(dir).market === "us" && lang === "en";
+  const usEn = lang === "en" && (!folderOk || readMarketSync(dir!).market === "us"); // an unrecognised folder that speaks English is the US kit
   if (args.unknown.length) {
     print(T.unknownArg(args.unknown.join(" "), usEn));
     return 2;

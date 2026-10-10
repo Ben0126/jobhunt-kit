@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Folder, looksLikeJobhuntFolder } from "./folder.ts";
 import { cliTextFor } from "./cli.text.ts";
-import { readMarketSync } from "./market.ts";
+import { readMarketSync, unrecognisedLanguage } from "./market.ts";
 import { APP_ID, startServer, type Running } from "./server.ts";
 
 export type Lock = { port: number; token: string; pid: number; started: string };
@@ -54,8 +54,8 @@ export type LaunchResult =
 export async function launch(dir: string, opts: { open: boolean; print?: (s: string) => void }): Promise<LaunchResult> {
   const print = opts.print ?? ((s: string) => console.log(s));
   if (!looksLikeJobhuntFolder(dir)) {
-    // No AGENTS.md means no jobhunt.yaml to ask either: the Taiwan (Chinese) wording.
-    const T = cliTextFor("zh-TW");
+    // No AGENTS.md means no jobhunt.yaml to ask either: Chinese, unless the path names the US kit (job-hunt-us).
+    const T = cliTextFor(unrecognisedLanguage(dir));
     print(T.notFolder1);
     print(T.programAt(dir));
     print(T.notFolder3);

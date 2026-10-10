@@ -8,6 +8,7 @@
     "dev": "bun src/main.ts --dir ../jobhunt/scaffold/workspace-general",
     "test": "bun test",
     "build": "bun build.ts",
-    "smoke": "bun tests/smoke.ts"
+    "smoke": "bun tests/smoke.ts",
+    "smoke:us": "bun tests/smoke.ts --us"
   }
 }

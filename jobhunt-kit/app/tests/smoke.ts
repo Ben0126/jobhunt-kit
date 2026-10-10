@@ -1,15 +1,19 @@
 // 冒煙測試：對「打包好的執行檔」跑，不是對原始碼跑。
 //   bun tests/smoke.ts <執行檔路徑> [測試資料夾，預設 tests/fixture]
+//   bun tests/smoke.ts <執行檔路徑> --us [測試資料夾，預設美國版 workspace-us]   ← 美國版：程式輸出要全英文
 // 步驟：複製測試資料夾 → 把執行檔放進去 → --no-open 啟動 → 從 lock 檔讀埠和通行碼 →
 //       read 讀 Word 舊履歷 → /api/ping → 改一筆狀態 → 確認進度表真的改了 → 履歷存一份 → 第二次啟動要導向第一份 → 關掉。
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
-const bin = process.argv[2] && resolve(process.argv[2]);
-const fixture = resolve(process.argv[3] ?? join(import.meta.dir, "fixture"));
+const argv = process.argv.slice(2);
+const usMode = argv.includes("--us");
+const posArgs = argv.filter((a) => a !== "--us");
+const bin = posArgs[0] && resolve(posArgs[0]);
+const fixture = resolve(posArgs[1] ?? (usMode ? join(import.meta.dir, "..", "..", "jobhunt", "scaffold", "workspace-us") : join(import.meta.dir, "fixture")));
 if (!bin || !existsSync(bin)) {
-  console.error("usage: bun tests/smoke.ts <binary> [fixture-folder]");
+  console.error("usage: bun tests/smoke.ts <binary> [--us] [fixture-folder]");
   process.exit(2);
 }
 
@@ -41,7 +45,72 @@ async function runToEnd(cmd: string[], timeoutMs: number): Promise<{ code: numbe
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const CJK = /[　-〿㐀-䶿一-鿿＀-￯]/;
+
+// 美國版：複製 workspace-us 當作使用者資料夾，所有程式輸出和介面頁面都不可以出現中文。
+async function runUs() {
+  console.log(`binary:  ${bin} (${(Bun.file(bin!).size / 1048576).toFixed(1)} MB)`);
+  console.log(`fixture: ${fixture} (US mode)`);
+
+  // 1) 資料夾不被認得、但路徑裡有 -us 段（像 job-hunt-us）：用英文說明，exit 1
+  const notFolder = join(work, "job-hunt-us", "not-a-folder");
+  mkdirSync(notFolder, { recursive: true });
+  const nf = await runToEnd([placeBinary(notFolder), "--no-open"], 20000);
+  check(nf.code === 1 && !CJK.test(nf.out) && nf.out.trim().length > 0, "unrecognised folder with -us in the path → English, exit 1", `exit=${nf.code}`);
+
+  // 2) check：新資料夾沒有履歷，應該 exit 0、英文
+  const folder = join(work, "job-hunt-us", "folder with space");
+  cpSync(fixture, folder, { recursive: true });
+  const exe = placeBinary(folder);
+  const ck = await runToEnd([exe, "check"], 30000);
+  check(ck.code === 0 && ck.out.includes("Program check") && !CJK.test(ck.out), "`check` in a fresh US folder → English, exit 0", `exit=${ck.code}`);
+  const ck2 = await runToEnd([exe, "check", "no-such-job"], 30000);
+  check(ck2.code === 2 && !CJK.test(ck2.out), "`check <unknown id>` → English, exit 2", `exit=${ck2.code}`);
+
+  // 3) 正式啟動：介面頁面和主控台訊息都不含中文
+  const app = Bun.spawn([exe, "--no-open"], { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+  procs.push(app);
+  const lockPath = join(folder, ".jobhunt", "app.lock");
+  let lock: { port: number; token: string } | null = null;
+  for (let i = 0; i < 100 && !lock; i++) {
+    try {
+      lock = JSON.parse(readFileSync(lockPath, "utf-8"));
+    } catch {
+      await sleep(200);
+    }
+  }
+  check(!!lock, "lock file written", lock ? `port ${lock.port}` : "no lock after 20s");
+  if (!lock) throw new Error("app did not start");
+  const base = `http://127.0.0.1:${lock.port}`;
+  const H = { "x-jobhunt-token": lock.token, "content-type": "application/json" };
+  const ping = await fetch(`${base}/api/ping`, { headers: H });
+  check(ping.status === 200, "/api/ping with token");
+  const home = await fetch(`${base}/`);
+  const html = await home.text();
+  check(home.status === 200 && html.includes('lang="en"') && !CJK.test(html), "UI page is English, no CJK");
+  const js = await (await fetch(`${base}/app.js`)).text();
+  check(js.includes("x-jobhunt-token"), "UI script embedded in the binary");
+  const board: any = await (await fetch(`${base}/api/applications`, { headers: H })).json();
+  check(Array.isArray(board.rows), "board API answers", `${board.rows?.length} rows`);
+  const cr = await fetch(`${base}/api/check`, { headers: H });
+  const crText = await cr.text();
+  check(cr.status === 200 && !CJK.test(crText), "/api/check JSON has no CJK");
+
+  // 第二次啟動：導向第一份
+  const second = await runToEnd([exe, "--no-open"], 20000);
+  check(second.code === 0 && !CJK.test(second.out) && second.out.includes(String(lock.port)), "second launch reuses the running one, English", `exit=${second.code}`);
+
+  app.kill();
+  await app.exited;
+  const out = await new Response(app.stdout).text();
+  check(out.includes(`127.0.0.1:${lock.port}`) && !CJK.test(out), "console message English with URL", out.split(/\r?\n/)[0]);
+}
+
 try {
+  if (usMode) {
+    await runUs();
+    throw null;
+  }
   console.log(`binary:  ${bin} (${(Bun.file(bin).size / 1048576).toFixed(1)} MB)`);
   console.log(`fixture: ${fixture}`);
 
@@ -184,7 +253,7 @@ try {
   const out = await new Response(app.stdout).text();
   check(out.includes("用完再關掉這個視窗") && out.includes(`127.0.0.1:${lock.port}`), "console message in plain Chinese with URL", out.split(/\r?\n/)[0]);
 } catch (e) {
-  check(false, "smoke run", String(e));
+  if (e !== null) check(false, "smoke run", String(e));
 } finally {
   for (const p of procs) {
     try {

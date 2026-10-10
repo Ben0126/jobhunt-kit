@@ -1,8 +1,10 @@
 # 發布版本：推 v0.6 或 v0.6.1 這種格式的 tag 就會跑（v0.6-rc1 這種測試用 tag 不會觸發，避免測試版變成「最新版」）。
 # 1) 在 Windows / Apple 晶片 Mac / Intel Mac 上各自測試、打包程式（步驟和 app.yml 相同）。
-# 2) 把使用者要的資料夾（workspace-general）和該平台的程式一起包成「解壓縮就能用」的 job-hunt 資料夾 zip。
-# 3) 建立 GitHub Release（公開下載頁），放上三個 zip。
-# 固定下載連結：https://github.com/<repo>/releases/latest/download/job-hunt-windows.zip（另兩個同理）。
+# 2) 每個平台只打包一次程式，再把兩套資料夾各自和程式包成「解壓縮就能用」的 zip：
+#    台灣版（workspace-general）→ job-hunt 資料夾 → job-hunt-windows.zip（另兩個同理）
+#    美國版（workspace-us）     → job-hunt-us 資料夾 → job-hunt-us-windows.zip（另兩個同理）
+# 3) 建立 GitHub Release（公開下載頁），台灣版和美國版同一個 tag、同一頁，放上六個 zip。
+# 固定下載連結：https://github.com/<repo>/releases/latest/download/job-hunt-windows.zip（其他同理，美國版是 job-hunt-us-*.zip）。
 name: release
 
 on:
@@ -38,20 +40,20 @@ jobs:
             os: windows-latest
             target: win
             bin: jobhunt.exe
-            zip: job-hunt-windows.zip
+            suffix: windows
             py: python
           - name: macos-arm64
             os: macos-latest
             target: mac-arm64
             bin: jobhunt-mac-arm64
-            zip: job-hunt-mac-apple.zip
+            suffix: mac-apple
             py: python3
           - name: macos-x64
             # macos-13 已退役；目前的 Intel runner 是 macos-15-intel
             os: macos-15-intel
             target: mac-x64
             bin: jobhunt-mac-x64
-            zip: job-hunt-mac-intel.zip
+            suffix: mac-intel
             py: python3
     defaults:
       run:
@@ -87,16 +89,24 @@ jobs:
       - name: Smoke test the compiled binary
         run: bun tests/smoke.ts "dist/${{ matrix.bin }}"
 
+      # 美國版：同一個程式，對美國版資料夾再跑一次，輸出要全英文。
+      - name: Smoke test the compiled binary (US kit)
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us
+
       # 只會帶到 git 追蹤的檔案（CI 是全新 checkout），本機的暫存檔不會被包進去。
-      - name: Assemble the ready-to-use folder
+      # 台灣版 → pkg/job-hunt，美國版 → pkg/job-hunt-us，各放一份同一個程式。
+      - name: Assemble the ready-to-use folders
         working-directory: ${{ github.workspace }}
         run: |
           rm -rf pkg
           mkdir pkg
           cp -R jobhunt-kit/jobhunt/scaffold/workspace-general pkg/job-hunt
-          cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/job-hunt/${{ matrix.bin }}"
-          if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/job-hunt/${{ matrix.bin }}"; fi
-          ls -la pkg/job-hunt
+          cp -R jobhunt-kit/jobhunt/scaffold/workspace-us pkg/job-hunt-us
+          for d in job-hunt job-hunt-us; do
+            cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/$d/${{ matrix.bin }}"
+            if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/$d/${{ matrix.bin }}"; fi
+            ls -la "pkg/$d"
+          done
 
       # Windows PowerShell 5.1 的 Compress-Archive：中文檔名寫成 UTF-8 並標上 UTF-8 旗標（已在本機 Windows 11 實測）。
       - name: Zip (Windows)
@@ -105,79 +115,94 @@ jobs:
         working-directory: ${{ github.workspace }}/pkg
         run: |
           $ErrorActionPreference = 'Stop'
-          Compress-Archive -Path job-hunt -DestinationPath '${{ matrix.zip }}'
+          Compress-Archive -Path job-hunt -DestinationPath 'job-hunt-${{ matrix.suffix }}.zip'
+          Compress-Archive -Path job-hunt-us -DestinationPath 'job-hunt-us-${{ matrix.suffix }}.zip'
 
       # ditto 保留執行權限和 UTF-8 檔名；不帶 Mac 專用的附加資料，避免多出 __MACOSX、._ 檔。
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         working-directory: ${{ github.workspace }}/pkg
-        run: ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt "${{ matrix.zip }}"
+        run: |
+          ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt "job-hunt-${{ matrix.suffix }}.zip"
+          ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt-us "job-hunt-us-${{ matrix.suffix }}.zip"
 
-      # 檢查 zip 裡的檔案和資料夾一模一樣（不多不少）、中文檔名沒有變亂碼、Mac 程式有執行權限。
-      - name: Verify the zip
+      # 檢查兩個 zip 裡的檔案和資料夾都和來源一模一樣（不多不少）、檔名沒有變亂碼、Mac 程式有執行權限、必要檔案都在。
+      - name: Verify the zips
         working-directory: ${{ github.workspace }}/pkg
         env:
-          ZIP: ${{ matrix.zip }}
-          SRC: job-hunt
+          SUFFIX: ${{ matrix.suffix }}
           BIN: ${{ matrix.bin }}
           PYTHONIOENCODING: utf-8
         run: |
           ${{ matrix.py }} - <<'PY'
           import os, sys, zipfile
 
-          zpath, src, binname = os.environ["ZIP"], os.environ["SRC"], os.environ["BIN"]
+          suffix, binname = os.environ["SUFFIX"], os.environ["BIN"]
           is_mac = os.environ["RUNNER_OS"] == "macOS"
 
-          expected = set()
-          for root, _dirs, files in os.walk(src):
-              for f in files:
-                  expected.add(os.path.join(root, f).replace(os.sep, "/"))
-
-          problems, got, utf8_flagged = [], {}, 0
-          with zipfile.ZipFile(zpath) as z:
-              for info in z.infolist():
-                  name = info.filename
-                  if info.flag_bits & 0x800:
-                      utf8_flagged += 1
-                  else:
-                      # 沒標 UTF-8 旗標時 Python 用 cp437 解碼；還原成原始位元組再用 UTF-8 解
-                      try:
-                          name = name.encode("cp437").decode("utf-8")
-                      except UnicodeError:
-                          problems.append("name is not UTF-8: " + ascii(name))
-                  if "\\" in name:
-                      problems.append("backslash in entry name: " + ascii(name))
-                  if name.endswith("/"):
-                      continue
-                  got[name] = info
-
-          for n in sorted(expected - set(got)):
-              problems.append("missing from zip: " + ascii(n))
-          for n in sorted(set(got) - expected):
-              problems.append("unexpected in zip: " + ascii(n))
-
-          must = [
-              "job-hunt/\u958b\u59cb\u4f7f\u7528.md",  # 開始使用.md
-              "job-hunt/\u958b\u5834\u53e5.txt",  # 開場句.txt
-              "job-hunt/AGENTS.md",
-              "job-hunt/.claude/settings.json",
-              "job-hunt/" + binname,
+          # 每套資料夾：(zip 檔名, 資料夾名, 必要檔案)
+          kits = [
+              ("job-hunt-%s.zip" % suffix, "job-hunt", [
+                  "開始使用.md",  # 開始使用.md
+                  "開場句.txt",  # 開場句.txt
+                  "AGENTS.md",
+                  ".claude/settings.json",
+              ]),
+              ("job-hunt-us-%s.zip" % suffix, "job-hunt-us", [
+                  "AGENTS.md",
+                  "START-HERE.md",
+                  "opening-prompt.txt",
+                  "jobhunt.yaml",
+                  "templates/resume-us.html",
+                  ".claude/settings.json",
+              ]),
           ]
-          for n in must:
-              if n not in got:
-                  problems.append("required file missing: " + ascii(n))
 
-          if is_mac and ("job-hunt/" + binname) in got:
-              mode = got["job-hunt/" + binname].external_attr >> 16
-              if not mode & 0o111:
-                  problems.append("program lost its exec bit: mode=%o" % mode)
-              else:
-                  print("exec bit ok: mode=%o" % mode)
+          problems = []
+          for zpath, src, must_files in kits:
+              expected = set()
+              for root, _dirs, files in os.walk(src):
+                  for f in files:
+                      expected.add(os.path.join(root, f).replace(os.sep, "/"))
 
-          print("%s: %d files, %d entries flagged UTF-8, %.1f MB" % (
-              zpath, len(got), utf8_flagged, os.path.getsize(zpath) / 1048576))
-          for n in sorted(got):
-              print("  " + n)
+              got, utf8_flagged = {}, 0
+              with zipfile.ZipFile(zpath) as z:
+                  for info in z.infolist():
+                      name = info.filename
+                      if info.flag_bits & 0x800:
+                          utf8_flagged += 1
+                      else:
+                          # 沒標 UTF-8 旗標時 Python 用 cp437 解碼；還原成原始位元組再用 UTF-8 解
+                          try:
+                              name = name.encode("cp437").decode("utf-8")
+                          except UnicodeError:
+                              problems.append(zpath + ": name is not UTF-8: " + ascii(name))
+                      if "\\" in name:
+                          problems.append(zpath + ": backslash in entry name: " + ascii(name))
+                      if name.endswith("/"):
+                          continue
+                      got[name] = info
+
+              for n in sorted(expected - set(got)):
+                  problems.append(zpath + ": missing from zip: " + ascii(n))
+              for n in sorted(set(got) - expected):
+                  problems.append(zpath + ": unexpected in zip: " + ascii(n))
+
+              for n in [src + "/" + f for f in must_files] + [src + "/" + binname]:
+                  if n not in got:
+                      problems.append(zpath + ": required file missing: " + ascii(n))
+
+              if is_mac and (src + "/" + binname) in got:
+                  mode = got[src + "/" + binname].external_attr >> 16
+                  if not mode & 0o111:
+                      problems.append(zpath + ": program lost its exec bit: mode=%o" % mode)
+                  else:
+                      print("exec bit ok: mode=%o" % mode)
+
+              print("%s: %d files, %d entries flagged UTF-8, %.1f MB" % (
+                  zpath, len(got), utf8_flagged, os.path.getsize(zpath) / 1048576))
+              for n in sorted(got):
+                  print("  " + n)
           if problems:
               print("\n".join("FAIL " + p for p in problems))
               sys.exit(1)
@@ -190,31 +215,46 @@ jobs:
         working-directory: ${{ github.workspace }}/pkg
         run: |
           $ErrorActionPreference = 'Stop'
-          Expand-Archive -Path '${{ matrix.zip }}' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
+          Expand-Archive -Path 'job-hunt-${{ matrix.suffix }}.zip' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
+          Expand-Archive -Path 'job-hunt-us-${{ matrix.suffix }}.zip' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
 
       - name: Unzip a throwaway copy (macOS)
         if: runner.os == 'macOS'
         working-directory: ${{ github.workspace }}/pkg
-        run: ditto -x -k "${{ matrix.zip }}" "$RUNNER_TEMP/unzipped"
+        run: |
+          ditto -x -k "job-hunt-${{ matrix.suffix }}.zip" "$RUNNER_TEMP/unzipped"
+          ditto -x -k "job-hunt-us-${{ matrix.suffix }}.zip" "$RUNNER_TEMP/unzipped"
 
-      - name: Test the unzipped program
+      - name: Test the unzipped programs
         env:
           BIN: ${{ matrix.bin }}
         run: |
           set -euo pipefail
-          dir="$RUNNER_TEMP/unzipped/job-hunt"
-          if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
-          bun tests/smoke.ts "$dir/$BIN"
-          # 在解出來的資料夾裡直接跑 check：程式要認得這是求職資料夾（認不得會回 2）。全新的資料夾應該回 0。
-          cd "$dir"
-          code=0
-          "./$BIN" check || code=$?
-          [ "$code" -eq 0 ] || { echo "check in the unzipped folder exited $code (expected 0)"; exit 1; }
+          for kit in job-hunt job-hunt-us; do
+            dir="$RUNNER_TEMP/unzipped/$kit"
+            if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
+            if [ "$kit" = "job-hunt-us" ]; then
+              bun tests/smoke.ts "$dir/$BIN" --us
+            else
+              bun tests/smoke.ts "$dir/$BIN"
+            fi
+            # 在解出來的資料夾裡直接跑 check：程式要認得這是求職資料夾（認不得會回 2）。全新的資料夾應該回 0。
+            code=0
+            (cd "$dir" && "./$BIN" check) || code=$?
+            [ "$code" -eq 0 ] || { echo "check in the unzipped $kit folder exited $code (expected 0)"; exit 1; }
+          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.zip }}
-          path: pkg/${{ matrix.zip }}
+          name: job-hunt-${{ matrix.suffix }}.zip
+          path: pkg/job-hunt-${{ matrix.suffix }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: job-hunt-us-${{ matrix.suffix }}.zip
+          path: pkg/job-hunt-us-${{ matrix.suffix }}.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -237,7 +277,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -l out
-          for f in job-hunt-windows.zip job-hunt-mac-apple.zip job-hunt-mac-intel.zip; do
+          for f in job-hunt-windows.zip job-hunt-mac-apple.zip job-hunt-mac-intel.zip                    job-hunt-us-windows.zip job-hunt-us-mac-apple.zip job-hunt-us-mac-intel.zip; do
             test -s "out/$f" || { echo "missing out/$f"; exit 1; }
           done
 
@@ -258,6 +298,8 @@ jobs:
 
           下面的「Source code」是給開發者的原始碼，不用下載。
 
+          （Using the US edition? See "US edition (English)" at the bottom of this page. Those files are named job-hunt-us-*.zip.）
+
           ## 使用前要有
 
           - Claude 付費方案（Pro 或以上）。免費方案不能用 Code 分頁。
@@ -270,6 +312,20 @@ jobs:
           ## 更多說明
 
           https://github.com/${REPO}#readme
+
+          ## US edition (English)
+
+          For students and new grads looking for jobs in the United States, including international students on F-1 OPT / CPT. Everything in the folder and the local app is in English. This release has two kits: the Chinese files above are the Taiwan edition; the files named **job-hunt-us-*.zip** are the US edition.
+
+          Download one zip, unzip it, and open START-HERE.md inside (any text editor works). If unzipping gives you a folder inside a folder, use the inner job-hunt-us folder, the one that contains START-HERE.md.
+
+          - Windows: [job-hunt-us-windows.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-windows.zip)
+          - Mac with Apple silicon (M1, M2, M3, M4): [job-hunt-us-mac-apple.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-mac-apple.zip)
+          - Mac with an Intel processor: [job-hunt-us-mac-intel.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-mac-intel.zip)
+
+          Not sure which Mac you have: Apple menu, then "About This Mac". "Chip: Apple M..." means Apple silicon; "Processor: Intel" means Intel.
+
+          You need a paid Claude plan (Pro or above) and the Claude desktop app (https://claude.ai/download), using its Code tab. The first time you open the jobhunt program, Windows and macOS show a warning because it is not code-signed; START-HERE.md explains what to click.
           EOF
           cat notes.md
 

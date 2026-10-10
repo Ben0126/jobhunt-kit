@@ -4,13 +4,13 @@ import { dirname } from "node:path";
 import { cliTextFor } from "./cli.text.ts";
 import { dirFlagRefused, looksLikeJobhuntFolder, resolveDataDir } from "./folder.ts";
 import { launch } from "./launch.ts";
-import { type Language, readMarketSync } from "./market.ts";
+import { type Language, readMarketSync, unrecognisedLanguage } from "./market.ts";
 
 const argv = process.argv.slice(2);
 const command = argv.find((a, i) => !a.startsWith("-") && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
 
-/** The language of the folder's jobhunt.yaml; a folder the program does not recognise gets the Taiwan (Chinese) wording. */
-const langOf = (dir: string | null): Language => (dir && looksLikeJobhuntFolder(dir) ? readMarketSync(dir).language : "zh-TW");
+/** The language of the folder's jobhunt.yaml; a folder the program does not recognise gets Chinese, or English when the path names the US kit. */
+const langOf = (dir: string | null): Language => (dir && looksLikeJobhuntFolder(dir) ? readMarketSync(dir).language : unrecognisedLanguage(dir));
 
 function waitForEnter(lang: Language) {
   // Double-clicked on Windows: keep the window open long enough to read the message.
@@ -42,7 +42,7 @@ async function main(): Promise<number> {
   const unknown = argv.filter((a, i) => a.startsWith("-") && !/^--(?:dir|folder)(?:=.*)?$/.test(a) && a !== "--no-open" && !/^-psn_/.test(a) && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
   if (command || unknown.length) {
     console.log(T.unknownCommand(command ?? unknown.join(" ")));
-    console.log(T.usage(dir !== null && langOf(dir) === "en" && readMarketSync(dir).market === "us"));
+    console.log(T.usage(langOf(dir) === "en" && (!dir || !looksLikeJobhuntFolder(dir) || readMarketSync(dir).market === "us"))); // an unrecognised folder that speaks English is the US kit
     return 2;
   }
   if (!dir) {
@@ -52,7 +52,7 @@ async function main(): Promise<number> {
 
   const result = await launch(dir, { open: !argv.includes("--no-open") });
   if (result.kind === "not-folder") {
-    waitForEnter("zh-TW"); // the folder is not recognised: launch() printed the Chinese wording
+    waitForEnter(unrecognisedLanguage(dir)); // the folder is not recognised: same wording launch() printed
     return 1;
   }
   if (result.kind === "already-running") return 0;

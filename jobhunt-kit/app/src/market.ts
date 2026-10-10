@@ -44,3 +44,15 @@ export function readMarketSync(dir: string): MarketConfig {
     return TW_DEFAULTS;
   }
 }
+
+/** True when a path has a segment naming the US kit: the folder `job-hunt-us`, or a zip like `job-hunt-us-windows.zip`
+ * (Windows shows a zip's content as `Temp1_job-hunt-us-windows.zip\job-hunt-us\...`). `focus-us` and `campus-users` do not count. */
+export function pathNamesUsKit(p: string): boolean {
+  return p.split(/[\/]+/).some((seg) => /job-hunt-us(?![a-z0-9])/i.test(seg));
+}
+
+/** The wording for a folder the program does not recognise (no readable jobhunt.yaml): English when the program's own
+ * path or the given folder path names the US kit, else the Taiwan (Chinese) wording as before. */
+export function unrecognisedLanguage(dir: string | null, execPath: string = process.execPath): Language {
+  return pathNamesUsKit(execPath) || (!!dir && pathNamesUsKit(dir)) ? "en" : "zh-TW";
+}

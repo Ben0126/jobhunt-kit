@@ -18,6 +18,16 @@
 
 不知道自己的 Mac 是哪一種：按左上角蘋果選單 →「關於這台 Mac」。有「晶片」這一行、寫 Apple（例如 Apple M1、M2、M3、M4）就選 Apple；沒有「晶片」，而是「處理器」那一行寫 Intel，就選 Intel。
 
+**US edition (English), for job searches in the United States.** Same Releases page, different files:
+
+| Your computer | Download this |
+| --- | --- |
+| Windows | [`job-hunt-us-windows.zip`](https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-us-windows.zip) |
+| Mac (Apple silicon, M1 or later) | [`job-hunt-us-mac-apple.zip`](https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-us-mac-apple.zip) |
+| Mac (Intel processor) | [`job-hunt-us-mac-intel.zip`](https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-us-mac-intel.zip) |
+
+Unzip it and open `START-HERE.md` inside the `job-hunt-us` folder.
+
 ## 需要什麼
 
 - 一台 Windows 或 Mac 電腦。
@@ -110,4 +120,4 @@ cd jobhunt-kit && pip install -e ".[dev]" && pytest     # Python CLI（Python 3.
 GitHub Actions 有兩份：
 
 - `.github/workflows/app.yml`：在 Windows、Apple 晶片 Mac、Intel Mac 上測試、打包，並實際打開打包好的程式跑一遍基本流程。
-- `.github/workflows/release.yml`：推 `v0.6`、`v0.6.1` 這種格式的 tag 時，把使用者資料夾和程式包成三個 zip，解開再測一次，然後放到 GitHub Release。
+- `.github/workflows/release.yml`：推 `v0.6`、`v0.6.1` 這種格式的 tag 時，把台灣版和美國版的使用者資料夾各和程式包成 zip（共六個），解開再測一次，然後放到 GitHub Release。

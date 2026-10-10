@@ -9,7 +9,7 @@ import * as R from "../../web/js/core/rules.js";
 import { docxTextFor } from "./docx.text.ts";
 import { looksLikeJobhuntFolder } from "./folder.ts";
 import { replaceExtraIds } from "./ids.ts";
-import { type Language, readMarketSync } from "./market.ts";
+import { type Language, readMarketSync, unrecognisedLanguage } from "./market.ts";
 
 // ---------------------------------------------------------------- limits
 
@@ -543,9 +543,9 @@ const isMissing = (err: unknown) => ["ENOENT", "ENOTDIR"].includes((err as any)?
 export function runRead(argv: string[], dir: string | null, print: (s: string) => void = (s) => console.log(s), ioOverride: Partial<ReadIo> = {}): number {
   const io = { ...REAL_IO, ...ioOverride };
   const { paths, unknown } = readArgs(argv);
-  // A folder the program does not recognise has no jobhunt.yaml to read: the Taiwan (Chinese) wording is the default.
+  // A folder the program does not recognise has no jobhunt.yaml to read: Chinese is the default, English when the path names the US kit.
   const folderOk = !!dir && looksLikeJobhuntFolder(dir);
-  const lang: Language = dir && folderOk ? readMarketSync(dir).language : "zh-TW";
+  const lang: Language = dir && folderOk ? readMarketSync(dir).language : unrecognisedLanguage(dir);
   const MESSAGES = messagesFor(lang);
   if (unknown.length || paths.length !== 1) {
     if (unknown.length) print(MESSAGES.unknownArg(unknown.join(" ")));

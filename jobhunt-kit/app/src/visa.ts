@@ -34,14 +34,28 @@ const RULES: RegExp[] = [
 
 /** The visa-related words found in `text` (as written, in order). `employers`: the user's own employers; a "Visa" inside one of them is a company. */
 export function visaWords(text: string, employers: string[] = []): string[] {
+  return visaMatches(text, employers).matches.map((m) => m[0]);
+}
+
+/** `text` (NFKC, dashes unified) with every visa word that visaWords reports replaced by spaces, so a later check does not
+ * read the digit of "F-1" or "H-1B" as a number. */
+export function maskVisaWords(text: string, employers: string[] = []): string {
+  const { t, matches } = visaMatches(text, employers);
+  let out = t;
+  for (const m of matches) out = out.slice(0, m.index!) + " ".repeat(m[0].length) + out.slice(m.index! + m[0].length);
+  return out;
+}
+
+function visaMatches(text: string, employers: string[]): { t: string; matches: RegExpMatchArray[] } {
   const t = String(text).normalize("NFKC").replace(DASH, "-");
   const own: [number, number][] = [];
   for (const name of employers.map((e) => e.normalize("NFKC")).filter((e) => /\bvisa\b/i.test(e))) // exact case: "visa extension" is not the company
     for (let i = t.indexOf(name); i >= 0; i = t.indexOf(name, i + 1)) own.push([i, i + name.length]);
   const seen = new Set<string>();
-  return RULES.flatMap((re) => [...t.matchAll(re)])
+  const matches = RULES.flatMap((re) => [...t.matchAll(re)])
     .filter((m) => !own.some(([a, b]) => m.index! >= a && m.index! + m[0].length <= b))
     .sort((a, b) => a.index! - b.index!)
     .filter((m) => !seen.has(`${m.index}:${m[0]}`) && !!seen.add(`${m.index}:${m[0]}`))
-    .map((m) => m[0]);
+    .map((m) => m);
+  return { t, matches };
 }
