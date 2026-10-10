@@ -64,13 +64,14 @@ skills:
   - {label: Languages, items: [Portuguese (native), English (fluent)], sources: [S-005], variants: [en]}
 `;
 
-const head = (id: string, title: string, org: string) => `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: confirmed\nconfirmed: "2026-10-09"\nconfirmed_via: chat\nconfirmed_reply: "confirm ${id}"\n---\n\n## Your words\n\n> text\n\n## Sentence for the resume\n\nx\n\n`;
+// P8fix-2: a card records its org and dates in the header (the checker compares resume.yaml with them) and says its numbers under "Your words"
+const head = (id: string, title: string, org: string, dates = "", said = "text") => `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\ndates: "${dates}"\nstatus: confirmed\nconfirmed: "2026-10-09"\nconfirmed_via: chat\nconfirmed_reply: "confirm ${id}"\n---\n\n## Your words\n\n> ${said}\n\n## Sentence for the resume\n\nx\n\n`;
 
 // S-001 has notes appended after the section (run B's S-002 shape), S-003 is plain, S-004 / S-005 are the Skills form
 const S001 =
-  head("S-001", "Bookstore sales associate", "Northfield College Bookstore") +
+  head("S-001", "Bookstore sales associate", "Northfield College Bookstore", "Jan 2024 – May 2026", "I rang up sales at the register, around 30 customers per shift, and I trained 2 new student hires") +
   `## Sentence at confirmation (do not change)\n\nTitle: Sales Associate\n1. Rang up sales at the register, with about 30 customers per shift.\n2. Trained 2 new student hires on the register.\n\nShown back in Chinese:\n1. 在收銀台結帳。\n2. 訓練 2 位新進學生員工。\n- a note added later: they asked for \"led a team\", refused\n`;
-const S003 = head("S-003", "Food drive", "Northfield Food Drive") + `## Sentence at confirmation (do not change)\n\n1. Helped collect cans as one of the volunteers.\n\nShown back: their words are English, so no translation needed.\n`;
+const S003 = head("S-003", "Food drive", "Northfield Food Drive", "Nov 2024") + `## Sentence at confirmation (do not change)\n\n1. Helped collect cans as one of the volunteers.\n\nShown back: their words are English, so no translation needed.\n`;
 const S004 = head("S-004", "Software", "") + `## Sentence at confirmation (do not change)\n\nSoftware: Google Sheets, Excel (basic)\n\nShown back: their words are English, so no translation needed.\n`;
 const S005 = head("S-005", "Languages", "") + `## Sentence at confirmation (do not change)\n\nLanguages: Portuguese (native), English (fluent)\n`;
 
@@ -327,7 +328,7 @@ test("P8fix-4：確認段落標題被改名、或開頭多一行標籤 → 錯�
 });
 
 test("P8fix-4b：沒有重點的經歷項目也要連到確認卡；職稱要是它的卡上的 Title", async () => {
-  const item = (extra: string) => `  - id: s009\n    org: Golden Dragon Restaurant\n    role: Restaurant Manager\n    dates: "2024"\n    variants: [en]\n${extra}    bullets: []\n`;
+  const item = (extra: string) => `  - id: s009\n    org: Northfield College Bookstore\n    role: Restaurant Manager\n    dates: "Jan 2024 – May 2026"\n    variants: [en]\n${extra}    bullets: []\n`;
   expect(has(await rd(usFolder({ resume: RESUME.replace("projects:\n", item("") + "projects:\n") })), "not tied to any confirmed card")).toBe(true);
   expect(has(await rd(usFolder({ resume: RESUME.replace("projects:\n", item("    source: S-001\n") + "projects:\n") })), "Sales Associate")).toBe(true);
   await rdOk(usFolder({ resume: RESUME.replace("projects:\n", item("    source: S-001\n").replace("Restaurant Manager", "Sales Associate") + "projects:\n") }));

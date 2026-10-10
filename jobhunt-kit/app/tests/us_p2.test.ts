@@ -105,10 +105,11 @@ function usFolder(): string {
   write(dir, "jobhunt.yaml", read(dir, "jobhunt.yaml").replace(/^market:.*$/m, "market: us").replace(/^language:.*$/m, "language: en").replace(/^paper:.*$/m, "paper: letter"));
   write(dir, "resume.yaml", RESUME);
   // P8-fix: resume.yaml is compared with the "Sentence at confirmation" of the cards it names, so the two cards carry those sentences
-  const card = (id: string, title: string, org: string, sentences: string[]) =>
-    `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: confirmed\nconfirmed: "2026-10-09"\nconfirmed_via: chat\nconfirmed_reply: "confirm ${id}"\n---\n\n## Your words\n\n> text\n\n## Sentence at confirmation (do not change)\n\nTitle: ${title}\n${sentences.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n`;
-  write(dir, "me/stories/S-001.md", card("S-001", "Cashier", "Campus Bookstore", BULLETS));
-  write(dir, "me/stories/S-002.md", card("S-002", "Volunteer", "City Library", ["Shelved books."]));
+  // P8fix-2: a card records its org / dates in the header, and its numbers are ones said under "Your words"
+  const card = (id: string, title: string, org: string, sentences: string[], dates = "", said = "text") =>
+    `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\ndates: "${dates}"\nstatus: confirmed\nconfirmed: "2026-10-09"\nconfirmed_via: chat\nconfirmed_reply: "confirm ${id}"\n---\n\n## Your words\n\n> ${said}\n\n## Sentence at confirmation (do not change)\n\nTitle: ${title}\n${sentences.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n`;
+  write(dir, "me/stories/S-001.md", card("S-001", "Cashier", "Campus Bookstore", BULLETS, "Jun 2023 – Present", "I handled twenty-five customers per hour, doubled newsletter signups to three hundred, managed a $1.2M annual budget, trained over 50 new hires, raised 47 donations, cut wait time by 15% and answered two hundred emails weekly"));
+  write(dir, "me/stories/S-002.md", card("S-002", "Volunteer", "City Library", ["Shelved books."], "Sep 2024 – Dec 2024"));
   write(dir, T, TARGET);
   rmSync(join(dir, HTML));
   return dir;
@@ -433,6 +434,7 @@ test("簽證字：Visa 是本人的雇主（resume.yaml 的 org）就不擋；�
   expect(visaWords("Applied for a visa extension at Visa.", ["Visa"])).toEqual(["visa"]);
   const dir = usFolder();
   write(dir, "resume.yaml", read(dir, "resume.yaml").replaceAll("Campus Bookstore", "Visa"));
+  write(dir, "me/stories/S-001.md", read(dir, "me/stories/S-001.md").replaceAll("Campus Bookstore", "Visa")); // P8fix-2: the card names the same employer
   write(dir, HTML, fillUs().replaceAll("Campus Bookstore", "Visa"));
   expect((await check(dir)).out).toContain("All passed.");
   const other = usFolder();

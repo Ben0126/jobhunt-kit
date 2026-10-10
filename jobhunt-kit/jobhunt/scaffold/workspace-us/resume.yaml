@@ -3,9 +3,10 @@
 # Rules (details in AGENTS.md, "How an experience becomes confirmed"):
 # - Only put in what the user explicitly confirmed ("confirm S-xxx"), or an old resume the user vouched for (confirmed_via: self-attest). Drafts (status: draft) never go in.
 # - Every bullet needs source: S-xxx, pointing to the confirmed story in me/stories/.
-# - Education and skills also need a source: education uses source: Education; each skills line uses sources: [S-xxx] (not a # comment, the program cannot read comments).
+# - Education also needs a source: education uses source: Education. Each skills line uses sources: [S-xxx], the codes of confirmed skill cards that hold exactly those items (not a # comment, the program cannot read comments). A skills line sourced only by Education or Job goals is an error.
+# - role, org (or name for a project) and dates are copied character for character from the Title:, Org: and Dates: lines of "Sentence at confirmation" in the story (dig-experience.md 6). A card with no Title: line means role stays empty. One card cannot be reused under a different employer, title or dates.
 # - Numbers only as the user said them, in digits. Quote dates and anything starting with 0, e.g. "Jun 2024 – Aug 2025".
-#   Dates are English: "May 2024", "Jun 2024 – Aug 2025", "Expected May 2027", "Present". If the user gave no month, write the year only (e.g. "2025"); if unknown, leave an empty string. Never work it out.
+#   Dates are English: "May 2024", "Jun 2024 – Aug 2025", "Expected May 2027", "Summers 2019 – 2022", "Present". If the user gave no month, write the year only (e.g. "2025"); if unknown, leave an empty string. Never work it out.
 # - Every item is English and carries variants: [en]. Each sentence is the English sentence the user confirmed on a card (see AGENTS.md). The variant is named en; the program only recognises that name.
 # - A story with status: deleted must not keep any bullet here.
 # - id is lowercase English letters, digits and underscores, unique across the file, e.g. campus_store, s003_a.

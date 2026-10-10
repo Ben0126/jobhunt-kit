@@ -65,7 +65,7 @@ Match the company and title against `data/applications.csv`, `jobs/<id>/jd.md` a
 
 - Choose the `job_id` first (section 4).
 - `jobs/<id>/` does not need the posting text yet. Save it later if they want to tailor a resume or prepare for the interview.
-- Add the new row at the end of the file.
+- Add the new row at the end of the file, with `last_update` set to today (`YYYY-MM-DD`).
 
 ### 3.4 Change a row
 
@@ -77,6 +77,8 @@ Match the company and title against `data/applications.csv`, `jobs/<id>/jd.md` a
 ### 3.5 Report back
 
 Say what changed in one sentence, e.g. "Recorded: Northfield HR Assistant is now Interviewing, Oct 14 (Wed) at 2:00 pm."
+
+**"I applied" and the resume copy.** Telling you in the chat only updates the tracker row. It does not keep a copy of the exact resume that was sent. That copy is made by the jobhunt app: its "Resumes" tab has a button that saves a copy of the resume as the one they sent (it goes to `submitted/` and is linked on the tracker row; the same press also moves a 'To apply' row to 'Applied'). So when the status becomes applied and `resumes/<id>.html` exists for this job, and the row's `resume_file` is empty, and the program is in the folder (`jobhunt.exe` or a file starting `jobhunt-mac-`), say once, in plain words: "I've updated your tracker. If you want to keep the exact version you sent, open the app, go to its \"Resumes\" tab and press the button that saves a copy as the one you sent." Never say that either way is fine or that chatting is enough. Describe the button; do not quote its label, which may be in another language. Do not tell them this when no resume file exists, when `resume_file` is already filled, or when there is no program. You never press it or write `resume_file` yourself.
 
 Then suggest at most one next step:
 - Interview -> "Want to prepare for the interview now?" (`interview-prep.md`)

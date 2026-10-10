@@ -157,7 +157,7 @@ Pick 1 or 2 per experience from the user's target roles. If the target is not de
 
 **Sales**
 - What did you say when customers were choosing what to buy? What happened next?
-- How did sponsors or partners come into this, and what did you do about them?
+- Did any sponsors or partners come into this? If so, what did you do about them? (It's fine if there were none.)
 - What was your target, and how did it go? (Only a number they say.)
 - What did you do after someone said no?
 - Tell me about a regular customer. What did you do for them?

@@ -155,15 +155,24 @@ function tailorMessage(msg: string, T: CheckText, us: boolean): { message: strin
 
 /** What a story file says under "## Sentence at confirmation (do not change)": `Title:` and the numbered sentences, or one
  * `Skills: a, b` line. Reading stops at the first blank line after them (the "Shown back" translation and notes come later). */
-export type Confirmed = { title: string | null; sentences: string[]; skills: string[]; /** the section is there but not in the exact format */ bad?: true };
-type Story = { status: string; title: string; org: string; conf?: Confirmed | null } | null;
+export type Confirmed = {
+  title: string | null;
+  /** `Org:` / `Dates:` lines of the block; undefined = the block has none (the file header's org / dates stand in for them) */
+  org?: string;
+  dates?: string;
+  sentences: string[];
+  skills: string[];
+  /** the section is there but not in the exact format */
+  bad?: true;
+};
+type Story = { status: string; title: string; org: string; dates: string; /** "Your words" and "Numbers" sections as text; null = neither section is there */ said: string | null; conf?: Confirmed | null } | null;
 
 export function parseConfirmed(text: string): Confirmed | null {
   const lines = text.split(/\r?\n/);
   const h = lines.findIndex((l) => /^##\s+Sentence at confirmation/i.test(l.trim()));
   if (h < 0) return null;
   // The exact format (dig-experience.md section 6): the heading, a blank line, then ONE block of lines up to the next blank line.
-  // The block is `[Title: x]` and numbered sentences, or a single `Label: items` line. Anything else in it (a note, a
+  // The block is optional `Title:` / `Org:` / `Dates:` lines and numbered sentences, or a single `Label: items` line. Anything else in it (a note, a
   // "Confirmed by:" line, a sentence without a number) makes the section malformed: `bad`. Text after the block (the translation,
   // later notes) is not read.
   const block: string[] = [];
@@ -181,12 +190,18 @@ export function parseConfirmed(text: string): Confirmed | null {
   const labelOf = (l: string) => /^([A-Za-z][A-Za-z &/-]{0,40}):\s*(.*)$/.exec(l);
   let rest = block;
   const first = block.length ? labelOf(block[0]) : null;
-  if (first && /^title$/i.test(first[1])) {
-    out.title = norm(first[2]);
-    rest = block.slice(1);
-    if (!rest.length || !out.title) return bad();
+  // leading `Title:` / `Org:` / `Dates:` lines, each at most once, in any order
+  let meta = 0;
+  while (rest.length) {
+    const m = labelOf(rest[0]);
+    const key = m ? m[1].toLowerCase() : "";
+    if (!m || !(key === "title" || key === "org" || key === "dates") || out[key] != null) break;
+    out[key] = norm(m[2]) as any;
+    rest = rest.slice(1);
+    meta++;
   }
-  if (rest.length === 1 && out.title == null && first && !/^(title|shown back)/i.test(first[1])) {
+  if (meta && (!rest.length || out.title === "")) return bad();
+  if (rest.length === 1 && !meta && first && !/^(title|org|dates|shown back)/i.test(first[1])) {
     out.skills.push(...splitList(first[2]));
     return out.skills.length ? out : bad();
   }
@@ -197,6 +212,35 @@ export function parseConfirmed(text: string): Confirmed | null {
   }
   return out.sentences.length ? out : bad();
 }
+/** The text under "## Your words" and "## Numbers ..." of a story file (what the user said, and the numbers recorded from it); null when the file has neither. */
+function saidOf(text: string): string | null {
+  const out: string[] = [];
+  let on = false;
+  let found = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const h = /^##\s+(.*)$/.exec(raw.trim());
+    if (h) {
+      on = /^(your words|numbers)\b/i.test(h[1].trim());
+      found ||= on;
+    } else if (on) out.push(raw);
+  }
+  return found ? out.join("\n") : null;
+}
+/** Employer / project names compared as words: no case, no punctuation, no (bracketed location). */
+const normName = (s: unknown) =>
+  norm(String(s ?? ""))
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+/** Date ranges compared as written, with any dash or "to" as one dash and no spaces around it. */
+const normDates = (s: unknown) =>
+  norm(String(s ?? ""))
+    .toLowerCase()
+    .replace(/\s*(?:[–—―−~～-]|\bto\b|至|到)\s*/g, "-")
+    .trim();
+/** Job-title words a summary or headline may not use unless a confirmed card's `Title:` has them. Lead and Head are only read capitalised (the verb "lead", "head" in "head start"). */
+const TITLE_WORDS = [/(?<![A-Za-z])(?:manager|director|supervisor|chief|president|founder|owner|captain|leader|chair(?:man|woman|person)?)(?![A-Za-z])/gi, /(?<![A-Za-z])(?:Lead|Head)(?![A-Za-z])/g];
 /** Straight quotes and one kind of space, so a pasted sentence is compared by its words. */
 const normQ = (s: unknown) => norm(String(s ?? "")).replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 
@@ -276,6 +320,9 @@ class Context {
   private stories = new Map<string, Story>();
   /** Names (org / title) of stories that are not confirmed and appear nowhere in the confirmed data. */
   draftNames: { code: string; name: string; status: string }[] = [];
+  /** market us: the words of the `Title:` lines of confirmed cards (lower case), and me/profile.md "Work they want" (the roles they look for). */
+  titleWords = new Set<string>();
+  wantWords = new Set<string>();
   /** Workplaces and activities in resume.yaml (not schools): a paragraph sourced only by 學歷 may not talk about them. */
   workNames: string[] = [];
   constructor(readonly folder: Folder) {}
@@ -317,6 +364,10 @@ class Context {
       const m = /^(S-[0-9]+)\.md$/i.exec(n);
       if (m) await this.story(m[1].toUpperCase());
     }
+    if (this.market.market === "us") {
+      for (const s of this.stories.values()) if (s?.status === "confirmed" && s.conf?.title) for (const w of s.conf.title.toLowerCase().match(/[a-z]+/g) ?? []) this.titleWords.add(w);
+      for (const w of (mdSection(this.profileRaw, "Work they want") ?? "").toLowerCase().match(/[a-z]+/g) ?? []) this.wantWords.add(w);
+    }
     const schools = asArray(this.resume.education).map((e: any) => norm(String(e?.school ?? ""))).filter((x) => [...x].length >= 2);
     const confirmed = [
       norm(all),
@@ -340,10 +391,17 @@ class Context {
       if (t != null) {
         const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(t);
         const fm: any = m ? Bun.YAML.parse(m[1]) : null;
-        s = { status: String(fm?.status ?? "").trim(), title: String(fm?.title ?? ""), org: String(fm?.org ?? ""), conf: parseConfirmed(t) };
+        s = {
+          status: String(fm?.status ?? "").trim(),
+          title: String(fm?.title ?? ""),
+          org: String(fm?.org ?? ""),
+          dates: String(fm?.dates ?? ""),
+          said: saidOf(t),
+          conf: parseConfirmed(t),
+        };
       }
     } catch {
-      s = { status: "?", title: "", org: "" };
+      s = { status: "?", title: "", org: "", dates: "", said: null };
     }
     this.stories.set(code, s);
     return s;
@@ -369,7 +427,7 @@ class Context {
     const reported = new Set<string>();
     /** What the confirmed cards among `codes` say; `ok` = at least one card could be read (otherwise nothing to compare with). */
     const cards = async (codes: string[]) => {
-      const r = { sentences: new Set<string>(), titles: [] as string[], skills: new Set<string>(), ok: false };
+      const r = { sentences: new Set<string>(), titles: [] as string[], orgs: [] as string[], dates: [] as string[], skills: new Set<string>(), ok: false };
       for (const c of codes) {
         const s = await this.story(c);
         if (!s || s.status !== "confirmed") continue;
@@ -382,6 +440,11 @@ class Context {
         s.conf.sentences.forEach((x) => r.sentences.add(normQ(x)));
         s.conf.skills.forEach((x) => r.skills.add(normQ(x)));
         if (s.conf.title != null) r.titles.push(s.conf.title);
+        // the confirmation section's Org: / Dates: lines; a section without them falls back on the file header (the card the user saw carried the same org and dates)
+        const org = normName(s.conf.org ?? s.org);
+        const dates = normDates(s.conf.dates ?? s.dates);
+        if (org) r.orgs.push(s.conf.org ?? s.org);
+        if (dates) r.dates.push(s.conf.dates ?? s.dates);
       }
       return r;
     };
@@ -403,19 +466,51 @@ class Context {
           out.push({ where, message: T.confirmedItemNoCard, quote: excerpt(norm(String(item?.role ?? item?.name ?? item?.org ?? ""))) });
           continue;
         }
-        if (!norm(String(item?.role ?? ""))) continue;
         const c = await cards([...all]);
-        if (c.titles.length && !c.titles.some((t) => normQ(t) === normQ(item.role)))
-          out.push({ where, message: T.confirmedRole([...all].join(", "), c.titles.join(" / ")), quote: excerpt(String(item.role)) });
+        if (!c.ok) continue;
+        const codes = [...all].join(", ");
+        if (norm(String(item?.role ?? ""))) {
+          if (!c.titles.length) out.push({ where, message: T.confirmedRoleNoTitle(codes), quote: excerpt(String(item.role)) });
+          else if (!c.titles.some((t) => normQ(t) === normQ(item.role)))
+            out.push({ where, message: T.confirmedRole(codes, c.titles.join(" / ")), quote: excerpt(String(item.role)) });
+        }
+        // the employer (experience) or the project name / org (projects), and the dates, are the ones a card recorded
+        for (const name of (sec === "projects" ? [item?.name, item?.org] : [item?.org]).map((x) => String(x ?? "")).filter((x) => norm(x))) {
+          const n = normName(name);
+          if (!c.orgs.length) out.push({ where, message: T.confirmedOrgNone(codes), quote: excerpt(name) });
+          // a project name may carry more words than the card's org ("Volunteer, International Student Welcome Week"); an employer may not
+          else if (!c.orgs.some((o) => normName(o) === n || (sec === "projects" && n && ` ${n} `.includes(` ${normName(o)} `))))
+            out.push({ where, message: T.confirmedOrg(codes, c.orgs.join(" / ")), quote: excerpt(name) });
+        }
+        if (norm(String(item?.dates ?? ""))) {
+          if (!c.dates.length) out.push({ where, message: T.confirmedDatesNone(codes), quote: excerpt(String(item.dates)) });
+          else if (!c.dates.some((d) => normDates(d) === normDates(item.dates))) out.push({ where, message: T.confirmedDates(codes, c.dates.join(" / ")), quote: excerpt(String(item.dates)) });
+        }
       }
     for (const line of asArray(this.resume.skills)) {
       if (!line || typeof line !== "object") continue;
       const codes = sOf(line);
-      if (!codes.length) continue;
+      if (!codes.length) {
+        // a skills line must rest on a card of its own; Education / Job goals are not one
+        if (asArray(line.items).some((x: unknown) => norm(String(x ?? "")))) out.push({ where, message: T.confirmedSkillNoCard, quote: excerpt(`${line.label ?? ""}: ${asArray(line.items).join(T.itemSep)}`) });
+        continue;
+      }
       const c = await cards(codes);
       if (!c.ok) continue;
       for (const it of asArray(line.items)) if (!c.skills.has(normQ(it))) out.push({ where, message: T.confirmedSkill(codes.join(", ")), quote: excerpt(String(it)) });
     }
+    // The numbers in a confirmed card's sentences are numbers the user said: in the same card's "Your words" or "Numbers".
+    // (Only a consistency check: an AI that edits both the card and the resume to match is not caught here.)
+    for (const [code, s] of this.stories) {
+      if (!s || s.status !== "confirmed" || !s.conf || s.conf.bad) continue;
+      const shown = [...s.conf.sentences, ...s.conf.skills].join("\n");
+      const said = s.said ?? "";
+      const have = new Set([...R.numbers(normEnglish(said)), ...vagueAmounts(said)]);
+      const extra = [...new Set([...R.numbers(normEnglish(shown)), ...vagueAmounts(shown)])].filter((n) => !have.has(n)).sort();
+      if (extra.length) out.push({ where, message: T.confirmedNumbers(code, extra.join(", ")), quote: excerpt(s.conf.sentences.find((x) => extra.some((n) => R.numbers(normEnglish(x)).has(n) || vagueAmounts(x).includes(n))) ?? shown) });
+    }
+    // a summary in resume.yaml follows the same title-word rule as a target's summary
+    for (const x of R.strings(this.resume.summary ?? "")) out.push(...this.titleWordProblems(x, where));
     const eduText = mdSection(this.profileRaw, "Education");
     for (const e of asArray(this.resume.education)) {
       const details = asArray(e?.details).map((d: any) => (typeof d === "string" ? d : d?.text)).filter((d: unknown) => norm(String(d ?? "")));
@@ -484,6 +579,29 @@ class Context {
         seen.add(d.code);
         out.push({ where, message: this.T.mentionStory(d.status === "deleted", d.name, d.code), quote: excerpt(text, d.name) });
       }
+    return out;
+  }
+
+  /** market us: a summary, headline or opening may not use a job-title word (Manager, Lead, Director ...) that no confirmed card has in its
+   * `Title:` line. Not counted: "the manager", "her manager", "manager's" (a person, not a title), and, in a "Seeking / Looking for" sentence,
+   * a role word the user wrote in "Work they want" of me/profile.md. */
+  titleWordProblems(text: string, where: string): Problem[] {
+    if (this.market.market !== "us") return [];
+    const out: Problem[] = [];
+    for (const line of String(text).split(/\r?\n/)) {
+      if (!line.trim() || SOURCE_LINE.test(line)) continue;
+      const t = line.normalize("NFKC");
+      const seekAt = [...t.matchAll(/(?<![A-Za-z])(?:seeking|looking\s+for|interested\s+in)(?![A-Za-z])/gi)].map((x) => x.index!);
+      // the word is inside a "Seeking ... roles" clause: after the keyword, before the next "|" or full stop
+      const inSeeking = (at: number) => seekAt.some((s) => s < at && !/[|.;]/.test(t.slice(s, at)));
+      for (const re of TITLE_WORDS)
+        for (const m of t.matchAll(re)) {
+          const w = m[0].toLowerCase();
+          if (this.titleWords.has(w) || (inSeeking(m.index!) && this.wantWords.has(w))) continue;
+          if (/(?<![A-Za-z])(?:the|her|his|their|my|our|its|your)\s+(?:[A-Za-z-]+\s+)?$/i.test(t.slice(0, m.index!)) || /^['’]s(?![A-Za-z])/.test(t.slice(m.index! + m[0].length))) continue;
+          out.push({ where, message: this.T.titleWord(m[0]), quote: excerpt(line, m[0]) });
+        }
+    }
     return out;
   }
 
@@ -709,7 +827,7 @@ async function checkTargetFile(ctx: Context, id: string, target: any, hasHtml: b
     const [base, key] = field.split(".");
     const where = `${W}${T.whereSep}${T.fieldNames[base] ?? base}`;
     const detail = key ? `${base}.${key}` : undefined;
-    const ps = [...ctx.textProblems(text, where, { skills: base === "skills_order" }), ...ctx.mentionProblems(text, where)];
+    const ps = [...ctx.textProblems(text, where, { skills: base === "skills_order" }), ...ctx.mentionProblems(text, where), ...(base === "summary" ? ctx.titleWordProblems(text, where) : [])];
     out.push(...ps.map((p) => (detail ? { ...p, detail } : p)));
   }
   out.push(...(await skillsProblems(ctx, target, `${W}${T.whereSep}${T.fieldNames.skills_order}`)));
@@ -1017,6 +1135,7 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
         bp.push(...ctx.textProblems(tl.filter((l) => !isSkills(l)).join("\n"), where, { only, visaCovered: true }), ...ctx.textProblems(tl.filter(isSkills).join("\n"), where, { skills: true, only, visaCovered: true }));
       } else bp.push(...ctx.textProblems(t, where, { skills: !!spec.list || name === "Headline", only, visaCovered: true }));
       bp.push(...ctx.mentionProblems(t, where));
+      if (name === "Headline" || name === "About" || name === "My Journey") bp.push(...ctx.titleWordProblems(b.body.filter((l) => !/^\s*•/.test(l)).join("\n"), where));
       // Every line that is not a "• " bullet or a Source line is compared with resume.yaml too (a sentence cannot be added to a
       // headline, an About opening, a skills line or a paragraph title just because it is not a bullet).
       const notBullet = (l: string) => !!l.trim() && !/^\s*•/.test(l) && !SOURCE_LINE.test(l);

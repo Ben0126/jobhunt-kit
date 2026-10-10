@@ -113,10 +113,18 @@ const ZH = {
   profileHeadlineSegment: (seg: string) => `標題的這一段「${seg}」不是 resume.yaml 裡有的學歷、職稱、單位或專長，也不是「Seeking … roles」`,
   confirmedBullet: (code: string) => `resume.yaml 的這句和 ${code} 確認卡上「Sentence at confirmation」的句子不一樣（不能自己改寫，要改就重新出卡確認）`,
   confirmedRole: (code: string, title: string) => `resume.yaml 的職稱和 ${code} 確認卡上的職稱「${title}」不一樣（要改就重新出卡確認）`,
+  confirmedRoleNoTitle: (code: string) => `resume.yaml 這筆經歷寫了職稱，但 ${code} 確認卡上「Sentence at confirmation」沒有 Title: 行，沒有確認過的職稱可以對照（要寫職稱，就重新出卡確認）`,
+  confirmedOrg: (code: string, orgs: string) => `resume.yaml 的單位或專案名稱和 ${code} 確認卡上確認的「${orgs}」不一樣（一張卡不能掛在別的單位底下，要改就重新出卡確認）`,
+  confirmedOrgNone: (code: string) => `resume.yaml 寫了單位或專案名稱，但 ${code} 確認卡沒有記錄確認過的單位（確認段落的 Org: 行，或卡的檔頭 org）`,
+  confirmedDates: (code: string, dates: string) => `resume.yaml 的日期和 ${code} 確認卡上確認的「${dates}」不一樣（要改就重新出卡確認）`,
+  confirmedDatesNone: (code: string) => `resume.yaml 寫了日期，但 ${code} 確認卡沒有記錄確認過的日期（確認段落的 Dates: 行，或卡的檔頭 dates）`,
+  confirmedNumbers: (code: string, nums: string) => `${code} 確認卡的確認句子裡有數字 ${nums}，但同一張卡的「Your words」和「Numbers」裡都沒有（數字只能是本人說過的）`,
+  confirmedSkillNoCard: "resume.yaml 的這一行專長沒有連到任何 S- 確認卡（只寫 Education 或 Job goals 不夠，專長要有自己的卡）",
+  titleWord: (w: string) => `這段文字用了職稱「${w}」，但沒有任何確認卡的 Title: 上有這個詞（沒確認過的職稱不能寫）`,
   confirmedSkill: (code: string) => `resume.yaml 的這個專長項目不在 ${code} 確認卡上「Sentence at confirmation」的專長裡`,
   confirmedNoSection: (code: string, malformed: boolean) =>
     malformed
-      ? `${code} 確認卡上「Sentence at confirmation (do not change)」這一段的格式不對（標題後面只能是：可有的 Title: 行加編號原句，或單獨一行「類別: 項目」），程式無法拿它對照 resume.yaml`
+      ? `${code} 確認卡上「Sentence at confirmation (do not change)」這一段的格式不對（標題後面只能是：可有的 Title:、Org:、Dates: 行加編號原句，或單獨一行「類別: 項目」），程式無法拿它對照 resume.yaml`
       : `${code} 已確認，但檔案裡沒有「## Sentence at confirmation (do not change)」這一段，程式無法拿它對照 resume.yaml`,
   confirmedBulletNoCard: "resume.yaml 的這句重點沒有寫 S- 開頭的來源（每一句都要連到一張已確認的卡）",
   confirmedItemNoCard: "resume.yaml 的這筆經歷或專案沒有連到任何已確認的卡（重點的 source 或項目本身的 source 要寫 S- 代號）",
@@ -300,10 +308,18 @@ const EN: CheckText = {
   profileHeadlineSegment: (seg) => `This headline part "${seg}" is not an education, title, employer or skill from resume.yaml, and not "Seeking <roles> roles" with roles written in "Work they want" of me/profile.md`,
   confirmedBullet: (code) => `This sentence in resume.yaml is not one of the sentences under "Sentence at confirmation" on the card of ${code} (do not reword it; to change it, make a new card and confirm again)`,
   confirmedRole: (code, title) => `The title in resume.yaml is not the title "${title}" confirmed on the card of ${code} (to change it, confirm a new card)`,
+  confirmedRoleNoTitle: (code) => `This experience in resume.yaml has a title, but the "Sentence at confirmation" of ${code} has no Title: line, so there is no confirmed title to compare it with (to print a title, confirm a new card that has one)`,
+  confirmedOrg: (code, orgs) => `The employer or project name in resume.yaml is not the "${orgs}" confirmed on the card of ${code} (one card cannot be put under another employer; to change it, confirm a new card)`,
+  confirmedOrgNone: (code) => `resume.yaml names an employer or project, but the card of ${code} does not record a confirmed one (an Org: line in its confirmation section, or org in its file header)`,
+  confirmedDates: (code, dates) => `The dates in resume.yaml are not the "${dates}" confirmed on the card of ${code} (to change them, confirm a new card)`,
+  confirmedDatesNone: (code) => `resume.yaml has dates, but the card of ${code} does not record confirmed dates (a Dates: line in its confirmation section, or dates in its file header)`,
+  confirmedNumbers: (code, nums) => `The confirmed sentences of ${code} contain the number ${nums}, which is in neither the "Your words" section nor the "Numbers" section of the same card (a number must be one the user said)`,
+  confirmedSkillNoCard: "This skills line in resume.yaml is not tied to any S- card (Education or Job goals alone is not enough; a skill needs a card of its own)",
+  titleWord: (w) => `This text uses the job title "${w}", but no confirmed card has that word in its Title: line (an unconfirmed title cannot be written)`,
   confirmedSkill: (code) => `This skills item in resume.yaml is not among the skills under "Sentence at confirmation" on ${code}`,
   confirmedNoSection: (code, malformed) =>
     malformed
-      ? `The "Sentence at confirmation (do not change)" section of ${code} is not in the exact format (after the heading: an optional Title: line and the numbered sentences, or one single "Label: items" line), so the program cannot compare resume.yaml with it`
+      ? `The "Sentence at confirmation (do not change)" section of ${code} is not in the exact format (after the heading: optional Title:, Org:, Dates: lines and the numbered sentences, or one single "Label: items" line), so the program cannot compare resume.yaml with it`
       : `${code} is confirmed, but its file has no "## Sentence at confirmation (do not change)" section, so the program cannot compare resume.yaml with it`,
   confirmedBulletNoCard: "This bullet in resume.yaml has no source starting with S- (every bullet must be tied to a confirmed card)",
   confirmedItemNoCard: "This experience or project in resume.yaml is not tied to any confirmed card (a bullet's source, or the item's own source, must be an S- code)",

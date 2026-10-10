@@ -70,8 +70,9 @@ skills:
 `;
 
 // P8-fix: a confirmed card has the "Sentence at confirmation" section (the program now compares resume.yaml with it, and a missing section is an error)
-const story = (id: string, title: string, org: string, status: string, conf = "") =>
-  `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: ${status}\n---\n\n## Your words\n> text\n` + (conf ? `\n## Sentence at confirmation (do not change)\n\n${conf}\n` : "");
+// P8fix-2: a card records its dates in the header (resume.yaml dates are compared with them) and its numbers under "Your words"
+const story = (id: string, title: string, org: string, status: string, conf = "", dates = "", said = "text") =>
+  `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\ndates: "${dates}"\nstatus: ${status}\n---\n\n## Your words\n> ${said}\n` + (conf ? `\n## Sentence at confirmation (do not change)\n\n${conf}\n` : "");
 
 /** A US folder with an English resume.yaml (the playbook examples' people) and stories S-001/S-004/S-006 confirmed, S-002 a draft. */
 function usFolder(): string {
@@ -80,9 +81,9 @@ function usFolder(): string {
   write(dir, "jobhunt.yaml", read(dir, "jobhunt.yaml").replace(/^market:.*$/m, "market: us").replace(/^language:.*$/m, "language: en").replace(/^paper:.*$/m, "paper: letter"));
   write(dir, "resume.yaml", RESUME);
   for (const f of ["S-001", "S-002", "S-003", "S-004"]) rmSync(join(dir, "me/stories", `${f}.md`));
-  write(dir, "me/stories/S-001.md", story("S-001", "Sales Associate", "Northfield State University Bookstore", "confirmed", "Title: Sales Associate\n1. Worked the register on weekends.\n2. Taught about 5 new employees to use the register at the manager's request.\n3. Helped students find textbooks."));
+  write(dir, "me/stories/S-001.md", story("S-001", "Sales Associate", "Northfield State University Bookstore", "confirmed", "Title: Sales Associate\n1. Worked the register on weekends.\n2. Taught about 5 new employees to use the register at the manager's request.\n3. Helped students find textbooks.", "Sep 2024 – May 2025", "I worked the register on weekends and taught about 5 new employees"));
   write(dir, "me/profile.md", "# Job goals\n\n## Work they want\n- Sales, administrative assistant, HR assistant\n\n## Location and work type\n- Columbus, OH\n\n## Education\n- Northfield State University, B.A. in Business Administration, Expected May 2027\n- Coursework in accounting and statistics.\n");
-  write(dir, "me/stories/S-004.md", story("S-004", "Treasurer", "Campus Food Drive Club", "confirmed", "Title: Treasurer\n1. Sorted donations with a team of volunteers."));
+  write(dir, "me/stories/S-004.md", story("S-004", "Treasurer", "Campus Food Drive Club", "confirmed", "Title: Treasurer\n1. Sorted donations with a team of volunteers.", "2025"));
   write(dir, "me/stories/S-006.md", story("S-006", "Software", "", "confirmed", "Software: Microsoft Word, Excel (pivot tables)"));
   write(dir, "me/stories/S-002.md", story("S-002", "Peer tutor", "Draft Tutoring Center", "draft"));
   return dir;
@@ -237,6 +238,7 @@ test("數字和日期：段落裡的數字要是本人說過的；N+ 只有本�
   const about = (s: string) => `## About\n- Fill: paste\n\n${s}\nSource: S-001\n`;
   // P8: a free sentence in About is now an error of its own (not a fixed frame); the number rules below are what this test is about
   expect(has((await li(dir, about("Trained about 5 new employees."))).errors, "not in your confirmed experience")).toBe(false);
+  expect(has((await li(dir, about("Trained about 5 new employees."))).errors, "not a fixed sentence frame")).toBe(true); // the error that replaced it, so the test cannot pass on an empty result
   expect(has((await li(dir, about("Served 300 customers a day."))).errors, "not in your confirmed experience")).toBe(true);
   expect(has((await li(dir, about("Trained 5+ new employees."))).errors, "more than")).toBe(true);
   expect(has((await li(dir, about("Worked there since Jun 2019."))).errors, "The date")).toBe(true);

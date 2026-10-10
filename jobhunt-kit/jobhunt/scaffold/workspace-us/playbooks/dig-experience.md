@@ -54,7 +54,7 @@ Language: you talk in the user's language; every file you write is English, exce
 5. Write "Sentence for the resume" (rules 6.1), then check every number against their words. Then look for "needs your decision" items (6.2).
 6. **Check before the card** (do not announce): Was the result question asked? (They already mentioned a result, or they said there was none or not sure, both count.) Did you do the short-answer follow-ups of section 2? If not, and they did not say it's slow -> ask first, no card. In the story's STAR "Result" write their answer, or "asked; they were not sure"; never empty, never made up.
 7. **Save**: create or update `me/stories/S-xxx.md` (format in section 6). Also save when they change topic or stop midway. If you have already asked 2 or more questions about an experience without saving, save before changing topic or showing the card. Do not write the file after every answer.
-8. Show the **confirmation card** (section 7). They can say "later"; then go on to the next experience and show cards one at a time at the end.
+8. Show the **confirmation card** (section 7; the card is at most 14 lines, and any other message at most 10, AGENTS.md). They can say "later"; then go on to the next experience and show cards one at a time at the end.
 
 ## 4 and 5. Question bank
 
@@ -119,24 +119,38 @@ After confirmation, add this at the end of the file (section 8.1). Never change 
 ## Sentence at confirmation (do not change)
 
 Title: Cashier
+Org: Northfield State University Bookstore
+Dates: Sep 2024 – May 2025
 1. Worked the register on weekends.
 2. ...(copy the card's English sentences word for word)
 
 Shown back in Spanish:
+Title: Cajero/a
 1. Trabajé en la caja los fines de semana.
 2. ...(copy the card's back-translation)
 ```
 
-**The format is exact, because a program compares `resume.yaml` with it** (the `role` must equal `Title:`, and every bullet of this story must be one of the numbered sentences). In order: the heading line; one blank line; the `Title:` line (only if the card has a title); the numbered sentence lines `1. `, `2. `, ... one sentence per line; then one blank line. Nothing else may sit between the heading and that blank line: no note, comment, "Removed" line or extra sentence. The translation, notes and anything else go only after the blank line. For a skills, languages or certificate story the block is one line, `Label: item, item`, then the blank line. A self-attested story uses the same shape, holding the vouched old-resume text.
+**The format is exact, because a program compares `resume.yaml` with it.** In order: the heading line; one blank line; then, with nothing between them, these lines:
+
+1. `Title: <title>`: only if the card has a title. The `role` in `resume.yaml` must equal it. No title on the card (a project, a volunteer activity, a family shop) -> no `Title:` line, and `role` stays empty or absent.
+2. `Org: <name>`: always, for a job, internship, student-org, project, volunteer or competition story. Official English name, exactly the text that goes in `resume.yaml`: `org` for an item under Experience, `name` for an item under Projects & Activities (the project or activity name, e.g. `Campus Food Drive`). It is always the same text as the story header's `org`, and it is never empty.
+3. `Dates: <dates>`: always, same line order. Exactly the string that goes in `resume.yaml` `dates`, and one of these shapes: `Mon YYYY – Mon YYYY` (e.g. `Sep 2024 – May 2025`), `Mon YYYY – Present`, `Expected Mon YYYY`, `Summers YYYY – YYYY`, `YYYY`. En dash with a space on each side. Nothing known -> write `Dates:` with nothing after it (the resume then prints no date).
+4. The numbered sentence lines `1. `, `2. `, ... one sentence per line.
+
+Then one blank line. Nothing else may sit between the heading and that blank line: no note, comment, "Removed" line or extra sentence. The translation, notes and anything else go only after the blank line. The `Org:` and `Dates:` values are English and are never translated; the back-translation block may repeat `Title:` in the user's language.
+
+For a skills, languages, software or certificate story (no job) the block is one line, `Label: item, item`, then the blank line; no `Title:`, `Org:` or `Dates:`. A self-attested story uses the same shape, holding the vouched old-resume text (title, organization and dates exactly as the old resume gives them, with only the mechanical changes of `import-resume.md` 8.4 point 3).
+
+The story's header must say the same as these lines: `org` equals `Org:`, and `dates` equals `Dates:`. If you change one, change the other, and show a new card.
 
 "Notes (STAR)" and "Abilities shown" are your own notes. The user has not seen them, so they are **not** a basis for the resume, profiles or interview answers.
 
 Field notes:
 - `title`: a short name for the experience, in official English, e.g. "Campus bookstore cashier", "International Student Association treasurer", "Class project: campus coffee shop survey". **`title` and `org` are always English** (the program compares them with the resume to catch unconfirmed experience names), even when "Your words" are in another language.
-- `org`: the official English name. For a place without an official English name (a family shop, a home-country employer), ask once "How would you write the name in English?", then add a few words of what it is from their words, e.g. "Rivera Family Bakery (family-owned bakery)". The card shows it for them to confirm.
+- `org`: the official English name. For a project, volunteer activity or competition with no organization of its own, `org` is the name that prints as the project's `name` (e.g. "Campus Food Drive"). For a place without an official English name (a family shop, a home-country employer), ask once "How would you write the name in English?", then add a few words of what it is from their words, e.g. "Rivera Family Bakery (family-owned bakery)". The card shows it for them to confirm.
 - `type`: only these values: job, internship, student-org, project, volunteer, competition, cert-language, other. A real part-time or full-time job, including campus jobs, RA and TA, is `job`. A club or organization they belong to (member or officer) and its events are `student-org` and go under Experience. Volunteering, one-time or regular, on or off campus, is `volunteer` and always goes under Projects & Activities, whatever the role was called; coursework is `project`. If you cannot tell, ask: "Was this for a class, or an activity outside class?" Software is `other` with `title: Software`.
-- `dates`: always quoted, in English: `"Sep 2024 – May 2025"`, `"Jun 2025 – Present"`. Month and year known -> that. Only a year, semester or "summer" -> the year only (`"2025"`); the season they said stays in "Your words". If they worked only in summers over several years, write `"Summers 2019 – 2022"` (the word and the years they gave, no months), so it does not read as continuous work. **Never work out a month.** Nothing known -> an empty string (no date printed). "About a year" is a length, not a date. Non-Gregorian or day-first dates: convert, say the converted date, and let them confirm.
-- "Sentence for the resume", first line **Title** (needed for job, internship, student-org), in their words (e.g. "Cashier", "Treasurer"). A title from an old resume follows `import-resume.md` section 4. The title prints on the resume, so it is on the card too. Never use CPT, OPT or visa words in a title.
+- `dates`: always quoted, in English: `"Sep 2024 – May 2025"`, `"Jun 2025 – Present"`, `"Expected May 2027"`. Month and year known -> that. Only a year, semester or "summer" -> the year only (`"2025"`); the season they said stays in "Your words". If they worked only in summers over several years, write `"Summers 2019 – 2022"` (the word and the years they gave, no months), so it does not read as continuous work. **Never work out a month.** Nothing known -> an empty string (no date printed). "About a year" is a length, not a date. Non-Gregorian or day-first dates: convert, say the converted date, and let them confirm. The same text is the `Dates:` line of the confirmation section (see the format above). Turning a date they gave in another language into the English form ("2027 年 5 月畢業" -> "Expected May 2027") is only a format change and needs no card of its own (`dig-cards.md` 7.1).
+- "Sentence for the resume", first line **Title** (needed for job, internship, student-org), in their words (e.g. "Cashier", "Treasurer"). The card shows the title with a literal back-translation in their language (`dig-cards.md` 7.1). A title from an old resume follows `import-resume.md` section 4. The title prints on the resume, so it is on the card too. Never use CPT, OPT or visa words in a title.
 - Imported stories get one more header line, `source: "import:old-resume.pdf"` (pasted text: `source: "import:pasted"`; see `import-resume.md`).
 - Self-attested stories (`confirmed_via: self-attest`): "Your words" is the vouched old-resume text, the sentences copy it, and "Still to ask" gets "Interviewers may ask: ...", written per `import-resume.md` 8.4. The verb and number rules of 6.1 still apply with that text as the words.
 - When helping someone else, add `helper_note: ""` to the header (7.3).
