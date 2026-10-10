@@ -1,6 +1,271 @@
 // 求職小幫手：畫面程式（不需要任何外部套件）。
 "use strict";
 
+// <ui-text>
+// Every word the page shows, once per language. The page picks one by <html lang> ("en" -> English, anything else -> 繁體中文),
+// and the folder's market / paper (from /api/info) only decide the things that differ by country (paper size, 1-page tip, 104 tab).
+const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** "2026-10-09 14:03" or "2026-10-09" -> "Oct 9, 14:03" / "Oct 9". */
+function enStamp(s) {
+  const m = /^\d{4}-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(s || "");
+  return m ? `${MONTHS_EN[Number(m[1]) - 1]} ${Number(m[2])}${m[3] ? `, ${m[3]}` : ""}` : String(s || "");
+}
+
+const TEXT = {
+  "zh-TW": {
+    pageTitle: "求職小幫手",
+    offline: "連不到程式。程式的視窗是不是被關掉了？請再點兩下程式打開。",
+    genericError: "出了點問題，請再試一次。",
+    gotIt: "知道了",
+    unknownStatus: (code) => `看不懂的狀態「${code}」`,
+    noStatus: "還沒填狀態",
+    folderLabel: (name) => `資料夾：${name}`,
+    statusAria: "狀態",
+    nextStep: (x) => `下一步：${x}`,
+    appliedOn: (d) => `投遞：${d}`,
+    clickToEdit: "點一下修改",
+    noCompany: "（沒有公司名稱）",
+    viewJob: "看職缺",
+    none: "沒有",
+    todoName: "待投遞",
+    movedToClosed: (label, company, role) => `已改成「${label}」：${company} ${role} 移到下面「已結束」那一區。`,
+    saved: (company, role) => `已存檔：${company} ${role}`,
+    added: (company, role, todo) => `已新增：${company} ${role}（放在「${todo}」）`,
+    editTitle: (company, role) => `修改：${company} ${role}`,
+    editKept: (msg) => `${msg}你剛剛打的內容還在，看一下沒問題就再按一次「儲存」。`,
+    rowGoneInEdit: "這一筆在進度表裡已經找不到了（可能被 AI 改掉或刪掉）。你剛剛打的內容還在畫面上，需要的話先複製起來，再按「取消」。",
+    confirmDelete: (company, role) => `確定要刪掉「${company} ${role}」這一筆嗎？刪掉就找不回來了。\n\n只是不想投了，可以按「取消」，把狀態改成「放棄」。`,
+    deleted: (company, role) => `已刪除：${company} ${role}`,
+    // check results
+    stamp: (at) => `檢查時間：${at.slice(5).replace("-", "/")}`,
+    shortStamp: (at) => at.slice(5).replace("-", "/"),
+    problemCount: (n) => `${n} 個問題`,
+    passed: "通過",
+    whereResume: "履歷檔",
+    whereTargets: "客製履歷",
+    whereData: "履歷資料",
+    plainResume: "下面這份履歷",
+    plainTargets: "AI 準備的內容",
+    plainData: "你確認過的經歷資料",
+    whereLabel: (w) => `${w}：`,
+    messageEnd: (m) => `${m}。`,
+    followSep: "：",
+    tellAi: "請跟 AI 說",
+    sayQuoted: (words) => `「${words}」`,
+    checking: "檢查中…",
+    recheck: "重新檢查",
+    // resume page
+    noCompanyShort: "（沒寫公司）",
+    updated: (at) => `更新：${at.slice(5).replace("-", "/")}`,
+    pillUnconfirmed: (n) => `未確認 ${n} 段`,
+    pillToAnswer: (n) => `待回答 ${n} 題`,
+    unconfirmedHead: (n) => `還有 ${n} 段經歷沒確認：`,
+    nameSep: "、",
+    unconfirmedTail: "。這份履歷不會有這幾段。",
+    unansweredHead: (n) => `還有 ${n} 題沒回答。`,
+    unansweredTail: "AI 改寫的句子要你回答過才能放進履歷。",
+    sayConfirmDrafts: "幫我確認還沒確認的經歷",
+    sayAnswerQs: "問我還沒回答的題目",
+    afterWaiting: "，確認完再請 AI 重做這份履歷，會比較完整。",
+    origMissing: "找不到你確認過的原句，下面整句都當成新的。請跟 AI 說「這句的原句在哪裡」。",
+    tagOriginal: "原句",
+    tagThisResume: "這份履歷",
+    rewritesSummary: (n) => `AI 改寫的句子（${n} 句）`,
+    rewritesHint: "綠底的字是加上去的，畫刪除線的字是拿掉的。這裡只能看；要改請跟 AI 說。",
+    // save a copy
+    saveCopyBtn: "我投了這份，存一份",
+    saveCopyHint: "投出去之後按，留一份寄出的版本，之後才查得到寄給這家的是哪一版。",
+    alreadySaved: (list) => `已經存過：${list}`,
+    listSep: "、",
+    hasCopyHead: "這一筆已經存過一份了",
+    hasCopyTail: (already) => `（${already}）。為了不蓋掉，不會再存。`,
+    savedTodayHead: "今天已經存過這份履歷了",
+    savedTodayTail: (name) => `（${name}）。為了不蓋掉，不會再存。`,
+    willCopy: "會把現在這份履歷複製一份，存到求職資料夾的「submitted」資料夾：",
+    willRecord: (company, role) => `並記在進度表「${company} ${role}」那一筆。存好的檔案不會被改，也不會被蓋掉。`,
+    unfixedWarn: (n) => `這份履歷還有 ${n} 個問題沒修。如果你已經用這一版投出去了，還是可以存，記下你寄出的是哪一版。`,
+    willApply: "進度表上這一筆會一起改成「已投遞」，投遞日記今天。",
+    confirmSave: "確定，存一份",
+    notNow: "先不要",
+    savedDone: (name) => `已經存好：${name}，也記在進度表了。`,
+    // PDF
+    pdfOpens: "會打開新分頁和列印視窗。",
+    pdfChrome: (paper) => ["Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「" + paper + "」→ 按「更多設定」，", "取消勾選「頁首和頁尾」", "→ 儲存。"],
+    pdfSafari: (paper) => "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。",
+    savePdf: "存成 PDF",
+    noResumeFileYet: "還沒有履歷檔，所以還不能存。",
+    confirmPdfAria: "確定要存成 PDF 嗎",
+    confirmPdfHead: (n) => `確定要存？這份履歷還有 ${n} 個問題（上面紅色那幾項）。`,
+    confirmPdfTail: "投出去，公司看到的就是這個版本，面試時也可能被問到。",
+    savePdfAnyway: "我知道，仍要存成 PDF",
+    savePdfWithProblems: (n) => `存成 PDF（還有 ${n} 個問題）`,
+    // pages: market is "tw" or "us"
+    pageNote: (p, market) =>
+      p > 1
+        ? market === "us"
+          ? `估計會印成 ${p} 頁。美國的履歷最好 1 頁：可以跟 AI 說「幫我把履歷縮成一頁」。（還是可以照樣存成 PDF）`
+          : `估計會印成 ${p} 頁。台灣的履歷最好 1 頁：可以跟 AI 說「幫我把履歷縮成一頁」。（還是可以照樣存成 PDF）`
+        : `估計會印成 ${p} 頁。`,
+    resumeFailedHead: (n) => `這份履歷還沒通過檢查：${n} 個問題`,
+    hiddenFromPreview: "標著「AI 準備的內容」或「你確認過的經歷資料」的問題，在下面的履歷上不一定看得到，那是 AI 那邊的資料。",
+    sayFixResume: "幫我修這份履歷的問題",
+    afterRecheck: "，改好之後按「重新檢查」。",
+    okHead: "程式檢查通過",
+    okBody: "數字、日期、用詞、句子長度、佔位字和來源都沒問題。意思和職稱有沒有寫得比實際大，還是要你自己讀一次。",
+    photoHint: "這份設定要放照片。從這裡存的 PDF 不會有照片；要放照片，請照「開始使用」裡的方法自己存。",
+    previewTitle: "履歷預覽",
+    blankResume: "還沒有履歷檔。跟 AI 說「做成履歷檔」，做好之後按「重新檢查」。",
+    // 104
+    copy: "複製",
+    copied: "已複製 ✓",
+    copiedNotice: (name) => `已複製「${name}」，到 104 貼上就好。`,
+    copyFailed: "沒辦法自動複製。請自己選取上面的文字，按 Ctrl+C（Mac 按 ⌘+C）。",
+    sizeWithLimit: (n, lim) => `${n} / ${lim} 字`,
+    sizeNoLimit: (n) => `${n} 字（上限以 104 畫面為準）`,
+    cantCopy: "為了不讓沒根據的內容送到公司，有問題的欄位先不能複製。",
+    sayFix104: "幫我修 104 的問題",
+    emptyText: "（空的）",
+    general104: "104 總履歷",
+    applyTitle: (company, role) => `應徵 ${company} ${role}`,
+  },
+  en: {
+    pageTitle: "Job Search Helper",
+    offline: "Cannot reach the program. Was its window closed? Open the program again.",
+    genericError: "Something went wrong. Please try again.",
+    gotIt: "Got it",
+    unknownStatus: (code) => `Unknown status "${code}"`,
+    noStatus: "No status yet",
+    folderLabel: (name) => `Folder: ${name}`,
+    statusAria: "Status",
+    nextStep: (x) => `Next step: ${x}`,
+    appliedOn: (d) => `Applied: ${d}`,
+    clickToEdit: "Click to edit",
+    noCompany: "(no company name)",
+    viewJob: "View job",
+    none: "None",
+    todoName: "To apply",
+    movedToClosed: (label, company, role) => `Changed to "${label}": ${company} ${role} moved to the "Closed" section below.`,
+    saved: (company, role) => `Saved: ${company} ${role}`,
+    added: (company, role, todo) => `Added: ${company} ${role} (in "${todo}")`,
+    editTitle: (company, role) => `Edit: ${company} ${role}`,
+    editKept: (msg) => `${msg} What you typed is still here. Check it and press "Save" again.`,
+    rowGoneInEdit: 'This job can no longer be found in the tracker (the AI may have changed or deleted it). What you typed is still on screen. Copy it if you need it, then press "Cancel".',
+    confirmDelete: (company, role) => `Delete "${company} ${role}"? You cannot get it back.\n\nIf you just do not want to apply, press "Cancel" and change the status to "Withdrawn".`,
+    deleted: (company, role) => `Deleted: ${company} ${role}`,
+    stamp: (at) => `Checked: ${enStamp(at)}`,
+    shortStamp: (at) => enStamp(at),
+    problemCount: (n) => plural(n, "problem"),
+    passed: "Passed",
+    whereResume: "Resume file",
+    whereTargets: "Targets file",
+    whereData: "Resume data",
+    plainResume: "The resume below",
+    plainTargets: "What the AI prepared",
+    plainData: "Your confirmed experience",
+    whereLabel: (w) => `${w}: `,
+    messageEnd: (m) => `${m}.`,
+    followSep: ": ",
+    tellAi: "Tell the AI ",
+    sayQuoted: (words) => `"${words}"`,
+    checking: "Checking…",
+    recheck: "Check again",
+    noCompanyShort: "(no company)",
+    updated: (at) => `Updated: ${enStamp(at)}`,
+    pillUnconfirmed: (n) => `${n} unconfirmed`,
+    pillToAnswer: (n) => `${plural(n, "question")} to answer`,
+    unconfirmedHead: (n) => `${plural(n, "experience")} not confirmed yet: `,
+    nameSep: ", ",
+    unconfirmedTail: ". This resume leaves out anything not confirmed.",
+    unansweredHead: (n) => `${plural(n, "question")} not answered yet. `,
+    unansweredTail: "A sentence the AI reworded can only go into the resume after you answer.",
+    sayConfirmDrafts: "Help me confirm my unconfirmed experiences",
+    sayAnswerQs: "Ask me the questions I have not answered",
+    afterWaiting: ". After that, ask the AI to remake this resume so it is more complete.",
+    origMissing: 'Cannot find the original sentence you confirmed, so the whole sentence below is treated as new. Tell the AI "Where is the original of this sentence?"',
+    tagOriginal: "Original",
+    tagThisResume: "This resume",
+    rewritesSummary: (n) => `Sentences the AI reworded (${n})`,
+    rewritesHint: "Green text was added. Struck-through text was removed. This is view only; to change anything, tell the AI.",
+    saveCopyBtn: "I applied, save a copy",
+    saveCopyHint: "Press this after you apply. It keeps a copy of the version you sent, so you can look up later which version went to this company.",
+    alreadySaved: (list) => `Already saved: ${list}`,
+    listSep: ", ",
+    hasCopyHead: "A copy was already saved for this job",
+    hasCopyTail: (already) => ` (${already}). To avoid overwriting it, nothing more will be saved.`,
+    savedTodayHead: "A copy of this resume was already saved today",
+    savedTodayTail: (name) => ` (${name}). To avoid overwriting it, nothing more will be saved.`,
+    willCopy: 'This copies the current resume into the "submitted" folder inside your job-search folder: ',
+    willRecord: (company, role) => `It is also recorded on the tracker entry "${company} ${role}". The saved file will not be changed or overwritten.`,
+    unfixedWarn: (n) => `This resume still has ${plural(n, "problem")} to fix. If you already applied with this version, you can still save it to record which version you sent.`,
+    willApply: 'This job will also change to "Applied" in your tracker, with today as the date applied.',
+    confirmSave: "Yes, save a copy",
+    notNow: "Not now",
+    savedDone: (name) => `Saved: ${name}. It is also recorded in your tracker.`,
+    pdfOpens: "A new tab and the print window will open.",
+    pdfChrome: (paper) => [
+      `Chrome: Destination "Save as PDF". Edge: Printer "Save as PDF". Then Paper size "${paper}", open "More settings", `,
+      'turn off "Headers and footers"',
+      ", and click Save.",
+    ],
+    pdfSafari: (paper) => `Mac Safari: bottom-left "PDF" menu, "Save as PDF". Click "Show Details", set Paper Size to "${paper === "Letter" ? "US Letter" : paper}" and turn off "Print headers and footers".`,
+    savePdf: "Save as PDF",
+    noResumeFileYet: "There is no resume file yet, so it cannot be saved.",
+    confirmPdfAria: "Save as PDF anyway?",
+    confirmPdfHead: (n) => `Save anyway? This resume still has ${plural(n, "problem")} (the red items above). `,
+    confirmPdfTail: "If you send it, this is the version the company sees, and an interviewer may ask about it.",
+    savePdfAnyway: "I understand, save as PDF anyway",
+    savePdfWithProblems: (n) => `Save as PDF (${plural(n, "problem")} left)`,
+    pageNote: (p, market) =>
+      p > 1
+        ? market === "tw"
+          ? `Estimated ${p} pages. A resume in Taiwan should be 1 page: you can tell the AI "Cut my resume to one page". (You can still save the PDF.)`
+          : `Estimated ${p} pages. A US resume should be one page: you can tell the AI "Cut my resume to one page". (You can still save the PDF.)`
+        : `Estimated ${p} page.`,
+    resumeFailedHead: (n) => `This resume has not passed the check: ${plural(n, "problem")}`,
+    hiddenFromPreview: 'Problems marked "What the AI prepared" or "Your confirmed experience" may not be visible in the resume below. That is data on the AI\'s side.',
+    sayFixResume: "Fix the problems in this resume",
+    afterRecheck: '. After it is fixed, press "Check again".',
+    okHead: "Program check passed",
+    okBody: "Numbers, wording, sentence length, placeholders, ID numbers, visa words and sources are all fine. You still need to read it yourself to make sure the meaning and job titles are not bigger than what you really did.",
+    photoHint: "This setup asks for a photo. A PDF saved from here has no photo. To include one, follow the steps in the start-here guide and save it yourself.",
+    previewTitle: "Resume preview",
+    blankResume: 'There is no resume file yet. Tell the AI "Make the resume file", then press "Check again".',
+    copy: "Copy",
+    copied: "Copied ✓",
+    copiedNotice: (name) => `Copied "${name}". Paste it into 104.`,
+    copyFailed: "Could not copy automatically. Select the text above yourself and press Ctrl+C (Mac: ⌘+C).",
+    sizeWithLimit: (n, lim) => `${n} / ${lim} characters`,
+    sizeNoLimit: (n) => `${n} characters (the limit shown on 104 applies)`,
+    cantCopy: "To keep unsupported content from reaching a company, a field with problems cannot be copied yet.",
+    sayFix104: "Fix the problems for 104",
+    emptyText: "(empty)",
+    general104: "104 general resume",
+    applyTitle: (company, role) => `Application: ${company} ${role}`,
+  },
+};
+
+/** "a4" -> "A4", "letter" -> "Letter" (the name the print dialog uses). */
+const paperName = (paper) => (paper === "letter" ? "Letter" : "A4");
+
+/** Pages the resume will print on, from the height (px) of its content. A4: 15 mm margins. Letter: 0.6 in margins, and
+ * (like the US template) one pixel over already counts as a second page. */
+function pagesFor(contentPx, paper) {
+  if (paper === "letter") {
+    const usable = (11 - 0.6 * 2) * 96;
+    return contentPx > usable + 1 ? Math.max(2, Math.ceil(contentPx / usable)) : 1;
+  }
+  const usable = ((297 - 15 * 2) * 96) / 25.4;
+  return Math.max(1, Math.ceil(contentPx / usable - 0.02));
+}
+// </ui-text>
+
+const LANG = document.documentElement.lang === "en" ? "en" : "zh-TW";
+const T = TEXT[LANG];
+/** What /api/info says about the folder; until it answers, the language's usual country. */
+let INFO = LANG === "en" ? { market: "us", paper: "letter" } : { market: "tw", paper: "a4" };
+const tabKnown = () => (INFO.market === "us" ? ["progress", "resumes", "nokey"] : ["progress", "resumes", "104", "nokey"]);
+
 const ACTIVE = ["todo", "applied", "oa", "interview", "offer"];
 const CLOSED = ["rejected", "ghosted", "withdrawn"];
 const TOKEN_KEY = "jobhunt-token";
@@ -48,13 +313,13 @@ async function api(method, path, body) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError("連不到程式。程式的視窗是不是被關掉了？請再點兩下程式打開。", 0);
+    throw new ApiError(T.offline, 0);
   }
   let data = null;
   try {
     data = await res.json();
   } catch {}
-  if (!res.ok) throw new ApiError((data && data.error) || "出了點問題，請再試一次。", res.status, data);
+  if (!res.ok) throw new ApiError((data && data.error) || T.genericError, res.status, data);
   return data;
 }
 
@@ -65,7 +330,7 @@ function notice(msg, bad = false, kind = "") {
   const el = $("notice");
   // replaceChildren would print a null child as the text "null": only real nodes go in
   const parts = [h("span", { class: "msg" }, msg)];
-  if (bad) parts.push(h("button", { type: "button", class: "close", onclick: () => hideNotice() }, "知道了"));
+  if (bad) parts.push(h("button", { type: "button", class: "close", onclick: () => hideNotice() }, T.gotIt));
   el.replaceChildren(...parts);
   el.className = "notice" + (bad ? " bad" : "");
   el.hidden = false;
@@ -87,9 +352,14 @@ function loaded() {
 }
 
 // ---- 分頁
-function showTab() {
+/** The tab the address asks for, or "progress" when it is unknown (or hidden for this country). */
+function currentTab() {
   const tab = token ? (location.hash.replace("#", "") || "progress") : "nokey";
-  const known = ["progress", "resumes", "104", "nokey"].includes(tab) ? tab : "progress";
+  return tabKnown().includes(tab) ? tab : "progress";
+}
+
+function showTab() {
+  const known = currentTab();
   hideNotice();
   for (const p of document.querySelectorAll(".page")) p.hidden = p.id !== `page-${known}`;
   for (const a of document.querySelectorAll(".tabs a")) {
@@ -106,12 +376,13 @@ let board = null;
 
 function label(code) {
   const s = board && board.statuses.find((x) => x.code === code);
-  return s ? s.label : code ? `看不懂的狀態「${code}」` : "還沒填狀態";
+  return s ? s.label : code ? T.unknownStatus(code) : T.noStatus;
 }
 
 function shortDate(s) {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return s || "";
   const [y, m, d] = s.split("-").map(Number);
+  if (LANG === "en") return y === Number(board.today.slice(0, 4)) ? `${MONTHS_EN[m - 1]} ${d}` : `${MONTHS_EN[m - 1]} ${d}, ${y}`;
   return y === Number(board.today.slice(0, 4)) ? `${m}/${d}` : `${y}/${m}/${d}`;
 }
 
@@ -131,7 +402,7 @@ async function loadBoard() {
     const [b, info] = await Promise.all([api("GET", "/api/applications"), folderInfo()]);
     if (info) {
       const parts = String(info.folder).split(/[\\/]/).filter(Boolean);
-      $("folder").textContent = `資料夾：${parts[parts.length - 1] || info.folder}`;
+      $("folder").textContent = T.folderLabel(parts[parts.length - 1] || info.folder);
       $("folder").title = info.folder;
     }
     render(b);
@@ -148,7 +419,7 @@ async function folderInfo() {
 }
 
 function statusSelect(current, onChange) {
-  const sel = h("select", { "aria-label": "狀態", onchange: (e) => onChange(e.target.value) });
+  const sel = h("select", { "aria-label": T.statusAria, onchange: (e) => onChange(e.target.value) });
   const codes = board.statuses.map((s) => s.code);
   if (!codes.includes(current)) sel.append(h("option", { value: current, selected: true, disabled: true }, label(current)));
   for (const s of board.statuses) sel.append(h("option", { value: s.code, selected: s.code === current }, s.label));
@@ -162,11 +433,11 @@ function card(row, flagged) {
       h(
         "div",
         { class: "next" },
-        `下一步：${row.next_action || ""}`,
+        T.nextStep(row.next_action || ""),
         row.next_action_date ? h("span", { class: "date" }, shortDate(row.next_action_date)) : null,
       ),
     );
-  if (row.applied_date) meta.push(h("div", { class: "meta" }, `投遞：${shortDate(row.applied_date)}`));
+  if (row.applied_date) meta.push(h("div", { class: "meta" }, T.appliedOn(shortDate(row.applied_date))));
   if (row.notes) meta.push(h("div", { class: "meta" }, row.notes));
   const link = safeLink(row.link);
   return h(
@@ -174,8 +445,8 @@ function card(row, flagged) {
     { class: "card" + (flagged ? " flag" : "") },
     h(
       "button",
-      { type: "button", class: "open", title: "點一下修改", onclick: () => openEdit(row) },
-      h("span", { class: "company" }, row.company || "（沒有公司名稱）"),
+      { type: "button", class: "open", title: T.clickToEdit, onclick: () => openEdit(row) },
+      h("span", { class: "company" }, row.company || T.noCompany),
       h("span", { class: "role" }, row.role || ""),
       meta,
     ),
@@ -183,7 +454,7 @@ function card(row, flagged) {
       "div",
       { class: "row" },
       statusSelect(row.status, (v) => save(row, { status: v })),
-      link && h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, "看職缺"),
+      link && h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, T.viewJob),
     ),
   );
 }
@@ -194,7 +465,7 @@ function column(code, rows, flagged) {
     "section",
     { class: "col", "aria-label": label(code) },
     h("h3", {}, label(code), h("span", { class: "count" }, String(list.length))),
-    list.length ? list.map((r) => card(r, flagged.has(r._index))) : h("p", { class: "empty" }, "沒有"),
+    list.length ? list.map((r) => card(r, flagged.has(r._index))) : h("p", { class: "empty" }, T.none),
   );
 }
 
@@ -213,7 +484,7 @@ function render(b) {
   fl.replaceChildren(
     ...b.followUps.map((f) => {
       const row = rows.find((r) => r._index === f.index);
-      return h("li", {}, h("button", { type: "button", onclick: () => row && openEdit(row) }, `${f.company} ${f.role}`), `：${f.message}`);
+      return h("li", {}, h("button", { type: "button", onclick: () => row && openEdit(row) }, `${f.company} ${f.role}`), `${T.followSep}${f.message}`);
     }),
   );
   $("follow").hidden = b.followUps.length === 0;
@@ -235,9 +506,9 @@ function render(b) {
 function savedMessage(row, changes) {
   if (changes.status && CLOSED.includes(changes.status)) {
     $("closed").open = true;
-    return `已改成「${label(changes.status)}」：${row.company} ${row.role} 移到下面「已結束」那一區。`;
+    return T.movedToClosed(label(changes.status), row.company, row.role);
   }
-  return `已存檔：${row.company} ${row.role}`;
+  return T.saved(row.company, row.role);
 }
 
 async function save(row, changes) {
@@ -270,7 +541,7 @@ $("add-form").addEventListener("submit", async (e) => {
     const b = await api("POST", "/api/applications/add", {
       company: f.company.value, role: f.role.value, link: fixLink(f.link.value), version: board && board.version,
     });
-    notice(`已新增：${f.company.value.trim()} ${f.role.value.trim()}（放在「待投遞」）`);
+    notice(T.added(f.company.value.trim(), f.role.value.trim(), board ? label("todo") : T.todoName));
     e.target.reset();
     e.target.hidden = true;
     render(b);
@@ -287,7 +558,7 @@ const FIELDS = ["company", "role", "status", "applied_date", "next_action", "nex
 function openEdit(row) {
   editing = row;
   const f = $("edit-form").elements;
-  $("edit-title").textContent = `修改：${row.company} ${row.role}`;
+  $("edit-title").textContent = T.editTitle(row.company, row.role);
   const sel = $("edit-status");
   sel.replaceChildren(...statusSelect(row.status, () => {}).children);
   for (const k of FIELDS) if (f[k]) f[k].value = row[k] || "";
@@ -321,9 +592,9 @@ $("edit-form").addEventListener("submit", async (e) => {
       const fresh = findRow(err.data.board, editing);
       if (fresh) {
         editing = fresh; // the next save compares with the file as it is now
-        msg = `${err.message}你剛剛打的內容還在，看一下沒問題就再按一次「儲存」。`;
+        msg = T.editKept(err.message);
       } else {
-        msg = "這一筆在進度表裡已經找不到了（可能被 AI 改掉或刪掉）。你剛剛打的內容還在畫面上，需要的話先複製起來，再按「取消」。";
+        msg = T.rowGoneInEdit;
         $("edit-save").disabled = true;
       }
     }
@@ -344,12 +615,12 @@ function findRow(b, row) {
 
 $("edit-delete").addEventListener("click", async () => {
   if (!editing) return;
-  if (!confirm(`確定要刪掉「${editing.company} ${editing.role}」這一筆嗎？刪掉就找不回來了。\n\n只是不想投了，可以按「取消」，把狀態改成「放棄」。`)) return;
+  if (!confirm(T.confirmDelete(editing.company, editing.role))) return;
   try {
     const b = await api("POST", "/api/applications/delete", { index: editing._index, job_id: editing.job_id, version: board.version });
     $("edit").close();
     render(b);
-    notice(`已刪除：${editing.company} ${editing.role}`);
+    notice(T.deleted(editing.company, editing.role));
   } catch (err) {
     if (err.data && err.data.board) render(err.data.board);
     $("edit").close();
@@ -361,20 +632,20 @@ $("edit-delete").addEventListener("click", async () => {
 const fmt = (n) => Number(n).toLocaleString("en-US");
 
 function stamp(r) {
-  return `檢查時間：${r.checkedAt.slice(5).replace("-", "/")}`;
+  return T.stamp(r.checkedAt);
 }
 
 function pill(problems) {
   return problems.length
-    ? h("span", { class: "pill bad" }, `${problems.length} 個問題`)
-    : h("span", { class: "pill ok" }, "通過");
+    ? h("span", { class: "pill bad" }, T.problemCount(problems.length))
+    : h("span", { class: "pill ok" }, T.passed);
 }
 
 /** The checker names files by their role; on the resume page the user sees these words instead. */
 function plainWhere(where) {
-  if (where.startsWith("履歷檔")) return "下面這份履歷";
-  if (where.startsWith("客製履歷")) return where.replace(/^客製履歷/, "AI 準備的內容");
-  if (where.startsWith("履歷資料")) return "你確認過的經歷資料";
+  if (where.startsWith(T.whereResume)) return T.plainResume;
+  if (where.startsWith(T.whereTargets)) return where.replace(T.whereTargets, T.plainTargets);
+  if (where.startsWith(T.whereData)) return T.plainData;
   return where;
 }
 
@@ -384,20 +655,20 @@ function problemList(problems, { where = (w) => w } = {}) {
     { class: "problems" },
     problems.map((p) => {
       const w = where(p.where);
-      return h("li", {}, w ? h("span", { class: "where" }, `${w}：`) : null, `${p.message}。`, p.quote ? h("q", {}, p.quote) : null);
+      return h("li", {}, w ? h("span", { class: "where" }, T.whereLabel(w)) : null, T.messageEnd(p.message), p.quote ? h("q", {}, p.quote) : null);
     }),
   );
 }
 
 /** 「跟 AI 說『…』」 with the words to say set apart, so they read as something to copy. */
 function sayToAi(words, after) {
-  return h("p", { class: "next-step" }, "請跟 AI 說", h("strong", { class: "say" }, `「${words}」`), after);
+  return h("p", { class: "next-step" }, T.tellAi, h("strong", { class: "say" }, T.sayQuoted(words)), after);
 }
 
 async function runCheck(button, render, at, also) {
   button.disabled = true;
-  button.textContent = "檢查中…";
-  if (at) at.textContent = "檢查中…";
+  button.textContent = T.checking;
+  if (at) at.textContent = T.checking;
   try {
     const [r] = await Promise.all([api("GET", "/api/check"), also ? also() : null]);
     render(r);
@@ -407,7 +678,7 @@ async function runCheck(button, render, at, also) {
     if (at) at.textContent = "";
   } finally {
     button.disabled = false;
-    button.textContent = "重新檢查";
+    button.textContent = T.recheck;
   }
 }
 
@@ -448,9 +719,9 @@ function renderResumes(r) {
               renderResumes(r);
             },
           },
-          h("span", { class: "company" }, i.company || "（沒寫公司）"),
+          h("span", { class: "company" }, i.company || T.noCompanyShort),
           h("span", { class: "role" }, i.role || ""),
-          h("span", { class: "meta" }, i.updated ? `更新：${i.updated.slice(5).replace("-", "/")}` : ""),
+          h("span", { class: "meta" }, i.updated ? T.updated(i.updated) : ""),
           h("span", { class: "pills" }, pill(i.resumeProblems), ...waitingPills(i)),
         ),
       ),
@@ -465,8 +736,8 @@ function waitingPills(item) {
   const out = [];
   const drafts = resumeExtra.drafts.length;
   const extra = resumeExtra.items[item.id];
-  if (drafts) out.push(h("span", { class: "pill wait" }, `未確認 ${drafts} 段`));
-  if (extra && extra.confirm) out.push(h("span", { class: "pill wait" }, `待回答 ${extra.confirm} 題`));
+  if (drafts) out.push(h("span", { class: "pill wait" }, T.pillUnconfirmed(drafts)));
+  if (extra && extra.confirm) out.push(h("span", { class: "pill wait" }, T.pillToAnswer(extra.confirm)));
   return out;
 }
 
@@ -475,16 +746,16 @@ function waitingNote(item) {
   const extra = resumeExtra.items[item.id];
   const lines = [];
   if (drafts.length) {
-    const names = drafts.map((d) => d.title || d.id).join("、");
-    lines.push(h("p", {}, h("strong", {}, `還有 ${drafts.length} 段經歷沒確認：`), names, "。這份履歷不會有這幾段。"));
+    const names = drafts.map((d) => d.title || d.id).join(T.nameSep);
+    lines.push(h("p", {}, h("strong", {}, T.unconfirmedHead(drafts.length)), names, T.unconfirmedTail));
   }
-  if (extra && extra.confirm) lines.push(h("p", {}, h("strong", {}, `還有 ${extra.confirm} 題沒回答。`), "AI 改寫的句子要你回答過才能放進履歷。"));
+  if (extra && extra.confirm) lines.push(h("p", {}, h("strong", {}, T.unansweredHead(extra.confirm)), T.unansweredTail));
   if (!lines.length) return null;
   return h(
     "div",
     { class: "result wait" },
     ...lines,
-    sayToAi(drafts.length ? "幫我確認還沒確認的經歷" : "問我還沒回答的題目", "，確認完再請 AI 重做這份履歷，會比較完整。"),
+    sayToAi(drafts.length ? T.sayConfirmDrafts : T.sayAnswerQs, T.afterWaiting),
   );
 }
 
@@ -497,20 +768,20 @@ function rewritesView(item) {
       "li",
       {},
       rw.before == null
-        ? h("p", { class: "hint" }, "找不到你確認過的原句，下面整句都當成新的。請跟 AI 說「這句的原句在哪裡」。")
-        : h("p", { class: "orig" }, h("span", { class: "tag" }, "原句"), rw.before),
+        ? h("p", { class: "hint" }, T.origMissing)
+        : h("p", { class: "orig" }, h("span", { class: "tag" }, T.tagOriginal), rw.before),
       h(
         "p",
         { class: "diff" },
-        h("span", { class: "tag" }, "這份履歷"),
+        h("span", { class: "tag" }, T.tagThisResume),
         rw.parts.map((p) => (p.t === "add" ? h("ins", {}, p.s) : p.t === "del" ? h("del", {}, p.s) : p.s)),
       ),
     );
   return h(
     "details",
     { class: "rewrites", open: true },
-    h("summary", {}, `AI 改寫的句子（${extra.rewrites.length} 句）`),
-    h("p", { class: "hint" }, "綠底的字是加上去的，畫刪除線的字是拿掉的。這裡只能看；要改請跟 AI 說。"),
+    h("summary", {}, T.rewritesSummary(extra.rewrites.length)),
+    h("p", { class: "hint" }, T.rewritesHint),
     h("ol", {}, extra.rewrites.map(row)),
   );
 }
@@ -521,12 +792,12 @@ function archiveArea(item) {
   const extra = resumeExtra.items[item.id];
   const saved = extra ? extra.saved : [];
   const box = h("div", { class: "archive-box", hidden: true });
-  const btn = h("button", { type: "button", onclick: () => previewArchive(item, btn, box) }, "我投了這份，存一份");
+  const btn = h("button", { type: "button", onclick: () => previewArchive(item, btn, box) }, T.saveCopyBtn);
   return h(
     "div",
     { class: "archive" },
-    h("div", { class: "row" }, btn, h("span", { class: "hint" }, "投出去之後按，留一份寄出的版本，之後才查得到寄給這家的是哪一版。")),
-    saved.length ? h("p", { class: "hint" }, `已經存過：${saved.join("、")}`) : null,
+    h("div", { class: "row" }, btn, h("span", { class: "hint" }, T.saveCopyHint)),
+    saved.length ? h("p", { class: "hint" }, T.alreadySaved(saved.join(T.listSep))) : null,
     box,
   );
 }
@@ -538,16 +809,16 @@ async function previewArchive(item, btn, box) {
     const name = p.to.replace(/^submitted\//, "");
     const blocked = p.already || p.exists;
     const parts = [];
-    if (p.already) parts.push(h("p", {}, h("strong", {}, "這一筆已經存過一份了"), `（${p.already}）。為了不蓋掉，不會再存。`));
-    else if (p.exists) parts.push(h("p", {}, h("strong", {}, "今天已經存過這份履歷了"), `（${name}）。為了不蓋掉，不會再存。`));
+    if (p.already) parts.push(h("p", {}, h("strong", {}, T.hasCopyHead), T.hasCopyTail(p.already)));
+    else if (p.exists) parts.push(h("p", {}, h("strong", {}, T.savedTodayHead), T.savedTodayTail(name)));
     else {
       parts.push(
-        h("p", {}, "會把現在這份履歷複製一份，存到求職資料夾的「submitted」資料夾：", h("strong", {}, name)),
-        h("p", {}, `並記在進度表「${p.company} ${p.role}」那一筆。存好的檔案不會被改，也不會被蓋掉。`),
+        h("p", {}, T.willCopy, h("strong", {}, name)),
+        h("p", {}, T.willRecord(p.company, p.role)),
       );
       if (item.resumeProblems.length)
-        parts.push(h("p", { class: "warn-text" }, `這份履歷還有 ${item.resumeProblems.length} 個問題沒修。如果你已經用這一版投出去了，還是可以存，記下你寄出的是哪一版。`));
-      if (p.status === "todo") parts.push(h("p", { class: "hint" }, "進度表上這一筆會一起改成「已投遞」，投遞日記今天。"));
+        parts.push(h("p", { class: "warn-text" }, T.unfixedWarn(item.resumeProblems.length)));
+      if (p.status === "todo") parts.push(h("p", { class: "hint" }, T.willApply));
     }
     const close = () => {
       box.hidden = true;
@@ -555,10 +826,10 @@ async function previewArchive(item, btn, box) {
       btn.focus();
     };
     const actions = blocked
-      ? [h("button", { type: "button", onclick: close }, "知道了")]
+      ? [h("button", { type: "button", onclick: close }, T.gotIt)]
       : [
-          h("button", { type: "button", class: "primary", onclick: (e) => doArchive(item, p, e.target, close) }, "確定，存一份"),
-          h("button", { type: "button", onclick: close }, "先不要"),
+          h("button", { type: "button", class: "primary", onclick: (e) => doArchive(item, p, e.target, close) }, T.confirmSave),
+          h("button", { type: "button", onclick: close }, T.notNow),
         ];
     box.replaceChildren(...parts, h("div", { class: "actions" }, ...actions));
     box.hidden = false;
@@ -576,7 +847,7 @@ async function doArchive(item, p, okBtn, close) {
     if (r.board) board = r.board;
     close();
     await loadResumes();
-    notice(`已經存好：${r.saved.replace(/^submitted\//, "")}，也記在進度表了。`);
+    notice(T.savedDone(r.saved.replace(/^submitted\//, "")));
   } catch (e) {
     okBtn.disabled = false;
     fail(e);
@@ -589,29 +860,31 @@ function openPrint(item) {
 }
 
 function pdfSteps() {
+  const paper = paperName(INFO.paper);
+  const [before, bold, after] = T.pdfChrome(paper);
   return h(
     "ol",
     { class: "steps" },
-    h("li", {}, "會打開新分頁和列印視窗。"),
-    h("li", {}, "Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「A4」→ 按「更多設定」，", h("strong", {}, "取消勾選「頁首和頁尾」"), "→ 儲存。"),
-    h("li", {}, "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。"),
+    h("li", {}, T.pdfOpens),
+    h("li", {}, before, h("strong", {}, bold), after),
+    h("li", {}, T.pdfSafari(paper)),
   );
 }
 
 function pdfArea(item, pages) {
   const n = item.resumeProblems.length;
   if (!item.hasHtml)
-    return h("div", { class: "pdf" }, h("button", { type: "button", disabled: true }, "存成 PDF"), h("span", { class: "hint" }, "還沒有履歷檔，所以還不能存。"));
-  if (!n) return h("div", { class: "pdf" }, h("button", { type: "button", class: "primary", onclick: () => openPrint(item) }, "存成 PDF"), pages, pdfSteps());
+    return h("div", { class: "pdf" }, h("button", { type: "button", disabled: true }, T.savePdf), h("span", { class: "hint" }, T.noResumeFileYet));
+  if (!n) return h("div", { class: "pdf" }, h("button", { type: "button", class: "primary", onclick: () => openPrint(item) }, T.savePdf), pages, pdfSteps());
   const box = h(
     "div",
-    { class: "confirm-box", role: "alertdialog", "aria-label": "確定要存成 PDF 嗎", hidden: true },
-    h("p", {}, h("strong", {}, `確定要存？這份履歷還有 ${n} 個問題（上面紅色那幾項）。`), "投出去，公司看到的就是這個版本，面試時也可能被問到。"),
+    { class: "confirm-box", role: "alertdialog", "aria-label": T.confirmPdfAria, hidden: true },
+    h("p", {}, h("strong", {}, T.confirmPdfHead(n)), T.confirmPdfTail),
     h(
       "div",
       { class: "actions" },
-      h("button", { type: "button", class: "danger-solid", onclick: () => openPrint(item) }, "我知道，仍要存成 PDF"),
-      h("button", { type: "button", onclick: () => { box.hidden = true; btn.hidden = false; btn.focus(); } }, "先不要"),
+      h("button", { type: "button", class: "danger-solid", onclick: () => openPrint(item) }, T.savePdfAnyway),
+      h("button", { type: "button", onclick: () => { box.hidden = true; btn.hidden = false; btn.focus(); } }, T.notNow),
     ),
     pdfSteps(),
   );
@@ -619,29 +892,21 @@ function pdfArea(item, pages) {
   const btn = h(
     "button",
     { type: "button", class: "danger", onclick: () => { btn.hidden = true; box.hidden = false; box.querySelector("button").focus(); } },
-    `存成 PDF（還有 ${n} 個問題）`,
+    T.savePdfWithProblems(n),
   );
   return h("div", { class: "pdf" }, btn, pages, box);
 }
 
-/** Taiwan resumes aim for 1 page: say so above that, but saving the PDF still works. */
-function pageNote(p) {
-  return p > 1
-    ? `估計會印成 ${p} 頁。台灣的履歷最好 1 頁：可以跟 AI 說「幫我把履歷縮成一頁」。（還是可以照樣存成 PDF）`
-    : `估計會印成 ${p} 頁。`;
-}
-
-/** The same page estimate the template makes (it can't run inside the preview): A4, 15 mm margins. */
+/** The same page estimate the template makes (it can't run inside the preview): the folder's own paper and margins. */
 function estimatePages(frame) {
   try {
     const win = frame.contentWindow;
     const doc = frame.contentDocument;
     const page = doc && doc.getElementById("page");
     if (!page || !page.lastElementChild || win.innerWidth <= 820) return 0;
-    const usable = ((297 - 15 * 2) * 96) / 25.4;
     const top = page.getBoundingClientRect().top + parseFloat(win.getComputedStyle(page).paddingTop);
     const content = page.lastElementChild.getBoundingClientRect().bottom - top;
-    return Math.max(1, Math.ceil(content / usable - 0.02));
+    return pagesFor(content, INFO.paper);
   } catch {
     return 0;
   }
@@ -649,44 +914,41 @@ function estimatePages(frame) {
 
 function resumeDetail(item) {
   const n = item.resumeProblems.length;
-  const head = h("h2", {}, `${item.company} ${item.role}`.trim() || "（沒寫公司）");
-  const hiddenFromPreview = item.resumeProblems.some((p) => !p.where.startsWith("履歷檔"));
+  const head = h("h2", {}, `${item.company} ${item.role}`.trim() || T.noCompanyShort);
+  const hiddenFromPreview = item.resumeProblems.some((p) => !p.where.startsWith(T.whereResume));
   const result = n
     ? h(
         "div",
         { class: "result bad", role: "alert" },
-        h("strong", {}, `這份履歷還沒通過檢查：${n} 個問題`),
+        h("strong", {}, T.resumeFailedHead(n)),
         problemList(item.resumeProblems, { where: plainWhere }),
-        hiddenFromPreview
-          ? h("p", { class: "hint" }, "標著「AI 準備的內容」或「你確認過的經歷資料」的問題，在下面的履歷上不一定看得到，那是 AI 那邊的資料。")
-          : null,
-        sayToAi("幫我修這份履歷的問題", "，改好之後按「重新檢查」。"),
+        hiddenFromPreview ? h("p", { class: "hint" }, T.hiddenFromPreview) : null,
+        sayToAi(T.sayFixResume, T.afterRecheck),
       )
     : h(
         "div",
         { class: "result ok" },
-        h("strong", {}, "程式檢查通過"),
-        h("p", {}, "數字、日期、用詞、句子長度、佔位字和來源都沒問題。意思和職稱有沒有寫得比實際大，還是要你自己讀一次。"),
+        h("strong", {}, T.okHead),
+        h("p", {}, T.okBody),
       );
-  const photo = item.photo
-    ? h("p", { class: "hint" }, "這份設定要放照片。從這裡存的 PDF 不會有照片；要放照片，請照「開始使用」裡的方法自己存。")
-    : null;
+  // The template's photo slot belongs to the Taiwan resume: a US folder never shows this hint.
+  const photo = item.photo && INFO.market !== "us" ? h("p", { class: "hint" }, T.photoHint) : null;
   const pages = h("span", { class: "pages", hidden: true });
   const preview = item.hasHtml
     ? h("iframe", {
         class: "preview",
-        title: "履歷預覽",
+        title: T.previewTitle,
         sandbox: "allow-same-origin",
         src: `/view/${encodeURIComponent(item.id)}?r=${Date.now()}`,
         onload: (e) => {
           const p = estimatePages(e.target);
           if (!p) return;
-          pages.textContent = pageNote(p);
+          pages.textContent = T.pageNote(p, INFO.market);
           pages.className = "pages" + (p > 1 ? " long" : "");
           pages.hidden = false;
         },
       })
-    : h("p", { class: "blank" }, "還沒有履歷檔。跟 AI 說「做成履歷檔」，做好之後按「重新檢查」。");
+    : h("p", { class: "blank" }, T.blankResume);
   return [head, result, waitingNote(item), pdfArea(item, pages), archiveArea(item), photo, rewritesView(item), preview];
 }
 
@@ -722,7 +984,7 @@ function card104(b) {
   const over = b.limit != null && b.chars > b.limit;
   const size = !b.pasted
     ? null
-    : h("span", { class: "size" + (over ? " over" : "") }, b.limit != null ? `${fmt(b.chars)} / ${fmt(b.limit)} 字` : `${fmt(b.chars)} 字（上限以 104 畫面為準）`);
+    : h("span", { class: "size" + (over ? " over" : "") }, b.limit != null ? T.sizeWithLimit(fmt(b.chars), fmt(b.limit)) : T.sizeNoLimit(fmt(b.chars)));
   let action;
   if (!b.pasted) action = h("p", { class: "hint" }, b.note);
   else if (n)
@@ -730,9 +992,9 @@ function card104(b) {
     action = h(
       "div",
       { class: "copy-row bad-row" },
-      h("button", { type: "button", disabled: true }, "複製"),
-      h("p", { class: "next-step" }, "為了不讓沒根據的內容送到公司，有問題的欄位先不能複製。"),
-      sayToAi("幫我修 104 的問題", "，改好之後按「重新檢查」。"),
+      h("button", { type: "button", disabled: true }, T.copy),
+      h("p", { class: "next-step" }, T.cantCopy),
+      sayToAi(T.sayFix104, T.afterRecheck),
     );
   else {
     const btn = h(
@@ -742,13 +1004,13 @@ function card104(b) {
         class: "primary",
         onclick: async () => {
           if (await copyText(b.text)) {
-            btn.textContent = "已複製 ✓";
+            btn.textContent = T.copied;
             btn.classList.add("done");
-            notice(`已複製「${b.name}」，到 104 貼上就好。`);
-          } else notice("沒辦法自動複製。請自己選取上面的文字，按 Ctrl+C（Mac 按 ⌘+C）。", true);
+            notice(T.copiedNotice(b.name));
+          } else notice(T.copyFailed, true);
         },
       },
-      "複製",
+      T.copy,
     );
     action = h("div", { class: "copy-row" }, btn);
   }
@@ -756,7 +1018,7 @@ function card104(b) {
     "article",
     { class: "card104" + (n ? " bad" : "") },
     h("header", {}, h("h3", {}, b.name), size, b.pasted || n ? pill(b.problems) : null),
-    h("pre", { class: "copytext" }, b.text || "（空的）"),
+    h("pre", { class: "copytext" }, b.text || T.emptyText),
     // the card already says which field it is: only the message
     n ? problemList(b.problems, { where: () => "" }) : null,
     action,
@@ -766,8 +1028,8 @@ function card104(b) {
 function render104(r) {
   $("at-104").textContent = stamp(r);
   const files = [];
-  if (r.general) files.push({ title: "104 總履歷", file: r.general });
-  for (const i of r.items) if (i.apply) files.push({ title: `應徵 ${i.company} ${i.role}`.trim(), file: i.apply });
+  if (r.general) files.push({ title: T.general104, file: r.general });
+  for (const i of r.items) if (i.apply) files.push({ title: T.applyTitle(i.company, i.role).trim(), file: i.apply });
   $("empty-104").hidden = files.length > 0;
   $("cards-104").replaceChildren(
     ...files.map(({ title, file }) =>
@@ -785,11 +1047,16 @@ function render104(r) {
 // 回到這個分頁時重新讀一次，AI 在背景改過的內容才看得到
 document.addEventListener("visibilitychange", () => {
   if (document.hidden || $("edit").open || !token) return;
-  const tab = location.hash.replace("#", "") || "progress";
+  const tab = currentTab();
   if (tab === "progress") loadBoard();
   else if (tab === "resumes") loadResumes();
   else if (tab === "104") load104();
 });
 
 window.addEventListener("hashchange", showTab);
-showTab();
+// Ask the folder which country it is for (hides the 104 tab for the US, picks the paper) before the first page loads.
+folderInfo().then((info) => {
+  if (info && (info.market === "us" || info.market === "tw")) INFO = { market: info.market, paper: info.paper === "letter" ? "letter" : "a4" };
+  for (const a of document.querySelectorAll('.tabs a[data-tab="104"]')) a.hidden = INFO.market === "us";
+  showTab();
+});

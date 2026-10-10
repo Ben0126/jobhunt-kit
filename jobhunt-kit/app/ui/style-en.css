@@ -1,0 +1,3 @@
+/* English page only: the words around a quoted sentence in the problem list (style.css has the Chinese ones). */
+.problems q::before { content: "Quote: \201C"; }
+.problems q::after { content: "\201D"; }

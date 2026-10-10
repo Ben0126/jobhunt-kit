@@ -113,7 +113,7 @@ function usFolder(): string {
 async function summaryMessages(dir: string, summary: string): Promise<string[]> {
   write(dir, T, TARGET.replace("Cashier with campus experience.", summary));
   const report = await runChecks(new Folder(dir), { ids: [ID], general: false });
-  return report.items[0].problems.filter((p) => p.where.includes("自我介紹")).map((p) => p.message);
+  return report.items[0].problems.filter((p) => p.where.includes("Summary")).map((p) => p.message);
 }
 
 // ---------------------------------------------------------------- numbers
@@ -154,7 +154,7 @@ test("英文數字：沒確認過的數字照樣抓（二十六、$2.4M、triple
   ];
   for (const [s, n] of cases) {
     const msgs = await summaryMessages(dir, s);
-    expect([s, msgs.some((m) => m.startsWith("數字") && m.includes(`「${n}」`))]).toEqual([s, true]);
+    expect([s, msgs.some((m) => m.startsWith("The number") && m.includes(`"${n}"`))]).toEqual([s, true]);
   }
 });
 
@@ -163,15 +163,15 @@ test("N+：本人原話沒說過「超過 N」就不准寫 50+、over 47、more 
   const flagged = ["Raised 47+ donations.", "Raised over 47 donations.", "Raised more than 47 donations.", "Raised 47 or more donations.", "Raised over forty-seven donations."];
   for (const s of flagged) {
     const msgs = await summaryMessages(dir, s);
-    expect([s, msgs.filter((m) => m.includes("沒說過「超過 47」")).length]).toEqual([s, 1]);
+    expect([s, msgs.filter((m) => m.includes(`You never said "over 47"`)).length]).toEqual([s, 1]);
   }
   // 47 is only a plain number in the user's words; 50 is "over 50" there
   expect(await summaryMessages(dir, "Raised 47 donations.")).toEqual([]);
   expect(await summaryMessages(dir, "Trained 50+ new hires.")).toEqual([]);
   // a number nobody said is the numbers problem alone, not reported twice
   const msgs = await summaryMessages(dir, "Raised 60+ donations.");
-  expect(msgs.filter((m) => m.startsWith("數字") && m.includes("「60」")).length).toBe(1);
-  expect(msgs.some((m) => m.includes("沒說過"))).toBe(false);
+  expect(msgs.filter((m) => m.startsWith("The number") && m.includes("\"60\"")).length).toBe(1);
+  expect(msgs.some((m) => m.includes("never said"))).toBe(false);
 });
 
 test("英文數字：normEnglish / moreThanClaims 單元", () => {
@@ -214,8 +214,8 @@ test("英文日期：確認過的資料裡沒有的月份要抓；05/2024 不會
   const dir = usFolder();
   for (const s of ["Cashier since Mar 2023.", "Cashier since May 2024.", "Cashier since 07/2023.", "Cashier since Sept 2023."]) {
     const msgs = await summaryMessages(dir, s);
-    expect([s, msgs.length, msgs[0]?.startsWith("日期")]).toEqual([s, 1, true]);
-    expect(msgs.some((m) => m.startsWith("數字"))).toBe(false);
+    expect([s, msgs.length, msgs[0]?.startsWith("The date")]).toEqual([s, 1, true]);
+    expect(msgs.some((m) => m.startsWith("The number"))).toBe(false);
   }
   expect(await summaryMessages(dir, "Cashier since 06/2023.")).toEqual([]); // 6 and 2023 are not number claims either
   expect(englishYearMonths("Sep 2021 – Expected May 2027, 05/2024, marketing 2024").map((d) => `${d.year}-${d.month}`)).toEqual(["2021-09", "2027-05", "2024-05"]);
@@ -234,10 +234,10 @@ test("英文佔位字：[Company Name]、[Your Name]、Lorem ipsum、TBD、XXX�
   const dir = usFolder();
   for (const s of ["Worked at [Company Name] as Cashier.", "Hello [Your Name].", "Lorem ipsum dolor sit amet.", "Started in TBD.", "Phone XXX-XXX.", "Company Name hired me.", "Left from {School Name}.", "Worked at <Job Title>."]) {
     const msgs = await summaryMessages(dir, s);
-    expect([s, msgs.some((m) => m.includes("佔位字"))]).toEqual([s, true]);
+    expect([s, msgs.some((m) => m.includes("placeholder"))]).toEqual([s, true]);
   }
   for (const s of ["Updated the company name in the CRM.", "Wrote a [link](https://example.com) for the team.", "Taught Excel at the school."]) {
-    expect([s, (await summaryMessages(dir, s)).filter((m) => m.includes("佔位字"))]).toEqual([s, []]);
+    expect([s, (await summaryMessages(dir, s)).filter((m) => m.includes("placeholder"))]).toEqual([s, []]);
   }
 });
 
@@ -293,9 +293,9 @@ test("範本 resume-us.html：照範本做的正確履歷檔 → 全部通過，
   write(dir, T, TARGET.replace("template: us\n", ""));
   write(dir, HTML, fillUs());
   const { code, out } = await check(dir);
-  expect(out).toContain("全部通過");
+  expect(out).toContain("All passed.");
   expect(code).toBe(0);
-  expect(read(dir, `checks/${ID}.md`)).toContain("範本：美國版）");
+  expect(read(dir, `checks/${ID}.md`)).toContain("template: US Letter)");
   expect(templateFor(fillUs(), {}, "us")).toEqual({ kind: "us", how: "style" });
   expect(TEMPLATE_NAMES.us).toBe("美國版");
 });
@@ -309,7 +309,7 @@ test("範本 resume-us.html：多一句沒確認過的話、範本以外的程�
   write(dir, HTML, fillUs().replace(/<script>[\s\S]*?<\/script>/, "<script>alert(1)</script>"));
   r = await check(dir);
   expect(r.code).toBe(1);
-  expect(r.out).toContain("有範本沒有的程式（<script>）");
+  expect(r.out).toContain("There is a script the template does not have (<script>)");
 });
 
 test("美國版：履歷檔上任何 <img> 都是錯（連 photo.jpg 也是）；台灣市場的英文版照舊可以有 photo.jpg", async () => {
@@ -317,7 +317,7 @@ test("美國版：履歷檔上任何 <img> 都是錯（連 photo.jpg 也是）�
   write(dir, HTML, fillUs('<img src="photo.jpg" alt="">\n'));
   const { code, out } = await check(dir);
   expect(code).toBe(1);
-  expect(out).toContain("美國版履歷不放任何圖片");
+  expect(out).toContain("a US resume has no images");
   const html = fillUs('<img src="photo.jpg" alt="">\n');
   expect(oddMarkup(html, new Set(scriptsOf(tplUs)))).toEqual([]); // default = the Taiwan rule: photo.jpg is the one picture allowed
   expect(oddMarkup(html, new Set(scriptsOf(tplUs)), false)).toEqual(["有範本沒有的圖片（美國版履歷不放任何圖片，也不放照片）"]);
@@ -361,9 +361,9 @@ test("workspace-us/jobhunt.yaml 放進資料夾：Results-driven、team player �
   write(dir, "jobhunt.yaml", readFileSync(join(US_KIT, "jobhunt.yaml"), "utf-8"));
   for (const s of ["Results-driven cashier.", "A team player at the store.", "Fast-paced store.", "Passion for service."]) {
     const msgs = await summaryMessages(dir, s);
-    expect([s, msgs.some((m) => m.includes("AI 腔"))]).toEqual([s, true]);
+    expect([s, msgs.some((m) => m.includes("sounds like AI writing"))]).toEqual([s, true]);
   }
-  expect((await summaryMessages(dir, "Detail-oriented cashier.")).filter((m) => m.includes("AI 腔"))).toEqual([]);
+  expect((await summaryMessages(dir, "Detail-oriented cashier.")).filter((m) => m.includes("sounds like AI writing"))).toEqual([]);
 });
 
 // ---------------------------------------------------------------- review fixes (english.ts / visa.ts)
@@ -376,7 +376,7 @@ async function summaryWithFact(extra: string, summary: string): Promise<string[]
   write(dir, "resume.yaml", yaml.replace("        text: Shelved books.", `        text: ${JSON.stringify(extra)}`));
   return summaryMessages(dir, summary);
 }
-const numberMsgs = (msgs: string[]) => msgs.filter((m) => m.startsWith("數字"));
+const numberMsgs = (msgs: string[]) => msgs.filter((m) => m.startsWith("The number"));
 
 test("twice a week 不是 2x：事實裡有「twice a week」時，亂寫 Doubled 要被抓；「2 times a week」對「twice a week」不誤報", async () => {
   expect(numberMsgs(await summaryWithFact("Tutored students twice a week.", "Doubled newsletter signups."))).not.toEqual([]);
@@ -393,7 +393,7 @@ test("模糊數量：hundreds of / thousands of / dozens of 事實沒這樣說�
 test("更多說法的「以上」：50-plus / 50 plus / upwards of 50 / in excess of 50 和 50+ 一樣要本人原話", async () => {
   for (const s of ["Trained 50-plus new hires.", "Trained 50 plus new hires.", "Trained upwards of 50 new hires.", "Trained in excess of 50 new hires."]) {
     const msgs = await summaryWithFact("Trained 50 new hires.", s);
-    expect([s, msgs.filter((m) => m.includes("沒說過「超過 50」")).length]).toEqual([s, 1]);
+    expect([s, msgs.filter((m) => m.includes(`You never said "over 50"`)).length]).toEqual([s, 1]);
   }
   expect(await summaryWithFact("Trained over 50 new hires.", "Trained 50-plus new hires.")).toEqual([]);
 });
@@ -402,7 +402,7 @@ test("over 加一段時間不是「超過」：over 3 months 不誤報；over 20
   expect(await summaryWithFact("Raised $5,000 in 3 months.", "Raised $5,000 over 3 months.")).toEqual([]);
   expect(await summaryWithFact("Raised $5,000 in 2 years.", "Raised $5,000 over 2 years.")).toEqual([]);
   const msgs = await summaryWithFact("Logged 200 hours.", "Logged over 200 hours.");
-  expect(msgs.filter((m) => m.includes("沒說過「超過 200」")).length).toBe(1);
+  expect(msgs.filter((m) => m.includes(`You never said "over 200"`)).length).toBe(1);
 });
 
 test("數字字加 and、十幾加 hundred：five hundred and twelve = 512、eleven hundred = 1100", async () => {
@@ -418,7 +418,7 @@ test("$1.2B = $1.2 billion、20-percent = 20%", async () => {
 });
 
 test("[Company Name] 只報一次", async () => {
-  const msgs = (await summaryMessages(usFolder(), "Managed [Company Name] accounts.")).filter((m) => m.includes("佔位字"));
+  const msgs = (await summaryMessages(usFolder(), "Managed [Company Name] accounts.")).filter((m) => m.includes("placeholder"));
   expect(msgs.length).toBe(1);
 });
 
@@ -429,7 +429,7 @@ test("簽證字：Visa 是本人的雇主（resume.yaml 的 org）就不擋；�
   const dir = usFolder();
   write(dir, "resume.yaml", read(dir, "resume.yaml").replaceAll("Campus Bookstore", "Visa"));
   write(dir, HTML, fillUs().replaceAll("Campus Bookstore", "Visa"));
-  expect((await check(dir)).out).toContain("全部通過");
+  expect((await check(dir)).out).toContain("All passed.");
   const other = usFolder();
   write(other, HTML, fillUs().replace("Shelved books.", "Shelved books for Visa."));
   expect((await check(other)).code).toBe(1);

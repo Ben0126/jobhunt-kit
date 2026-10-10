@@ -6,8 +6,10 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, resolve, sep } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import * as R from "../../web/js/core/rules.js";
+import { docxTextFor } from "./docx.text.ts";
 import { looksLikeJobhuntFolder } from "./folder.ts";
 import { replaceExtraIds } from "./ids.ts";
+import { type Language, readMarketSync } from "./market.ts";
 
 // ---------------------------------------------------------------- limits
 
@@ -449,14 +451,15 @@ const INVISIBLE = /[­​-‏⁠-⁤﻿]/g;
 // original text, full-width letters and digits too.
 const ID_NEW = /(?<![A-Za-z0-9Ａ-Ｚａ-ｚ０-９])[A-Za-zＡ-Ｚａ-ｚ][1289１２８９][0-9０-９]{8}(?![0-9０-９])/g;
 const ID_OLD = /(?<![A-Za-z0-9Ａ-Ｚａ-ｚ０-９])[A-ZＡ-Ｚ]{2}[0-9０-９]{8}(?![0-9０-９])/g;
-export const ID_MASK = "[已遮住身分證字號]";
+export const ID_MASK = docxTextFor("zh-TW").idMask;
 
-export function maskIdNumbers(text: string): { text: string; count: number } {
+/** `maskWord`: what replaces each ID number (the Chinese one unless the folder's language is English). */
+export function maskIdNumbers(text: string, maskWord = ID_MASK): { text: string; count: number } {
   let t = text.replace(INVISIBLE, "");
   let count = 0;
   const mask = () => {
     count++;
-    return ID_MASK;
+    return maskWord;
   };
   t = t.replace(ID_NEW, mask).replace(ID_OLD, mask);
   t = replaceExtraIds(t, mask); // SSN, SEVIS, A-number, China ID (src/ids.ts)
@@ -473,28 +476,14 @@ export function maskIdNumbers(text: string): { text: string; count: number } {
 
 // ---------------------------------------------------------------- command line
 
-const USAGE_WIN = ".\\jobhunt.exe read inbox\\舊履歷.docx";
-const USAGE_MAC = "./jobhunt-mac-arm64 read inbox/舊履歷.docx";
+/** The sentences `read` prints in a folder's language. The path in "not found" is ID-masked with that language's mask. */
+function messagesFor(lang: Language) {
+  const T = docxTextFor(lang);
+  return { ...T, notFound: (p: string) => T.notFound(maskIdNumbers(p, T.idMask).text) };
+}
 
-export const MESSAGES = {
-  usage: `用法：jobhunt read <檔案>，例如 ${USAGE_WIN}（Mac：${USAGE_MAC}）。一次讀一個檔案，檔名有空白要加引號。`,
-  notFolder: "這個資料夾看起來不是求職資料夾，沒有讀。請把程式放進求職資料夾（有 AGENTS.md 的那個）再執行。",
-  notFound: (p: string) => `找不到「${maskIdNumbers(p).text}」。請確認檔案放在求職資料夾的 inbox 裡，檔名打對（含 .docx）。`,
-  outside: "只能讀求職資料夾裡面的檔案（建議放在 inbox）。這個檔案在資料夾外面，沒有讀。",
-  isDir: (p: string) => `「${p}」是資料夾，不是檔案。`,
-  doc: "這是舊版 Word 檔（.doc），程式讀不了。請用 Word 打開它，按「檔案」→「另存新檔」，存成 .docx（或 PDF），放進 inbox 再試一次。",
-  pdf: "這是 PDF 檔，不用這個程式：AI 可以直接讀 PDF 檔案。",
-  pages: "這是 Mac 的 Pages 檔，程式讀不了。請在 Pages 按「檔案」→「輸出至」→「Word」存成 .docx，放進 inbox 再試一次。",
-  other: "這個程式只讀 Word 的 .docx 檔。PDF、文字檔請 AI 直接讀檔案；其他格式請用原本的程式另存成 .docx。",
-  encrypted: "這個 Word 檔有密碼保護，程式讀不了。請用 Word 打開它（輸入密碼），把密碼拿掉，或另存一份沒有密碼的 .docx，再試一次。",
-  cfbDocx: "這個 Word 檔有密碼保護，或其實是舊版 Word 格式，程式讀不了。請用 Word 打開它，按「檔案」→「另存新檔」，存成一份沒有密碼的 .docx，再試一次。",
-  cannotOpen: "這個檔案現在打不開：可能正被別的程式用著（例如 OneDrive 正在同步、防毒軟體正在檢查、還沒下載完），或沒有權限讀。請等一下再試；還是不行，就把 Word 關掉，或在 Word 裡另存一份到 inbox 再讀那一份。",
-  corrupt: "這個 Word 檔打不開，可能壞了或沒有存完整。請用 Word 打開它，按「檔案」→「另存新檔」存成新的 .docx 再試一次；還是不行，就把文字複製貼給 AI。",
-  tooBig: "這個檔案太大或內容不正常，程式不讀。請用 Word 打開它，按「檔案」→「另存新檔」存成新的 .docx 再試一次；還是不行，就把文字複製貼給 AI。",
-  empty: "（這個檔案裡沒有讀到文字，可能整份是圖片。請把文字複製貼給 AI，或把原本的檔案另存成 PDF 給 AI 讀。）",
-  header: (name: string) => `＝＝ ${name} 的文字（只給 AI 讀，沒有存成檔案）＝＝`,
-  masked: (n: number) => `（有 ${n} 個身分證字號已經遮住。）`,
-};
+/** The Chinese sentences (what a Taiwan folder prints). */
+export const MESSAGES = messagesFor("zh-TW");
 
 function isCfb(b: Uint8Array) {
   return b.length >= 8 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0 && b[4] === 0xa1 && b[5] === 0xb1 && b[6] === 0x1a && b[7] === 0xe1;
@@ -554,14 +543,18 @@ const isMissing = (err: unknown) => ["ENOENT", "ENOTDIR"].includes((err as any)?
 export function runRead(argv: string[], dir: string | null, print: (s: string) => void = (s) => console.log(s), ioOverride: Partial<ReadIo> = {}): number {
   const io = { ...REAL_IO, ...ioOverride };
   const { paths, unknown } = readArgs(argv);
+  // A folder the program does not recognise has no jobhunt.yaml to read: the Taiwan (Chinese) wording is the default.
+  const folderOk = !!dir && looksLikeJobhuntFolder(dir);
+  const lang: Language = dir && folderOk ? readMarketSync(dir).language : "zh-TW";
+  const MESSAGES = messagesFor(lang);
   if (unknown.length || paths.length !== 1) {
-    if (unknown.length) print(`不認得「${unknown.join(" ")}」。`);
+    if (unknown.length) print(MESSAGES.unknownArg(unknown.join(" ")));
     print(MESSAGES.usage);
     return 2;
   }
-  if (!dir || !looksLikeJobhuntFolder(dir)) {
+  if (!dir || !folderOk) {
     print(MESSAGES.notFolder);
-    if (dir) print(`程式現在在：${dir}`);
+    if (dir) print(MESSAGES.programAt(dir));
     return 2;
   }
   const given = paths[0];
@@ -627,8 +620,8 @@ export function runRead(argv: string[], dir: string | null, print: (s: string) =
     return 2;
   }
 
-  const masked = maskIdNumbers(text);
-  const name = maskIdNumbers(basename(real)).text;
+  const masked = maskIdNumbers(text, MESSAGES.idMask);
+  const name = maskIdNumbers(basename(real), MESSAGES.idMask).text;
   const out = [MESSAGES.header(name), masked.text.trim() ? masked.text : MESSAGES.empty];
   if (masked.count) out.push("", MESSAGES.masked(masked.count));
   print(out.join("\n"));

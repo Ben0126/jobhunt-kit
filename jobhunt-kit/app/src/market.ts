@@ -1,6 +1,8 @@
 // Which job market a kit folder is for: jobhunt.yaml `market` (tw | us), `language` (zh-TW | en), `paper` (a4 | letter).
 // Missing file, broken yaml or an unknown market all mean the Taiwan kit, so a folder made before this existed keeps
 // working exactly as it did.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Folder } from "./folder.ts";
 
 export type Market = "tw" | "us";
@@ -29,6 +31,15 @@ export function marketFromConfig(cfg: unknown): MarketConfig {
 export async function readMarket(folder: Folder): Promise<MarketConfig> {
   try {
     return marketFromConfig(await folder.readYaml("jobhunt.yaml"));
+  } catch {
+    return TW_DEFAULTS;
+  }
+}
+
+/** Same as readMarket for code that cannot await (the Word reader). `dir` is the folder's path. */
+export function readMarketSync(dir: string): MarketConfig {
+  try {
+    return marketFromConfig(Bun.YAML.parse(readFileSync(join(dir, "jobhunt.yaml"), "utf-8").replace(/^﻿/, "")));
   } catch {
     return TW_DEFAULTS;
   }

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Search Helper</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style-en.css">
+</head>
+<body>
+<header class="top">
+  <h1>Job Search Helper</h1>
+  <nav class="tabs" aria-label="Tabs">
+    <a href="#progress" data-tab="progress">Progress</a>
+    <a href="#resumes" data-tab="resumes">Resumes</a>
+    <a href="#104" data-tab="104" hidden>104</a>
+  </nav>
+  <p class="folder" id="folder"></p>
+</header>
+
+<main>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+  <section id="page-progress" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="add-open" class="primary">+ Add a job</button>
+    </div>
+
+    <form id="add-form" class="add-form" hidden>
+      <label>Company <span class="req">Required</span><input name="company" autocomplete="off" required></label>
+      <label>Job title <span class="req">Required</span><input name="role" autocomplete="off" required></label>
+      <label>Job link <span class="opt">Optional</span><input name="link" type="text" inputmode="url" autocomplete="off" placeholder="Paste the link to the job posting"></label>
+      <div class="actions">
+        <button type="submit" class="primary">Add</button>
+        <button type="button" id="add-cancel">Cancel</button>
+      </div>
+    </form>
+
+    <section id="follow" class="follow" hidden>
+      <h2>Time to follow up</h2>
+      <ul id="follow-list"></ul>
+    </section>
+
+    <p id="progress-empty" class="blank" hidden>No jobs are recorded yet. After you apply, tell the AI "I applied to such-and-such company" and it will record it here. You can also press "+ Add a job" and add one yourself.</p>
+
+    <div id="board" class="board"></div>
+
+    <details id="closed" class="closed">
+      <summary>Closed: rejected, no response, withdrawn (<span id="closed-count">0</span>)</summary>
+      <div id="board-closed" class="board"></div>
+    </details>
+  </section>
+
+  <section id="page-resumes" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="recheck-resumes">Check again</button>
+      <span id="at-resumes" class="hint"></span>
+    </div>
+    <p id="resumes-empty" class="blank" hidden>No tailored resumes yet. Tell the AI "Tailor my resume for this job". When it is done, the resume shows up here.</p>
+    <div id="resumes" class="resumes">
+      <ul id="resume-list" class="resume-list" aria-label="Resume versions"></ul>
+      <div id="resume-detail" class="resume-detail"></div>
+    </div>
+  </section>
+
+  <section id="page-104" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="recheck-104">Check again</button>
+      <span id="at-104" class="hint"></span>
+    </div>
+    <p class="hint lead">One card per field. Paste them one at a time, in order. "Copy" copies only the text meant for 104. After you paste, the character count shown on the 104 site is the one that counts.</p>
+    <p id="empty-104" class="blank" hidden>There is no text for 104 yet. Tell the AI "How do I fill in 104" or "Write my cover letter". When it is done, the text shows up here.</p>
+    <div id="cards-104"></div>
+  </section>
+
+  <section id="page-nokey" class="page placeholder" hidden>
+    <h2>Please reopen the program</h2>
+    <p>This tab cannot reach the program. Close this tab, then double-click the program in your job-search folder to open it again.</p>
+  </section>
+</main>
+
+<dialog id="edit">
+  <form id="edit-form" method="dialog">
+    <h2 id="edit-title">Edit</h2>
+    <div class="grid">
+      <label>Company<input name="company" required autocomplete="off"></label>
+      <label>Job title<input name="role" required autocomplete="off"></label>
+      <label>Status<select name="status" id="edit-status"></select></label>
+      <label>Date applied<input name="applied_date" type="date"></label>
+      <label class="wide">Next step<input name="next_action" autocomplete="off" placeholder="For example: Interview 10/15 at 2 pm"></label>
+      <label>Next step date<input name="next_action_date" type="date"></label>
+      <label class="wide">Notes<input name="notes" autocomplete="off"></label>
+      <label class="wide">Job link<input name="link" type="text" inputmode="url" autocomplete="off" placeholder="Paste the link to the job posting"></label>
+    </div>
+    <p class="hint">When you change the status to "Applied" and leave the date applied empty, today's date is filled in.</p>
+    <p id="edit-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="submit" value="save" class="primary" id="edit-save">Save</button>
+      <button type="button" id="edit-cancel">Cancel</button>
+      <span class="spacer"></span>
+      <button type="button" id="edit-delete" class="danger">Delete this job</button>
+      <span id="edit-nodelete" class="hint" hidden>A copy of the resume you sent is saved, so this cannot be deleted. If you do not want to see it, change the status to "Withdrawn".</span>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

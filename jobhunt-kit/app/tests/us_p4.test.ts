@@ -143,12 +143,12 @@ test("來源詞：美國版接受 Education、Job goals（大小寫要一樣）�
     if (!us) write(dir, "jobhunt.yaml", read(dir, "jobhunt.yaml").replace("market: us", "market: tw"));
     write(dir, "104/履歷欄位.md", body("Education, Job goals"));
     const probs = (await runChecks(new Folder(dir), { ids: [], general: true })).general!.blocks.flatMap((b) => b.problems);
-    expect(probs.filter((p) => p.message.includes("來源寫了")).length > 0).toBe(!ok);
+    expect(probs.filter((p) => p.message.includes("The source says")).length > 0).toBe(!ok);
   }
   const dir = usFolder();
   write(dir, "104/履歷欄位.md", body("job goals, education"));
   const probs = (await runChecks(new Folder(dir), { ids: [], general: true })).general!.blocks.flatMap((b) => b.problems);
-  expect(probs.filter((p) => p.message.includes("來源寫了")).length).toBe(2); // wrong case is still refused
+  expect(probs.filter((p) => p.message.includes("The source says")).length).toBe(2); // wrong case is still refused
 });
 
 // ---------------------------------------------------------------- structure
@@ -158,20 +158,20 @@ test("結構：第一行標題、區塊名稱、不能有 # ／ ### 標題、Fil
   expect((await li(dir, ABOUT_OK)).errors).toEqual([]);
 
   const noHeader = await profile(dir, "linkedin", ABOUT_OK);
-  expect(has(noHeader.errors, "第一行")).toBe(true);
+  expect(has(noHeader.errors, "The first line must be")).toBe(true);
 
   const wrongName = await hs(dir, ABOUT_OK); // About is a LinkedIn block, not a Handshake one
-  expect(has(wrongName.errors, "不認得的區塊名稱")).toBe(true);
+  expect(has(wrongName.errors, "Unknown section name")).toBe(true);
   const lower = await li(dir, ABOUT_OK.replace("## About", "## about"));
-  expect(has(lower.errors, "不認得的區塊名稱")).toBe(true);
+  expect(has(lower.errors, "Unknown section name")).toBe(true);
 
   const dup = await li(dir, ABOUT_OK + "\n" + ABOUT_OK);
-  expect(has(dup.errors, "只能出現一次")).toBe(true);
+  expect(has(dup.errors, "can only appear once")).toBe(true);
 
   const h3 = await li(dir, ABOUT_OK + "\n### Extra\nSomething.\n");
-  expect(has(h3.errors, "不能用 # 或 ### 標題")).toBe(true);
+  expect(has(h3.errors, "Do not use # or ### headings")).toBe(true);
   const h1 = await li(dir, ABOUT_OK + "\n# Another title\n");
-  expect(has(h1.errors, "不能用 # 或 ### 標題")).toBe(true);
+  expect(has(h1.errors, "Do not use # or ### headings")).toBe(true);
 
   const fill = await li(dir, ABOUT_OK.replace("- Fill: paste", "- Fill: guide"));
   expect(has(fill.errors, "Fill")).toBe(true);
@@ -195,10 +195,10 @@ test("來源行：每一段都要有；草稿、刪掉、不存在的故事、wo
     `## Experience: Sales Associate\n- Title: Sales Associate\n- Company: Northfield State University Bookstore\n- Fill: paste\n\n• Worked the register on weekends.${src == null ? "" : `\nSource: ${src}`}\n`;
   expect((await li(dir, exp("S-001"))).errors).toEqual([]);
   expect(has((await li(dir, exp(null))).errors, "Source:")).toBe(true);
-  expect(has((await li(dir, exp("S-002"))).errors, "還是草稿")).toBe(true);
-  expect(has((await li(dir, exp("S-099"))).errors, "找不到這則經歷")).toBe(true);
-  expect(has((await li(dir, exp("work-auth"))).errors, "來源只能寫")).toBe(true);
-  expect(has((await li(dir, exp("S-001, work-auth"))).errors, "來源只能寫")).toBe(true);
+  expect(has((await li(dir, exp("S-002"))).errors, "is still a draft")).toBe(true);
+  expect(has((await li(dir, exp("S-099"))).errors, "no experience with that id")).toBe(true);
+  expect(has((await li(dir, exp("work-auth"))).errors, "A source can only be")).toBe(true);
+  expect(has((await li(dir, exp("S-001, work-auth"))).errors, "A source can only be")).toBe(true);
   const second = await li(dir, ABOUT_OK + "\nAnother paragraph with no source line.\n");
   expect(has(second.errors, "Source:")).toBe(true);
   // an empty block still needs its Source line
@@ -227,12 +227,12 @@ test("數字和日期：段落裡的數字要是本人說過的；N+ 只有本�
   const dir = usFolder();
   const about = (s: string) => `## About\n- Fill: paste\n\n${s}\nSource: S-001\n`;
   expect((await li(dir, about("Trained about 5 new employees."))).errors).toEqual([]);
-  expect(has((await li(dir, about("Served 300 customers a day."))).errors, "在確認過的經歷裡找不到")).toBe(true);
-  expect(has((await li(dir, about("Trained 5+ new employees."))).errors, "超過")).toBe(true);
-  expect(has((await li(dir, about("Worked there since Jun 2019."))).errors, "日期")).toBe(true);
+  expect(has((await li(dir, about("Served 300 customers a day."))).errors, "not in your confirmed experience")).toBe(true);
+  expect(has((await li(dir, about("Trained 5+ new employees."))).errors, "more than")).toBe(true);
+  expect(has((await li(dir, about("Worked there since Jun 2019."))).errors, "The date")).toBe(true);
   const exp = (dates: string) => `## Experience: Sales Associate\n- Title: Sales Associate\n- Company: Northfield State University Bookstore\n- Dates: ${dates}\n- Fill: paste\n\n• Worked the register on weekends.\nSource: S-001\n`;
   expect((await li(dir, exp("Sep 2024 – May 2025"))).errors).toEqual([]);
-  expect(has((await li(dir, exp("Sep 2022 – May 2025"))).errors, "日期")).toBe(true);
+  expect(has((await li(dir, exp("Sep 2022 – May 2025"))).errors, "The date")).toBe(true);
 });
 
 // ---------------------------------------------------------------- limits
@@ -245,31 +245,31 @@ test("字數上限：第三方來源的上限只提醒（程式還是通過）�
   expect(ok.warnings).toEqual([]);
   const over = await li(dir, head(222));
   expect(over.errors).toEqual([]);
-  expect(has(over.warnings, "超過上限 220")).toBe(true);
+  expect(has(over.warnings, "over the limit of 220")).toBe(true);
   expect(over.ok).toBe(true);
 
   const small = await li(dir, head(150).replace("- Fill: paste", "- Limit: 100 characters\n- Fill: paste")); // the user's own, smaller number wins
-  expect(has(small.warnings, "超過上限 100")).toBe(true);
+  expect(has(small.warnings, "over the limit of 100")).toBe(true);
   const big = await li(dir, head(222).replace("- Fill: paste", "- Limit: 5000 characters\n- Fill: paste")); // a bigger number never lets it through
-  expect(has(big.warnings, "超過上限 220")).toBe(true);
+  expect(has(big.warnings, "over the limit of 220")).toBe(true);
 
   const journey = (n: number) => `## My Journey\n- Fill: paste\n\n${"B.A. student looking for sales roles. ".repeat(20).slice(0, n)}\nSource: Education, Job goals\n`;
   expect((await hs(dir, journey(300))).warnings).toEqual([]);
-  expect(has((await hs(dir, journey(301))).warnings, "超過上限 300")).toBe(true);
+  expect(has((await hs(dir, journey(301))).warnings, "over the limit of 300")).toBe(true);
 
   const aboutLong = `## About\n- Fill: paste\n\n${"Looking for sales roles. ".repeat(110).slice(0, 2601)}\nSource: Job goals\n`;
-  expect(has((await li(dir, aboutLong)).warnings, "超過上限 2,600")).toBe(true);
+  expect(has((await li(dir, aboutLong)).warnings, "over the limit of 2,600")).toBe(true);
 
   const title = "T".repeat(101);
   const exp = `## Experience: Long\n- Title: ${title}\n- Company: Northfield State University Bookstore\n- Fill: paste\n\n• Worked the register on weekends.\nSource: S-001\n`;
   const e = await li(dir, exp);
   expect(has(e.warnings, "Title")).toBe(true);
-  expect(has(e.errors, "超過上限")).toBe(false); // (the long Title is not a resume.yaml role: that is its own, separate error)
+  expect(has(e.errors, "over the limit")).toBe(false); // (the long Title is not a resume.yaml role: that is its own, separate error)
 
   const skills = (n: number) => `## Skills\n- Fill: paste\n\n${Array.from({ length: n }, (_, i) => (i === 0 ? "• Microsoft Word" : `• Excel (pivot tables)`)).join("\n")}\nSource: S-006\n`;
   expect((await li(dir, skills(100))).errors).toEqual([]);
   const s101 = await li(dir, skills(101));
-  expect(has(s101.errors, "101 個項目")).toBe(true);
+  expect(has(s101.errors, "101 items")).toBe(true);
   expect(s101.ok).toBe(false);
 });
 
@@ -278,7 +278,7 @@ test("自訂網址 Suggested：英文字母和數字 3 到 100 個字、不含 l
   const url = (v: string) => `## Custom URL\n- Fill: guide\n- Suggested: ${v}\n\nYour address would look like linkedin.com/in/ followed by a short name. LinkedIn allows 3 to 100 characters.\n`;
   expect((await li(dir, url("janedoe"))).errors).toEqual([]);
   for (const bad of ["jane-doe", "jd", "janelinkedin", "Jane Doe", "x".repeat(101)])
-    expect(has((await li(dir, url(bad))).errors, "自訂網址")).toBe(true);
+    expect(has((await li(dir, url(bad))).errors, "custom URL")).toBe(true);
 });
 
 // ---------------------------------------------------------------- bullets from resume.yaml
@@ -288,13 +288,13 @@ test("重點要和 resume.yaml 一字不差；來源行要有那一條的來源�
   const exp = (bullet: string, src = "S-001") =>
     `## Experience: Sales Associate\n- Title: Sales Associate\n- Company: Northfield State University Bookstore\n- Fill: paste\n\n• ${bullet}\nSource: ${src}\n`;
   expect((await li(dir, exp("Worked the register on weekends."))).errors).toEqual([]);
-  expect(has((await li(dir, exp("Worked the register on weekends and holidays."))).errors, "不是 resume.yaml 的重點原句")).toBe(true);
-  expect(has((await li(dir, exp("Worked the register on weekends.", "S-004"))).errors, "沒有寫這條重點的來源 S-001")).toBe(true);
+  expect(has((await li(dir, exp("Worked the register on weekends and holidays."))).errors, "is not a bullet sentence from resume.yaml")).toBe(true);
+  expect(has((await li(dir, exp("Worked the register on weekends.", "S-004"))).errors, "does not list S-001, the source of this bullet")).toBe(true);
 
   const skills = (items: string[], src: string) => `## Skills\n- Fill: paste\n\n${items.map((i) => `• ${i}`).join("\n")}\nSource: ${src}\n`;
   expect((await li(dir, skills(["Microsoft Word", "Excel (pivot tables)"], "S-006"))).errors).toEqual([]);
-  expect(has((await li(dir, skills(["Photoshop"], "S-006"))).errors, "專長項目")).toBe(true);
-  expect(has((await li(dir, skills(["Microsoft Word"], "S-001"))).errors, "沒有寫這項專長的來源 S-006")).toBe(true);
+  expect(has((await li(dir, skills(["Photoshop"], "S-006"))).errors, "is not in the skills of resume.yaml")).toBe(true);
+  expect(has((await li(dir, skills(["Microsoft Word"], "S-001"))).errors, "does not list S-006, the source of this skill")).toBe(true);
 
   // Handshake: courses, skills and career interests are lists, not resume bullets
   const courses = await hs(dir, "## Courses\n- Fill: paste\n\n• Intro to Accounting\n• Business Statistics\nSource: Education\n");
@@ -311,30 +311,30 @@ test("電話、email、住址：兩個檔案的每個地方都擋（說明區塊
   const dir = usFolder();
   for (const bad of ["Call me at (614) 555-0100.", "Reach me at jane.doe@example.com.", "I live at 123 Main Street.", "Phone 614-555-0100", "Box: P.O. Box 55"]) {
     const r = await li(dir, `## About\n- Fill: paste\n\n${bad}\nSource: Job goals\n`);
-    expect(has(r.errors, "電話、email 或住址")).toBe(true);
+    expect(has(r.errors, "phone number, email or street address")).toBe(true);
   }
   const guide = await li(dir, "## Open to Work\n- Fill: guide\n\nEmail me at jane.doe@example.com or on F-1 status.\n");
-  expect(has(guide.errors, "電話、email 或住址")).toBe(true);
-  expect(has(guide.errors, "簽證")).toBe(true);
+  expect(has(guide.errors, "phone number, email or street address")).toBe(true);
+  expect(has(guide.errors, "visa or work authorization")).toBe(true);
   const meta = await li(dir, ABOUT_OK.replace("- Fill: paste", "- Fill: paste\n- Location: 123 Main Street"));
-  expect(has(meta.errors, "電話、email 或住址")).toBe(true);
+  expect(has(meta.errors, "phone number, email or street address")).toBe(true);
   const header = await profile(dir, "handshake", HEAD_HS.replace("Updated: 2026-10-09", "Updated: 2026-10-09 jane@example.com") + ABOUT_OK.replace("## About", "## My Journey"));
-  expect(has(header.errors, "電話、email 或住址")).toBe(true);
+  expect(has(header.errors, "phone number, email or street address")).toBe(true);
   const ph = await li(dir, "## About\n- Fill: paste\n\n[Your Name] is looking for roles. TBD.\nSource: Job goals\n");
-  expect(has(ph.errors, "佔位字")).toBe(true);
+  expect(has(ph.errors, "placeholder")).toBe(true);
 });
 
 test("貼上的內文是純文字：不能有 - 開頭的行、粗體、連結、表情符號；說明區塊的數字不用對來源", async () => {
   const dir = usFolder();
   const about = (line: string) => `## About\n- Fill: paste\n\n${line}\nSource: Job goals\n`;
-  expect(has((await li(dir, about("- Looking for sales roles."))).errors, "重點符號")).toBe(true);
-  expect(has((await li(dir, about("**Looking** for sales roles."))).errors, "粗體")).toBe(true);
-  expect(has((await li(dir, about("See https://example.com for sales roles."))).errors, "連結")).toBe(true);
-  expect(has((await li(dir, about("Looking for sales roles 🚀"))).errors, "表情")).toBe(true);
+  expect(has((await li(dir, about("- Looking for sales roles."))).errors, "for bullet points")).toBe(true);
+  expect(has((await li(dir, about("**Looking** for sales roles."))).errors, "bold")).toBe(true);
+  expect(has((await li(dir, about("See https://example.com for sales roles."))).errors, "links")).toBe(true);
+  expect(has((await li(dir, about("Looking for sales roles 🚀"))).errors, "emoji")).toBe(true);
   const guide = await li(dir, "## Open to Work\n- Fill: guide\n\nThree choices. You can change it 5 times in 6 months.\n");
   expect(guide.errors).toEqual([]);
   const guideSrc = await li(dir, "## Open to Work\n- Fill: guide\n\nThree choices.\nSource: Job goals\n");
-  expect(has(guideSrc.errors, "說明區塊不用寫 Source")).toBe(true);
+  expect(has(guideSrc.errors, "A guide section does not need a Source")).toBe(true);
 });
 
 // ---------------------------------------------------------------- command line
@@ -345,13 +345,13 @@ test("check --profiles：只查 profiles（不查職缺、104），寫 checks/_p
   const r = await cli(dir, "--profiles");
   expect(r.code).toBe(0);
   expect(r.out).toContain("profiles/linkedin.md");
-  expect(r.out).toContain("超過上限 220");
-  expect(r.out).toContain("全部通過");
-  expect(r.out).not.toContain("104 總履歷");
+  expect(r.out).toContain("over the limit of 220");
+  expect(r.out).toContain("All passed.");
+  expect(r.out).not.toContain("104 master resume");
   expect(r.out).toContain("checks/_profiles.md");
   const doc = read(dir, "checks/_profiles.md");
-  expect(doc).toContain("超過上限 220");
-  expect(doc).toContain("提醒");
+  expect(doc).toContain("over the limit of 220");
+  expect(doc).toContain("Warnings (not failures)");
   expect(doc.startsWith("# AI manual check")).toBe(true); // US folder: English heading and first line
   expect(doc).toContain("## Program check");
   expect(doc).not.toContain("## 程式檢查");
@@ -424,15 +424,15 @@ test("修正：Headline 和 About 的 Skills: 行抄 resume.yaml 的 Spanish (na
   expect(about.errors).toEqual([]);
   // an ordinary sentence still gets the one-pair rule
   const two = await li(dir, "## About\n- Fill: paste\n\nStudent (Expected May 2027) looking for sales (retail) roles.\nSource: Education, Job goals\n");
-  expect(has(two.errors, "括號")).toBe(true);
+  expect(has(two.errors, "pairs of parentheses")).toBe(true);
 });
 
 test("修正：Skills 每一項都要是 resume.yaml 的 skills 項目，句子裡出現的字（register、textbooks）不算", async () => {
   const dir = usFolder();
   const skills = (items: string[]) => `## Skills\n- Fill: paste\n\n${items.map((i) => `• ${i}`).join("\n")}\nSource: S-001\n`;
-  for (const word of ["Register", "Textbooks", "Worked the register"]) expect(has((await li(dir, skills([word]))).errors, "專長項目")).toBe(true);
+  for (const word of ["Register", "Textbooks", "Worked the register"]) expect(has((await li(dir, skills([word]))).errors, "is not in the skills of resume.yaml")).toBe(true);
   const hsr = await hs(dir, "## Skills\n- Fill: paste\n\n• Register\nSource: S-001\n");
-  expect(has(hsr.errors, "專長項目")).toBe(true);
+  expect(has(hsr.errors, "is not in the skills of resume.yaml")).toBe(true);
 });
 
 test("修正：Title、Company、School、Degree 要和 resume.yaml 一字不差", async () => {
@@ -454,5 +454,5 @@ test("修正：Title、Company、School、Degree 要和 resume.yaml 一字不差
 test("修正：只靠 Education／Job goals 的段落寫到校內打工（名字含學校名）也要被抓到", async () => {
   const dir = usFolder();
   const j = (name: string) => `## My Journey\n- Fill: paste\n\nCashier at ${name}.\nSource: Education, Job goals\n`;
-  expect(has((await hs(dir, j("Northfield State University Bookstore"))).errors, "寫到經歷")).toBe(true);
+  expect(has((await hs(dir, j("Northfield State University Bookstore"))).errors, "This paragraph mentions")).toBe(true);
 });

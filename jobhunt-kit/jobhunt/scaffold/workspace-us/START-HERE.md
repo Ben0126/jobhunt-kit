@@ -70,7 +70,7 @@ Open the Code tab, pick the same folder, start a new conversation and type "cont
 
 ## Open the app (optional)
 
-If the folder contains the "jobhunt" program, you can open a small page in your browser to see your application tracker and check and save your resume as a PDF. You can use the kit without it.
+If the folder contains the "jobhunt" program, you can open a small page in your browser. Its "Progress" tab is your application tracker. Its "Resumes" tab checks your resume and saves it as a PDF. You can use the kit without it.
 
 - Windows: double-click "jobhunt" in the folder (the one whose type is "Application"). The first time, if Windows says it protected your PC, click "More info" and then "Run anyway".
 - Mac: double-click the program whose name starts with "jobhunt-mac" (there is only one). If it says it is not supported on this computer, you downloaded the wrong version. Open the Apple menu, then "About This Mac": if "Chip" says Apple, you need the Apple version; if "Processor" says Intel, you need the Intel version.
@@ -108,7 +108,7 @@ So:
 
 ## Save your resume as a PDF
 
-If you opened the app, the easiest way is the "Save as PDF" button on its resume page. It checks first, then opens the print window; continue from point 3 below.
+If you opened the app, the easiest way is the "Save as PDF" button on its "Resumes" tab. It checks first, then opens the print window; continue from point 3 below.
 
 The resume files the AI makes are in the "resumes" folder and end in .html. The file name is the company and job title, for example northfield-hr-assistant. The AI tells you which company it is for.
 

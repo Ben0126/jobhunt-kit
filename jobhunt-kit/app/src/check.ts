@@ -16,7 +16,8 @@ import { replaceSection, SECTION, SECTION_EN } from "./checksfile.ts";
 import { Folder, FolderError, looksLikeJobhuntFolder } from "./folder.ts";
 import { englishYearMonths, EN_PLACEHOLDERS, factText, moreThanClaims, normEnglish, vagueAmounts } from "./english.ts";
 import { extraIdMatches, replaceExtraIds, starMask } from "./ids.ts";
-import { type Market, type MarketConfig, readMarket, TW_DEFAULTS } from "./market.ts";
+import { type Language, type Market, type MarketConfig, readMarket, readMarketSync, TW_DEFAULTS } from "./market.ts";
+import { type CheckText, textFor } from "./check.text.ts";
 import { visaWords } from "./visa.ts";
 import {
   bodyLineProblem,
@@ -74,7 +75,8 @@ export const GENERAL_104 = "104/履歷欄位.md";
 export const GENERAL_CHECKS = "checks/_104.md";
 export const PROFILES_CHECKS = "checks/_profiles.md";
 
-// ---------------------------------------------------------------- plain-Chinese messages
+// ---------------------------------------------------------------- plain-language messages
+// Every sentence a person reads is in check.text.ts (one table per jobhunt.yaml `language`); this file only picks one.
 
 const CJK = /[㐀-鿿]/;
 // Same shape as rules.js idNumbers, matched on the original text (full-width letters and digits too) so a quote
@@ -106,45 +108,41 @@ function numberNeedle(text: string, n: string): string | undefined {
 }
 
 /** One rules.js checkText problem → plain words + the piece of text it is about. */
-function fromRule(p: any, text: string): { message: string; quote: string } {
+function fromRule(p: any, text: string, T: CheckText): { message: string; quote: string } {
   switch (p.code) {
     case "numbers":
-      return {
-        message: `數字${p.numbers.map((n: string) => `「${n}」`).join("、")}在確認過的經歷裡找不到。只能用本人親口說過的數字`,
-        quote: excerpt(text, numberNeedle(text, p.numbers[0])),
-      };
+      return { message: T.numbersMissing(p.numbers), quote: excerpt(text, numberNeedle(text, p.numbers[0])) };
     case "ai_word":
-      return { message: `用了 AI 腔的詞「${p.word}」，請換成平常說話的寫法`, quote: excerpt(text, p.word) };
+      return { message: T.aiWord(p.word), quote: excerpt(text, p.word) };
     case "parens":
-      return { message: `一句裡有 ${p.n} 組括號，最多 1 組`, quote: excerpt(p.sentence ?? text) };
+      return { message: T.parens(p.n), quote: excerpt(p.sentence ?? text) };
     case "semicolon":
-      return { message: "用了分號，請拆成兩句", quote: excerpt(text, text.includes("；") ? "；" : ";") };
+      return { message: T.semicolon, quote: excerpt(text, text.includes("；") ? "；" : ";") };
     case "long":
       return CJK.test(p.sentence ?? "")
-        ? { message: `這一句有 ${p.length} 字，超過 ${R.MAX_CHARS} 字，請拆短`, quote: excerpt(p.sentence) }
-        : { message: `這一句有 ${p.length} 個英文字，超過 ${R.MAX_WORDS} 個，請拆短`, quote: excerpt(p.sentence) };
+        ? { message: T.longChars(p.length, R.MAX_CHARS), quote: excerpt(p.sentence) }
+        : { message: T.longWords(p.length, R.MAX_WORDS), quote: excerpt(p.sentence) };
     case "id_number":
-      return { message: `看起來像身分證或居留證號碼（${maskId(p.text)}），不能寫進來`, quote: excerpt(text, p.text) };
+      return { message: T.idLike(maskId(p.text)), quote: excerpt(text, p.text) };
     case "placeholder":
-      return { message: `還有佔位字「${p.text}」，要換成真的內容`, quote: excerpt(text, p.text) };
+      return { message: T.placeholder(p.text), quote: excerpt(text, p.text) };
     case "invisible":
-      return { message: "有看不見的特殊字元（會跟著貼到 104），請把這一句重打一次", quote: excerpt(text) };
+      return { message: T.invisible, quote: excerpt(text) };
     default:
-      return { message: "沒通過檢查", quote: excerpt(text) };
+      return { message: T.ruleDefault, quote: excerpt(text) };
   }
 }
 
-function tailorMessage(msg: string): { message: string; detail?: string } {
+function tailorMessage(msg: string, T: CheckText, us: boolean): { message: string; detail?: string } {
   let m: RegExpExecArray | null;
-  if ((m = /unknown bullet id '([^']+)'/.exec(msg))) return { message: "排序裡有一條重點，在確認過的履歷資料裡找不到", detail: `重點代號 ${m[1]}` };
+  if ((m = /unknown bullet id '([^']+)'/.exec(msg))) return { message: T.tailorUnknownBullet, detail: T.tailorUnknownBulletDetail(m[1]) };
   if ((m = /bullet '([^']+)' is not in the '([^']+)' variant/.exec(msg)))
-    return { message: "排序裡有一條重點不屬於這個版本（中文或英文）", detail: `重點代號 ${m[1]}，版本 ${m[2]}` };
-  if (/listed twice/.test(msg)) return { message: "同一條重點在排序裡出現兩次" };
-  if (/base_variant is required/.test(msg)) return { message: "沒寫要用哪一個版本（中文或英文）" };
-  if ((m = /unknown variant '([^']+)'/.exec(msg))) return { message: "確認過的履歷資料裡沒有這個版本", detail: `版本 ${m[1]}` };
-  if (/skills_order line needs/.test(msg))
-    return { message: "專長那一行要寫成「類別: 項目」，冒號要用半形的「:」", detail: msg.replace(/^.*?needs 'Label: items': /, "") };
-  return { message: "這份客製履歷的設定有錯，程式沒辦法排出履歷", detail: msg };
+    return { message: T.tailorNotInVariant(us), detail: T.tailorNotInVariantDetail(m[1], m[2]) };
+  if (/listed twice/.test(msg)) return { message: T.tailorTwice };
+  if (/base_variant is required/.test(msg)) return { message: T.tailorNoBase(us) };
+  if ((m = /unknown variant '([^']+)'/.exec(msg))) return { message: T.tailorUnknownVariant, detail: T.tailorUnknownVariantDetail(m[1]) };
+  if (/skills_order line needs/.test(msg)) return { message: T.tailorSkillsLine, detail: msg.replace(/^.*?needs 'Label: items': /, "") };
+  return { message: T.tailorFallback, detail: msg };
 }
 
 // ---------------------------------------------------------------- folder context
@@ -164,7 +162,7 @@ const MONTH_COUNT = /(?:連續|每|共|累計|長達|將近|超過|前後)\s?([0
 // en = English, us = English on US Letter (workspace-us). A resume file may print only its own template's fixed words and run only its own template's script.
 
 export type TemplateKind = "tw" | "tw-classic" | "en" | "us";
-export const TEMPLATE_NAMES: Record<TemplateKind, string> = { tw: "深色抬頭", "tw-classic": "精緻單欄", en: "英文版", us: "美國版" };
+export const TEMPLATE_NAMES = textFor("zh-TW").templateNames as Record<TemplateKind, string>; // the Chinese names; the English ones: textFor("en")
 type Template = { kind: TemplateKind; styles: Set<string>; scripts: Set<string>; words: string[] };
 
 function template(kind: TemplateKind, versions: string[]): Template {
@@ -205,6 +203,10 @@ const norm = (s: string) => String(s).normalize("NFKC").replace(/\s+/g, " ").tri
 
 class Context {
   market: MarketConfig = TW_DEFAULTS;
+  /** The sentences of this folder's language (jobhunt.yaml `language`). */
+  get T(): CheckText {
+    return textFor(this.market.language);
+  }
   resume: any = {};
   resumeProblem: string | null = null;
   resumeDetail: string | undefined;
@@ -227,11 +229,11 @@ class Context {
     this.market = await readMarket(this.folder);
     try {
       const r = await this.folder.readYaml("resume.yaml");
-      if (r == null) this.resumeProblem = "找不到確認過的履歷資料，所有數字都對不到";
-      else if (typeof r !== "object") this.resumeProblem = "確認過的履歷資料格式壞了，程式讀不懂";
+      if (r == null) this.resumeProblem = this.T.resumeMissing;
+      else if (typeof r !== "object") this.resumeProblem = this.T.resumeBroken;
       else this.resume = r;
     } catch (e: any) {
-      this.resumeProblem = "確認過的履歷資料格式壞了，程式讀不懂";
+      this.resumeProblem = this.T.resumeBroken;
       this.resumeDetail = firstLine(e);
     }
     try {
@@ -304,32 +306,31 @@ class Context {
       const c = raw.normalize("NFKC").trim();
       if (this.isBackground(c)) continue;
       if (!/^S-[0-9]+$/i.test(c)) {
-        const words = this.market.market === "us" ? "學歷（Education）、求職方向（Job goals）" : "學歷、求職方向";
-        out.push({ where, message: `來源寫了「${c}」。來源只能寫經歷代號（像 S-003）、${words}`, quote });
+        out.push({ where, message: this.T.sourceBad(c, this.market.market === "us"), quote });
         continue;
       }
       const s = await this.story(c.toUpperCase());
-      if (!s) out.push({ where, message: `來源 ${c} 找不到這則經歷`, quote });
+      if (!s) out.push({ where, message: this.T.sourceMissing(c), quote });
       else if (s.status === "confirmed") continue;
-      else if (s.status === "draft") out.push({ where, message: `來源 ${c} 還是草稿，本人還沒確認，不能用`, quote });
-      else if (s.status === "deleted") out.push({ where, message: `來源 ${c} 已經刪掉了，不能用`, quote });
-      else out.push({ where, message: `來源 ${c} 的狀態看不懂（${s.status || "沒寫"}），先當成還沒確認`, quote });
+      else if (s.status === "draft") out.push({ where, message: this.T.sourceDraft(c), quote });
+      else if (s.status === "deleted") out.push({ where, message: this.T.sourceDeleted(c), quote });
+      else out.push({ where, message: this.T.sourceUnknown(c, s.status), quote });
     }
     return out;
   }
 
   /** One pasted paragraph (104 card or profile block): it has a source line, the sources are usable, and a paragraph that
    * rests only on 學歷 / 求職方向 (Education / Job goals) does not name a job or activity. */
-  async paragraphProblems(p: Paragraph, where: string, sourceWord = "來源："): Promise<Problem[]> {
+  async paragraphProblems(p: Paragraph, where: string, sourceWord = this.T.sourceWord): Promise<Problem[]> {
     const out: Problem[] = [];
     const body = p.lines.filter((l) => !SOURCE_LINE.test(l)).join("\n");
     const quote = excerpt(p.lines.find((l) => !SOURCE_LINE.test(l)) ?? "");
-    if (p.unsourced != null) out.push({ where, message: `這一段下面沒有「${sourceWord}」那一行，不知道根據哪一則經歷`, quote: excerpt(p.unsourced) });
+    if (p.unsourced != null) out.push({ where, message: this.T.noSourceLine(sourceWord), quote: excerpt(p.unsourced) });
     if (p.sources) {
       out.push(...(await this.sourceProblems(p.sources, where, quote)));
       const onlyBackground = p.sources.every((c) => this.isBackground(c));
       const work = onlyBackground ? this.workNames.find((w) => norm(body).includes(w)) : undefined;
-      if (work) out.push({ where, message: `這一段寫到經歷「${work}」，來源卻只寫了${this.market.market === "us" ? "學歷或求職方向（Education、Job goals）" : "學歷或求職方向"}`, quote: excerpt(body, work) });
+      if (work) out.push({ where, message: this.T.workMentioned(work, this.market.market === "us"), quote: excerpt(body, work) });
     }
     return out;
   }
@@ -342,8 +343,7 @@ class Context {
     for (const d of this.draftNames)
       if (!seen.has(d.code) && t.includes(d.name)) {
         seen.add(d.code);
-        const state = d.status === "deleted" ? "已經刪掉的經歷" : "還沒確認的經歷";
-        out.push({ where, message: `提到${state}「${d.name}」（${d.code}），本人確認過才能寫`, quote: excerpt(text, d.name) });
+        out.push({ where, message: this.T.mentionStory(d.status === "deleted", d.name, d.code), quote: excerpt(text, d.name) });
       }
     return out;
   }
@@ -359,27 +359,27 @@ class Context {
       for (const d of englishYearMonths(t)) {
         spans.push([d.index, d.index + d.length]);
         if (!this.yearMonths.has(`${d.year}-${d.month}`))
-          out.push({ where, message: `日期「${d.text.replace(/\s+/g, " ")}」在確認過的經歷裡找不到`, quote: excerpt(text, d.text) });
+          out.push({ where, message: this.T.dateMissing(d.text.replace(/\s+/g, " ")), quote: excerpt(text, d.text) });
       }
     for (const m of t.matchAll(YM)) {
       spans.push([m.index!, m.index! + m[0].length]);
       if (!this.yearMonths.has(`${m[1]}-${m[2].padStart(2, "0")}`))
-        out.push({ where, message: `日期「${m[0].replace(/\s+/g, "")}」在確認過的經歷裡找不到`, quote: excerpt(text, m[0]) });
+        out.push({ where, message: this.T.dateMissing(m[0].replace(/\s+/g, "")), quote: excerpt(text, m[0]) });
     }
     const monthBefore = new RegExp(`(?:[-–—~～至到]|(?:${MONTHS})[a-z]*\\.?)\\s*$`, "i");
     for (const m of t.matchAll(YEAR4)) {
       const at = m.index!;
       if (spans.some(([a, b]) => at >= a && at < b)) continue;
       const dateLike = /^\s?(?:年|[-–—~～/.])/.test(t.slice(at + 4)) || monthBefore.test(t.slice(0, at));
-      if (dateLike && !okYear(m[1])) out.push({ where, message: `年份「${m[1]}」在確認過的經歷裡找不到`, quote: excerpt(text, m[1]) });
+      if (dateLike && !okYear(m[1])) out.push({ where, message: this.T.yearMissing(m[1]), quote: excerpt(text, m[1]) });
     }
     for (const m of t.matchAll(ROC_YEAR))
       if (!okYear(String(Number(m[1]) + 1911)))
-        out.push({ where, message: `年份「${m[0].replace(/\s+/g, "")}」在確認過的經歷裡找不到`, quote: excerpt(text, m[0]) });
+        out.push({ where, message: this.T.yearMissing(m[0].replace(/\s+/g, "")), quote: excerpt(text, m[0]) });
     for (const m of t.matchAll(MONTH_COUNT)) {
       const n = /^[0-9]+$/.test(m[1]) ? String(Number(m[1])) : String(R.zhNumber(m[1]));
       if (!this.facts.has(n))
-        out.push({ where, message: `數字「${n}」在確認過的經歷裡找不到。只能用本人親口說過的數字`, quote: excerpt(text, m[0]) });
+        out.push({ where, message: this.T.numbersMissing([n]), quote: excerpt(text, m[0]) });
     }
     return out;
   }
@@ -390,15 +390,15 @@ class Context {
     const vals = (secs: string[], keys: string[]) =>
       new Set(secs.flatMap((sec) => asArray(this.resume[sec]).flatMap((x: any) => keys.map((k) => norm(String(x?.[k] ?? ""))))).filter(Boolean));
     const jobs = ["experience", "projects"];
-    const rules: [string, Set<string>, string][] =
+    const rules: [string, Set<string>][] =
       block === "Education"
-        ? [["School", vals(["education"], ["school"]), "學校"], ["Degree", vals(["education"], ["degree"]), "學位"]]
+        ? [["School", vals(["education"], ["school"])], ["Degree", vals(["education"], ["degree"])]]
         : ["Experience", "Work Experience", "Organizations", "Projects"].includes(block)
-          ? [["Title", vals(jobs, ["role", "name"]), "職稱或專題名稱"], ["Company", vals(jobs, ["org"]), "單位名稱"]]
+          ? [["Title", vals(jobs, ["role", "name"])], ["Company", vals(jobs, ["org"])]]
           : [];
-    for (const [key, allowed, what] of rules) {
+    for (const [key, allowed] of rules) {
       const v = norm(meta[key] ?? "");
-      if (v && !allowed.has(v)) out.push({ where, message: `${key}「${v}」不是 resume.yaml 裡的${what}。這一欄要和確認過的${what}一字不差`, quote: excerpt(v) });
+      if (v && !allowed.has(v)) out.push({ where, message: this.T.fieldMismatch(key, v, this.T.fieldWhat[key]), quote: excerpt(v) });
     }
     return out;
   }
@@ -415,14 +415,14 @@ class Context {
       let probe = line;
       if (ids.length) {
         if (!opts.only || opts.only.includes("id_number"))
-          for (const id of ids) out.push({ where, message: `看起來像個人證號（${maskId(id)}），不能寫進來`, quote: excerpt(line, id) });
+          for (const id of ids) out.push({ where, message: this.T.personalId(maskId(id)), quote: excerpt(line, id) });
         probe = replaceExtraIds(line, (m) => (tw.has(m.toUpperCase()) ? m : " "));
       }
       const us = this.market.market === "us";
       for (const p of R.checkText(probe, this.resume, { voice: this.voice, skills: !!opts.skills })) {
         if (opts.only && !opts.only.includes(p.code)) continue;
         if (us && p.code === "numbers") continue; // read the English way below
-        out.push({ where, ...fromRule(p, line) });
+        out.push({ where, ...fromRule(p, line, this.T) });
       }
       if (us) out.push(...this.englishProblems(probe, line, where, opts.only));
       if (!opts.only || opts.only.includes("numbers")) out.push(...this.dateProblems(probe, where));
@@ -435,12 +435,12 @@ class Context {
     const out: Problem[] = [];
     if (!only || only.includes("numbers")) {
       const missing = [...new Set([...R.numbers(normEnglish(probe)), ...vagueAmounts(probe)])].filter((n) => !this.factsEn.has(n)).sort();
-      if (missing.length) out.push({ where, ...fromRule({ code: "numbers", numbers: missing }, line) });
+      if (missing.length) out.push({ where, ...fromRule({ code: "numbers", numbers: missing }, line, this.T) });
       for (const c of moreThanClaims(probe))
         if (this.factsEn.has(c.n) && !this.moreThanFacts.has(c.n))
           out.push({
             where,
-            message: `「${c.quote}」寫成「超過／以上」，但本人說的數字只有 ${c.n}，沒說過「超過 ${c.n}」。只有本人原話這樣說才能寫 N+`,
+            message: this.T.moreThan(c.quote, c.n),
             quote: excerpt(line, c.quote),
           });
     }
@@ -451,7 +451,7 @@ class Context {
           const [a, b] = [m.index!, m.index! + m[0].length];
           if (seen.some(([x, y]) => a >= x && b <= y)) continue;
           seen.push([a, b]);
-          out.push({ where, ...fromRule({ code: "placeholder", text: m[0] }, line) });
+          out.push({ where, ...fromRule({ code: "placeholder", text: m[0] }, line, this.T) });
         }
     }
     return out;
@@ -462,7 +462,7 @@ class Context {
     if (this.market.market !== "us") return [];
     return visaWords(text, this.workNames).map((w) => ({
       where,
-      message: `履歷和個人檔案不能寫簽證或工作身分的字眼「${w}」。簽證身分放在 me/work-auth.md，申請表上照實回答`,
+      message: this.T.visaWord(w),
       quote: excerpt(text, w),
     }));
   }
@@ -492,7 +492,6 @@ function dedupe(ps: Problem[]): Problem[] {
 
 // ---------------------------------------------------------------- the three kinds of files
 
-const FIELD_NAMES: Record<string, string> = { summary: "自我介紹", skills_order: "專長", bullet_overrides: "改寫的重點", application_answers: "應徵問答" };
 
 /** Split a skills line into items at 、 , ， — but not inside brackets: 「Excel（加總、篩選、簡單表格）」 is one item. */
 export function splitSkillItems(text: string): string[] {
@@ -520,7 +519,7 @@ async function skillsProblems(ctx: Context, target: any, where: string): Promise
     if (checked.has(l)) return;
     checked.add(l);
     const codes = sourcesOf(l);
-    if (!codes.length) out.push({ where, message: `專長「${l.label ?? ""}」那一行在確認過的履歷資料裡沒有寫來源`, quote });
+    if (!codes.length) out.push({ where, message: ctx.T.skillsNoSource(l.label ?? ""), quote });
     else out.push(...(await ctx.sourceProblems(codes, where, quote)));
   };
   if (Array.isArray(target.skills_order) && target.skills_order.length) {
@@ -532,47 +531,48 @@ async function skillsProblems(ctx: Context, target: any, where: string): Promise
         const item = norm(raw);
         if (!item) continue;
         const home = lines.find((l: any) => asArray(l.items).some((x: any) => norm(String(x)) === item));
-        if (!home) out.push({ where, message: `專長「${raw.trim()}」不在確認過的履歷資料裡（要和裡面的專長一字不差）`, quote: excerpt(line) });
+        if (!home) out.push({ where, message: ctx.T.skillsNotInResume(raw.trim()), quote: excerpt(line) });
         else await checkLine(home, excerpt(line));
       }
     }
   } else {
-    for (const l of lines) if (asArray(l.items).length) await checkLine(l, excerpt(`${l.label ?? ""}: ${asArray(l.items).join("、")}`));
+    for (const l of lines) if (asArray(l.items).length) await checkLine(l, excerpt(`${l.label ?? ""}: ${asArray(l.items).join(ctx.T.itemSep)}`));
   }
   return out;
 }
 
 async function checkTargetFile(ctx: Context, id: string, target: any, hasHtml: boolean): Promise<Problem[]> {
-  const W = "客製履歷";
+  const T = ctx.T;
+  const W = T.targetsFile;
   const out: Problem[] = [];
-  if (!target || typeof target !== "object" || Array.isArray(target)) return [{ where: W, message: "這個檔案的格式壞了，程式讀不懂" }];
-  if (String(target.id ?? "") !== id) out.push({ where: W, message: `檔案裡寫的代號和檔名不一樣`, detail: `id: ${target.id ?? ""}，檔名 ${id}` });
+  if (!target || typeof target !== "object" || Array.isArray(target)) return [{ where: W, message: T.fileBroken }];
+  if (String(target.id ?? "") !== id) out.push({ where: W, message: T.idMismatch, detail: T.idMismatchDetail(String(target.id ?? ""), id) });
   const tplField = String(target.template ?? "").trim();
   if (tplField && !validTemplate(tplField, ctx.market.market))
-    out.push({ where: W, message: "履歷樣式寫錯了，只能是深色抬頭（tw）、精緻單欄（tw-classic）或英文版（en）", detail: `template: ${target.template}` });
+    out.push({ where: W, message: T.templateBad(ctx.market.market === "us"), detail: `template: ${target.template}` });
 
   let structural: any[] = [];
   try {
     structural = R.checkTarget(ctx.resume, target, ctx.voice);
   } catch (e) {
-    out.push({ where: W, message: "這份客製履歷的設定有錯，程式讀不懂", detail: firstLine(e) });
+    out.push({ where: W, message: T.targetUnreadable, detail: firstLine(e) });
   }
   for (const e of structural) {
     if (e.code === "numbers" || e.code === "voice") continue; // checked per field below, with the sentence quoted
-    if (e.code === "tailor") out.push({ where: W, ...tailorMessage(e.message) });
-    else if (e.code === "id") out.push({ where: W, message: "代號只能用英文小寫、數字和 -", detail: `id: ${e.id ?? ""}` });
-    else if (e.code === "list") out.push({ where: W, message: "筆記要寫成一條一條的清單", detail: e.field });
-    else out.push({ where: W, message: "這份客製履歷的設定有錯" });
+    if (e.code === "tailor") out.push({ where: W, ...tailorMessage(e.message, T, ctx.market.market === "us") });
+    else if (e.code === "id") out.push({ where: W, message: T.idChars, detail: `id: ${e.id ?? ""}` });
+    else if (e.code === "list") out.push({ where: W, message: T.notesList, detail: e.field });
+    else out.push({ where: W, message: T.targetGeneric });
   }
 
   for (const [field, text] of R.fields(target, [...R.PRINTED, "application_answers"]) as [string, string][]) {
     const [base, key] = field.split(".");
-    const where = `${W}・${FIELD_NAMES[base] ?? base}`;
+    const where = `${W}${T.whereSep}${T.fieldNames[base] ?? base}`;
     const detail = key ? `${base}.${key}` : undefined;
     const ps = [...ctx.textProblems(text, where, { skills: base === "skills_order" }), ...ctx.mentionProblems(text, where)];
     out.push(...ps.map((p) => (detail ? { ...p, detail } : p)));
   }
-  out.push(...(await skillsProblems(ctx, target, `${W}・專長`)));
+  out.push(...(await skillsProblems(ctx, target, `${W}${T.whereSep}${T.fieldNames.skills_order}`)));
 
   // Every printed bullet must come from a confirmed story.
   if (!structural.some((e) => e.code === "tailor")) {
@@ -586,15 +586,15 @@ async function checkTargetFile(ctx: Context, id: string, target: any, hasHtml: b
               if (b && R.inVariant(b, v)) {
                 const src = b.sources ?? b.source;
                 const codes = Array.isArray(src) ? src.map(String) : src ? splitSources(String(src), ctx.market.market === "us") : [];
-                const where = "履歷資料的重點";
-                if (!codes.length) out.push({ where, message: "這條會印出來的重點沒有寫來源（是哪一則經歷）", quote: excerpt(b.text ?? "") });
+                const where = T.resumeDataBullets;
+                if (!codes.length) out.push({ where, message: T.bulletNoSource, quote: excerpt(b.text ?? "") });
                 else out.push(...(await ctx.sourceProblems(codes, where, excerpt(b.text ?? ""))));
               }
     } catch {}
   }
 
   if (hasHtml && Array.isArray(target.confirm) && target.confirm.length)
-    out.push({ where: W, message: `還有 ${target.confirm.length} 題還沒問過本人，問完才能做成履歷檔` });
+    out.push({ where: W, message: T.confirmLeft(target.confirm.length) });
   return out;
 }
 
@@ -645,16 +645,17 @@ function lineBacked(line: string, expected: string[]): boolean {
 }
 
 async function checkHtml(ctx: Context, html: string, target: any, tpl: Template): Promise<Problem[]> {
-  const W = "履歷檔";
+  const T = ctx.T;
+  const W = T.resumeFile;
   const out: Problem[] = [];
-  for (const m of oddMarkup(html, tpl.scripts, ctx.market.market !== "us"))
-    out.push({ where: W, message: `${m}。照範本重做履歷檔，不要加範本以外的寫法` });
+  for (const m of oddMarkup(html, tpl.scripts, ctx.market.market !== "us", ctx.market.language))
+    out.push({ where: W, message: T.oddFollow(m) });
   const lines = visibleLines(html);
-  if (!lines.length) out.push({ where: W, message: "履歷檔上看不到任何字" });
+  if (!lines.length) out.push({ where: W, message: T.noVisibleText });
   const expected = target && typeof target === "object" ? expectedText(ctx, target, tpl) : null;
   for (const l of lines) {
     if (SOURCE_LINE.test(l.text)) {
-      out.push({ where: W, message: "履歷檔上不該有「來源：」這一行（它會印出來）", quote: excerpt(l.text) });
+      out.push({ where: W, message: T.sourceLineOnPage, quote: excerpt(l.text) });
       continue;
     }
     out.push(...ctx.textProblems(l.text, W, { skills: l.skills }), ...ctx.visaProblems(l.text, W));
@@ -663,12 +664,12 @@ async function checkHtml(ctx: Context, html: string, target: any, tpl: Template)
     if (want) {
       const v = want[1];
       if (v !== norm(String(target.role ?? "")) && !ctx.profile.includes(v))
-        out.push({ where: W, message: "希望職稱不是你說過想找的工作（求職方向裡沒有）", quote: excerpt(l.text) });
+        out.push({ where: W, message: T.wantedTitle, quote: excerpt(l.text) });
     } else if (!lineBacked(l.text, expected))
-      out.push({ where: W, message: "這一句和 AI 準備的內容對不上（不是確認過的經歷，或履歷檔還沒照最新的內容重做）", quote: excerpt(l.text) });
+      out.push({ where: W, message: T.notBacked, quote: excerpt(l.text) });
   }
   if (!out.some((p) => p.message.includes("{{")))
-    for (const s of leftoverSlots(html)) out.push({ where: W, message: "還有佔位字「{{」，要換成真的內容", quote: excerpt(s) });
+    for (const s of leftoverSlots(html)) out.push({ where: W, message: T.leftoverSlot, quote: excerpt(s) });
   return out;
 }
 
@@ -683,10 +684,11 @@ async function check104File(ctx: Context, rel: string, label: string): Promise<F
   const file: File104 = { file: rel, label, blocks: [], problems: [] };
   const raw = parse104(text);
   const us = ctx.market.market === "us";
-  if (!raw.length) file.problems.push({ where: label, message: "裡面沒有找到任何欄位（每一欄要用「## 欄位名稱」開頭）" });
+  const T = ctx.T;
+  if (!raw.length) file.problems.push({ where: label, message: T.noFields });
   for (const b of raw) {
-    const name = b.group ? `${b.group}・${b.title}` : b.title;
-    const where = `${label}・${name}`;
+    const name = b.group ? `${b.group}${T.whereSep}${b.title}` : b.title;
+    const where = `${label}${T.whereSep}${name}`;
     const t = copyText(b.body);
     const pasted = !!t && isPasted(b, t);
     const { limit } = limitFor(b);
@@ -694,12 +696,12 @@ async function check104File(ctx: Context, rel: string, label: string): Promise<F
     // Not-copied fields are still typed into 104 by hand: the same wording rules apply.
     const problems: Problem[] = t ? [...ctx.textProblems(t, where), ...ctx.mentionProblems(t, where)] : [];
     let note = "";
-    if (!t) note = "這一欄是空的。";
-    else if (!pasted) note = "這一欄要在 104 用選的或自己填，不用複製。";
+    if (!t) note = T.emptyField;
+    else if (!pasted) note = T.notCopiedField;
     else {
       for (const p of paragraphs(b.body, us)) problems.push(...(await ctx.paragraphProblems(p, where)));
       if (limit != null && chars > limit)
-        problems.push({ where, message: `有 ${chars.toLocaleString("en-US")} 字，超過上限 ${limit.toLocaleString("en-US")} 字` });
+        problems.push({ where, message: T.overChars(chars, limit) });
     }
     file.blocks.push({ name, text: t, chars, limit, pasted, note, problems: dedupe(problems) });
   }
@@ -748,14 +750,15 @@ export async function checkItem(ctx: Context, id: string): Promise<Item> {
   const targetRel = folder.exists(`targets/${id}.yaml`) ? `targets/${id}.yaml` : folder.exists(`targets/${id}.yml`) ? `targets/${id}.yml` : null;
   const htmlRel = folder.exists(`resumes/${id}.html`) ? `resumes/${id}.html` : null;
   const item: Item = { id, company: "", role: "", updated: null, hasTarget: !!targetRel, hasHtml: !!htmlRel, photo: false, checked: [], problems: [], resumeProblems: [], apply: null };
+  const T = ctx.T;
 
   let target: any = null;
   if (targetRel) {
-    item.checked.push(`客製履歷 ${targetRel}（自我介紹、專長、改寫的重點、應徵問答）`);
+    item.checked.push(T.checkedTarget(targetRel));
     try {
       target = await folder.readYaml(targetRel);
     } catch (e) {
-      item.problems.push({ where: "客製履歷", message: "這個檔案的格式壞了，程式讀不懂", detail: firstLine(e) });
+      item.problems.push({ where: T.targetsFile, message: T.fileBroken, detail: firstLine(e) });
     }
     if (target && typeof target === "object") {
       item.company = String(target.company ?? "");
@@ -764,23 +767,23 @@ export async function checkItem(ctx: Context, id: string): Promise<Item> {
     }
   }
   if (!item.company && !item.role) Object.assign(item, await jdNames(folder, id));
-  if (ctx.resumeProblem && (targetRel || htmlRel)) item.problems.push({ where: "履歷資料", message: ctx.resumeProblem, detail: ctx.resumeDetail });
+  if (ctx.resumeProblem && (targetRel || htmlRel)) item.problems.push({ where: T.resumeData, message: ctx.resumeProblem, detail: ctx.resumeDetail });
   if (targetRel && target != null) item.problems.push(...(await checkTargetFile(ctx, id, target, !!htmlRel)));
 
   if (htmlRel) {
     const html = (await folder.readText(htmlRel)) ?? "";
     const tpl = templateFor(html, target, ctx.market.market);
-    item.checked.push(`履歷檔 ${htmlRel} 上看得到的每一行字（範本：${TEMPLATE_NAMES[tpl.kind]}${tpl.how === "style" ? "" : "，照設定或語言判斷"}）`);
-    if (!targetRel) item.problems.push({ where: "履歷檔", message: "找不到這份履歷檔的客製履歷設定，程式沒辦法對照它是照什麼做的" });
+    item.checked.push(T.checkedResume(htmlRel, T.templateNames[tpl.kind], tpl.how === "style"));
+    if (!targetRel) item.problems.push({ where: T.resumeFile, message: T.noTargetForResume });
     item.problems.push(...(await checkHtml(ctx, html, target, byKind(tpl.kind))));
   }
 
   item.resumeProblems = dedupe(item.problems);
   const applyRel = `jobs/${id}/104-apply.md`;
   if (folder.exists(applyRel)) {
-    item.apply = await check104File(ctx, applyRel, "104 應徵信與問答");
+    item.apply = await check104File(ctx, applyRel, T.label104Apply);
     if (item.apply) {
-      item.checked.push(`104 應徵信與問答 ${applyRel}（${item.apply.blocks.length} 欄）`);
+      item.checked.push(T.checkedApply(applyRel, item.apply.blocks.length));
       item.problems.push(...item.apply.problems, ...item.apply.blocks.flatMap((b) => b.problems));
     }
   }
@@ -798,6 +801,8 @@ const BLOCK_TEXT_CODES = ["numbers", "ai_word", "parens", "semicolon", "long", "
  * playbooks/linkedin-profile.md and handshake-profile.md (§1); any other file only gets the ID-number and visa checks. */
 async function checkProfileFile(ctx: Context, file: string, text: string): Promise<ProfileFile> {
   const kind = profileKind(file);
+  const T = ctx.T;
+  const lang = ctx.market.language;
   const problems: Problem[] = [];
   const warnings: Problem[] = [];
   const blocks: Block[] = [];
@@ -811,40 +816,40 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
     problems.push(...ctx.visaProblems(line, file));
     if (kind)
       for (const c of contactMatches(line))
-        problems.push({ where: file, message: `個人檔案不能寫電話、email 或住址（${c.kind === "email" ? "email" : c.kind === "phone" ? "電話" : "住址"}）`, quote: excerpt(line.replace(c.text, "…")) });
+        problems.push({ where: file, message: T.contactBanned(c.kind), quote: excerpt(line.replace(c.text, "…")) });
   }
   if (!kind) return { file, problems: dedupe(problems), warnings, blocks };
 
   const label = PROFILE_NAMES[kind];
   const specs = PROFILE_SPECS[kind];
   if (!PROFILE_HEADER[kind].test(lines[0]?.trim() ?? ""))
-    problems.push({ where: file, message: `第一行要寫「# ${label} profile text (draft)」`, quote: excerpt(lines[0] ?? "") });
+    problems.push({ where: file, message: T.profileFirstLine(label), quote: excerpt(lines[0] ?? "") });
   let fence = false;
   lines.forEach((l, i) => {
     if (/^\s*```/.test(l)) fence = !fence;
     const h = fence ? null : /^(#{1,6})\s/.exec(l);
-    if (h && i > 0 && h[1].length !== 2) problems.push({ where: file, message: "不能用 # 或 ### 標題，區塊標題只能是「## 區塊名稱」", quote: excerpt(l) });
+    if (h && i > 0 && h[1].length !== 2) problems.push({ where: file, message: T.profileHeading, quote: excerpt(l) });
   });
 
   const idx = resumeIndex(ctx.resume, (s) => splitSources(s, true));
   const seen = new Set<string>();
   const raw = parse104(text, true);
-  if (!raw.some((b) => !b.group)) problems.push({ where: file, message: "裡面沒有找到任何區塊（每一個區塊要用「## 區塊名稱」開頭）" });
+  if (!raw.some((b) => !b.group)) problems.push({ where: file, message: T.profileNoBlocks });
   for (const b of raw) {
     if (b.group) continue; // a "### " heading: reported above
     const { name } = splitHeading(b.title);
-    const where = `${file}・${b.title}`;
+    const where = `${file}${T.whereSep}${b.title}`;
     const bp: Problem[] = [];
     const bw: Problem[] = [];
     const spec = specs.find((x) => x.name === name);
     if (!spec) {
-      problems.push({ where, message: `不認得的區塊名稱「${name}」。${label} 的區塊名稱只有：${specs.map((x) => x.name).join("、")}（大小寫要一樣）` });
+      problems.push({ where, message: T.profileUnknownBlock(name, label, specs.map((x) => x.name)) });
       continue;
     }
-    if (!spec.repeat && seen.has(name)) bp.push({ where, message: `區塊「${name}」只能出現一次` });
+    if (!spec.repeat && seen.has(name)) bp.push({ where, message: T.profileOnce(name) });
     seen.add(name);
     const fill = b.meta.Fill;
-    if (fill !== spec.fill) bp.push({ where, message: fill == null ? `區塊開頭少了「- Fill: ${spec.fill}」那一行` : `「${name}」的 Fill 要寫成「${spec.fill}」，不是「${fill}」` });
+    if (fill !== spec.fill) bp.push({ where, message: fill == null ? T.profileFillMissing(spec.fill) : T.profileFillWrong(name, spec.fill, fill) });
 
     const t = copyText(b.body);
     const chars = R.countChars(t);
@@ -852,15 +857,15 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
     const guide = spec.fill === "guide";
     const items = b.body.filter((l) => /^\s*•/.test(l)).length;
     if (guide) {
-      if (b.body.some((l) => SOURCE_LINE.test(l))) bp.push({ where, message: "說明區塊不用寫 Source: 那一行（它不會貼到網站上）" });
+      if (b.body.some((l) => SOURCE_LINE.test(l))) bp.push({ where, message: T.profileGuideSource });
       if (name === "Custom URL" && b.meta.Suggested != null) {
-        const why = customUrlProblem(b.meta.Suggested);
+        const why = customUrlProblem(b.meta.Suggested, lang);
         if (why) bp.push({ where, message: why, quote: excerpt(b.meta.Suggested) });
       }
     } else {
-      if (!ps.length) bp.push({ where, message: "這個區塊沒有 Source: 那一行，不知道根據哪一則經歷" });
+      if (!ps.length) bp.push({ where, message: T.profileNoSource });
       for (const l of b.body) {
-        const why = SOURCE_LINE.test(l) ? null : bodyLineProblem(l);
+        const why = SOURCE_LINE.test(l) ? null : bodyLineProblem(l, lang);
         if (why) bp.push({ where, message: why, quote: excerpt(l) });
       }
       const only = name === "Courses" ? BLOCK_TEXT_CODES.slice(1) : BLOCK_TEXT_CODES;
@@ -881,17 +886,17 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
           const bullet = norm(m[1]);
           if (name === "Skills") {
             const codes = skillCodes(bullet, idx);
-            if (!codes) bp.push({ where, message: `專長項目「${bullet}」不在 resume.yaml 的專長裡（句子裡寫到的工具，要先出專長卡、加進 skills 才能用）`, quote: excerpt(l) });
+            if (!codes) bp.push({ where, message: T.profileSkillNotIn(bullet), quote: excerpt(l) });
             else codes.forEach((c) => need.add(c));
           } else if (!spec.list) {
             const codes = idx.bullets.get(bullet);
-            if (!codes) bp.push({ where, message: "這一行不是 resume.yaml 的重點原句（重點只能挑選、排序，不能改寫）", quote: excerpt(l) });
+            if (!codes) bp.push({ where, message: T.profileBulletNotOriginal, quote: excerpt(l) });
             else codes.forEach((c) => need.add(c));
           }
         }
         const have = new Set((p.sources ?? []).map(canonSource));
         for (const c of need)
-          if (!have.has(c)) bp.push({ where, message: `Source: 那一行沒有寫這${name === "Skills" ? "項專長" : "條重點"}的來源 ${c}`, quote: excerpt(p.lines.find((l) => !SOURCE_LINE.test(l)) ?? "") });
+          if (!have.has(c)) bp.push({ where, message: T.profileNeedSource(name === "Skills", c), quote: excerpt(p.lines.find((l) => !SOURCE_LINE.test(l)) ?? "") });
       }
     }
     // Meta lines: dates are ones resume.yaml has, names are not unconfirmed stories', boxes typed on the site have limits.
@@ -900,16 +905,13 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
     bp.push(...ctx.profileFieldProblems(name, b.meta, where));
     for (const [k, n] of Object.entries(spec.metaLimits ?? {}))
       if (b.meta[k] != null && [...b.meta[k]].length > n)
-        bw.push({ where, message: `${k} 有 ${[...b.meta[k]].length} 字，超過上限 ${n} 字（網站實際顯示的數字為準）`, quote: excerpt(b.meta[k]) });
+        bw.push({ where, message: T.profileMetaOver(k, [...b.meta[k]].length, n), quote: excerpt(b.meta[k]) });
     // Length limits: the smaller of the table's and the file's own number.
     const lim = effectiveLimit(spec, b.meta.Limit);
     if (lim && !guide) {
       const over = lim.unit === "items" ? items > lim.n : chars > lim.n;
       if (over) {
-        const message =
-          lim.unit === "items"
-            ? `有 ${items} 個項目，超過上限 ${lim.n} 個`
-            : `有 ${chars.toLocaleString("en-US")} 字，超過上限 ${lim.n.toLocaleString("en-US")} 字${lim.level === "warn" ? "（網站實際顯示的數字為準）" : ""}`;
+        const message = lim.unit === "items" ? T.profileItemsOver(items, lim.n) : T.profileCharsOver(chars, lim.n, lim.level === "warn");
         (lim.level === "error" ? bp : bw).push({ where, message });
       }
     }
@@ -919,7 +921,7 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
       chars,
       limit: lim?.unit === "chars" ? lim.n : null,
       pasted: spec.fill === "paste",
-      note: spec.fill === "paste" ? "" : "這一區塊不用複製。",
+      note: spec.fill === "paste" ? "" : T.profileNotCopied,
       problems: dedupe(bp),
       warnings: dedupe(bw),
     });
@@ -940,7 +942,7 @@ async function checkProfiles(ctx: Context): Promise<ProfileFile[]> {
       text = await ctx.folder.readText(file);
     } catch {}
     if (text == null) {
-      out.push({ file, problems: [{ where: file, message: "讀不到這個個人檔案，沒辦法檢查" }], warnings: [], blocks: [] }); // never skip a file silently
+      out.push({ file, problems: [{ where: file, message: ctx.T.profileUnreadable }], warnings: [], blocks: [] }); // never skip a file silently
       continue;
     }
     out.push(await checkProfileFile(ctx, file, text));
@@ -956,8 +958,8 @@ export async function runChecks(folder: Folder, opts: { ids?: string[] | null; g
   for (const id of ids) items.push(await checkItem(ctx, id));
   let general: File104 | null = null;
   if (opts.general ?? true) {
-    general = await check104File(ctx, GENERAL_104, "104 總履歷");
-    if (general && ctx.resumeProblem) general.problems.unshift({ where: "履歷資料", message: ctx.resumeProblem, detail: ctx.resumeDetail });
+    general = await check104File(ctx, GENERAL_104, ctx.T.label104General);
+    if (general && ctx.resumeProblem) general.problems.unshift({ where: ctx.T.resumeData, message: ctx.resumeProblem, detail: ctx.resumeDetail });
   }
   const profiles = (opts.profiles ?? true) ? await checkProfiles(ctx) : [];
   const count =
@@ -971,61 +973,62 @@ export function generalProblems(f: File104): Problem[] {
 
 // ---------------------------------------------------------------- checks/<id>.md
 
-function problemLines(ps: Problem[]): string[] {
-  return ps.map((p, i) =>
-    `${i + 1}. ${p.where}：${p.message}。${p.quote ? `原文：「${p.quote}」` : ""}${p.detail ? `（給 AI：${p.detail}）` : ""}`.replace(/。。/g, "。"),
-  );
+function problemLines(ps: Problem[], T: CheckText): string[] {
+  return ps.map((p, i) => T.problemLine(i + 1, p.where, p.message, p.quote, p.detail));
 }
 
-function blockLines(f: File104, us = false): string[] {
-  return f.blocks.map((b) => {
-    const size = b.pasted ? `${b.chars.toLocaleString("en-US")} 字／${b.limit != null ? `上限 ${b.limit.toLocaleString("en-US")} 字` : (us ? "上限以網站畫面為準" : "上限以 104 畫面為準")}` : "不用複製";
-    return `- ${b.name}：${size}，${b.problems.length ? `沒通過（${b.problems.length} 個問題）` : "通過"}${b.warnings?.length ? `，提醒 ${b.warnings.length} 個` : ""}`;
-  });
+function blockLines(f: File104, us: boolean, T: CheckText): string[] {
+  return f.blocks.map((b) => T.blockLine(b.name, T.blockSize(b.pasted, b.chars, b.limit, us), b.problems.length, b.warnings?.length ?? 0));
 }
 
-export function sectionText(when: string, checked: string[], problems: Problem[], files104: File104[], warnings: Problem[] = [], us = false): string {
+/** `us`: the market (picks the US wording of the scope line and the English heading). `lang`: the language of every sentence. */
+export function sectionText(when: string, checked: string[], problems: Problem[], files104: File104[], warnings: Problem[] = [], us = false, lang: Language = "zh-TW"): string {
+  const T = textFor(lang);
   const lines = [
-    us ? SECTION_EN : SECTION,
+    us || lang === "en" ? SECTION_EN : SECTION,
     "",
-    `- 檢查時間：${when}`,
-    "- 檢查者：jobhunt 程式（不是 AI）。這一節只有程式會寫，AI 不能改。",
-    `- 檢查了：${checked.length ? checked.join("；") : "沒有可以檢查的檔案"}`,
-    "- 對照的資料：resume.yaml（確認過的事實）、me/stories/ 的確認狀態",
-    `- 結果：${problems.length ? `沒通過，有 ${problems.length} 個問題` : "通過"}`,
-    `- 程式查的是數字、AI 腔用詞、括號和分號、句子長度、身分證字號、佔位字、來源行和${us ? "" : " 104 "}字數。意思、動詞和職稱有沒有升級，程式不會查，還是要照「手動檢查」。`,
+    T.lineCheckedAt(when),
+    T.lineCheckedBy,
+    T.lineChecked(checked, T.nothingToCheck),
+    T.lineCompared,
+    T.lineResult(problems.length),
+    T.lineScope(us),
   ];
-  for (const f of files104) if (f.blocks.length) lines.push("", `### ${f.label}：每一欄`, ...blockLines(f, us));
-  if (problems.length) lines.push("", "### 要處理的問題", ...problemLines(problems));
-  if (warnings.length) lines.push("", "### 提醒（不算沒通過）", ...problemLines(warnings));
+  for (const f of files104) if (f.blocks.length) lines.push("", T.blockHead(f.label), ...blockLines(f, us, T));
+  if (problems.length) lines.push("", T.headProblems, ...problemLines(problems, T));
+  if (warnings.length) lines.push("", T.headWarnings, ...problemLines(warnings, T));
   return lines.join("\n") + "\n";
 }
 
 export async function writeResults(folder: Folder, report: Report): Promise<string[]> {
   const written: string[] = [];
-  const us = (await readMarket(folder)).market === "us"; // the English kit gets the English heading and first line
+  const mk = await readMarket(folder);
+  const us = mk.market === "us";
+  const lang = mk.language;
+  const T = textFor(lang);
+  const eh = us || lang === "en"; // the English kit gets the English heading and first line
   for (const item of report.items) {
     const rel = `checks/${item.id}.md`;
     const doc = await folder.readText(rel);
-    const intro = item.company || item.role ? [`職缺：${item.company}${item.role}（代號 ${item.id}）`] : [];
+    const intro = item.company || item.role ? [T.jobIntro(item.company, item.role, item.id)] : [];
     const files = item.apply ? [item.apply] : [];
-    await folder.writeText(rel, replaceSection(doc, sectionText(report.checkedAt, item.checked, item.problems, files, [], us), intro, us));
+    await folder.writeText(rel, replaceSection(doc, sectionText(report.checkedAt, item.checked, item.problems, files, [], us, lang), intro, eh));
     written.push(rel);
   }
   if (report.general) {
     const g = report.general;
     const doc = await folder.readText(GENERAL_CHECKS);
-    const checked = [`104 總履歷 ${g.file}（${g.blocks.length} 欄）`];
-    await folder.writeText(GENERAL_CHECKS, replaceSection(doc, sectionText(report.checkedAt, checked, generalProblems(g), [g], [], us), [], us));
+    const checked = [T.checkedGeneral(g.file, g.blocks.length)];
+    await folder.writeText(GENERAL_CHECKS, replaceSection(doc, sectionText(report.checkedAt, checked, generalProblems(g), [g], [], us, lang), [], eh));
     written.push(GENERAL_CHECKS);
   }
   if (report.profiles.length) {
     const doc = await folder.readText(PROFILES_CHECKS);
-    const checked = report.profiles.map((f) => `個人檔案 ${f.file}`);
+    const checked = report.profiles.map((f) => T.checkedProfile(f.file));
     const problems = dedupe(report.profiles.flatMap((f) => f.problems));
     const files = report.profiles.map((f): File104 => ({ file: f.file, label: f.file, blocks: f.blocks, problems: [] }));
     const warnings = dedupe(report.profiles.flatMap((f) => f.warnings));
-    await folder.writeText(PROFILES_CHECKS, replaceSection(doc, sectionText(report.checkedAt, checked, problems, files, warnings, us), [], us));
+    await folder.writeText(PROFILES_CHECKS, replaceSection(doc, sectionText(report.checkedAt, checked, problems, files, warnings, us, lang), [], eh));
     written.push(PROFILES_CHECKS);
   }
   return written;
@@ -1035,26 +1038,27 @@ export async function writeResults(folder: Folder, report: Report): Promise<stri
 
 const MAX_PRINTED = 12;
 
-export function summaryText(report: Report, written: string[], us = false): string {
-  const out = [`程式檢查（${report.checkedAt}）`];
+export function summaryText(report: Report, written: string[], us = false, lang: Language = "zh-TW"): string {
+  const T = textFor(lang);
+  const out = [T.summaryHead(report.checkedAt)];
   const block = (title: string, ps: Problem[]) => {
-    out.push("", `${title}：${ps.length ? `沒通過，${ps.length} 個問題` : "通過"}`);
-    for (const l of problemLines(ps.slice(0, MAX_PRINTED))) out.push(`  ${l}`);
-    if (ps.length > MAX_PRINTED) out.push(`  還有 ${ps.length - MAX_PRINTED} 個，完整的寫在檢查結果檔裡。`);
+    out.push("", T.blockTitle(title, ps.length));
+    for (const l of problemLines(ps.slice(0, MAX_PRINTED), T)) out.push(`  ${l}`);
+    if (ps.length > MAX_PRINTED) out.push(`  ${T.moreProblems(ps.length - MAX_PRINTED)}`);
   };
-  for (const i of report.items) block(`${[i.company, i.role].filter(Boolean).join(" ") || "（沒寫公司）"}（代號 ${i.id}）`, i.problems);
-  if (report.general) block("104 總履歷", generalProblems(report.general));
+  for (const i of report.items) block(T.itemTitle([i.company, i.role].filter(Boolean).join(" ") || T.noCompany, i.id), i.problems);
+  if (report.general) block(T.label104General, generalProblems(report.general));
   for (const f of report.profiles) {
     block(f.file, f.problems);
     if (f.warnings.length) {
-      out.push(`  提醒（不算沒通過）：`);
-      for (const l of problemLines(f.warnings.slice(0, MAX_PRINTED))) out.push(`    ${l}`);
+      out.push(`  ${T.warnHead}`);
+      for (const l of problemLines(f.warnings.slice(0, MAX_PRINTED), T)) out.push(`    ${l}`);
     }
   }
-  if (!report.items.length && !report.general && !report.profiles.length) out.push("", "資料夾裡還沒有可以檢查的履歷或 104 文字。");
-  out.push("", report.ok ? "全部通過。" : `沒通過：共 ${report.problems} 個問題。改好之後再檢查一次。`);
-  if (written.length) out.push(`結果寫進 ${written.join("、")} 的「${(us ? SECTION_EN : SECTION).replace(/^## /, "")}」一節。`);
-  out.push("程式不檢查意思、動詞和職稱有沒有升級，這部分還是要人看。");
+  if (!report.items.length && !report.general && !report.profiles.length) out.push("", T.nothingYet);
+  out.push("", report.ok ? T.allPassed : T.failedTotal(report.problems));
+  if (written.length) out.push(T.writtenTo(written, (us || lang === "en" ? SECTION_EN : SECTION).replace(/^## /, "")));
+  out.push(T.notChecked);
   return out.join("\n");
 }
 
@@ -1091,25 +1095,35 @@ export function parseCheckArgs(argv: string[]): CheckArgs {
 
 export async function runCheck(argv: string[], dir: string | null, print: (s: string) => void = (s) => console.log(s)): Promise<number> {
   const args = parseCheckArgs(argv);
+  // A folder the program does not recognise has no jobhunt.yaml to read: the Taiwan (Chinese) wording is the default.
+  const folderOk = !!dir && looksLikeJobhuntFolder(dir);
+  const lang: Language = dir && folderOk ? readMarketSync(dir).language : "zh-TW";
+  const T = textFor(lang);
+  // The English wording of a US folder leaves out the Taiwan-only parts (the 104 site). The Chinese table ignores this.
+  const usEn = !!dir && folderOk && readMarketSync(dir).market === "us" && lang === "en";
   if (args.unknown.length) {
-    print(`不認得「${args.unknown.join(" ")}」。用法：check [職缺代號 ...] [--104] [--profiles] [--all]`);
+    print(T.unknownArg(args.unknown.join(" "), usEn));
     return 2;
   }
-  if (!dir || !looksLikeJobhuntFolder(dir)) {
-    print("這個資料夾看起來不是求職資料夾，沒有檢查。請把程式放進求職資料夾（有 AGENTS.md 的那個）再執行。");
-    if (dir) print(`程式現在在：${dir}`);
+  if (!dir || !folderOk) {
+    print(T.notFolder);
+    if (dir) print(T.programAt(dir));
     return 2;
   }
   const folder = new Folder(dir);
   if (args.profiles && (await readMarket(folder)).market !== "us") {
-    print("這是台灣版資料夾，沒有個人檔案（profiles）可以檢查。--profiles 只用在美國版資料夾。");
+    print(T.profilesTw);
+    return 2;
+  }
+  if (args.general && usEn) {
+    print(T.no104Us);
     return 2;
   }
   const known = allIds(folder);
   const missing = args.ids.filter((id) => !known.includes(id));
   if (missing.length) {
-    print(`找不到這些職缺代號：${missing.join("、")}。`);
-    print(known.length ? `資料夾裡有：${known.join("、")}。` : "資料夾裡還沒有客製履歷、履歷檔或 104 應徵信。");
+    print(T.idsMissing(missing));
+    print(T.idsKnown(known, usEn));
     return 2;
   }
   const everything = args.all || (!args.ids.length && !args.general && !args.profiles);
@@ -1120,25 +1134,21 @@ export async function runCheck(argv: string[], dir: string | null, print: (s: st
     profiles: everything || !!args.profiles,
   });
   if (args.general && !everything && !report.general) {
-    print("找不到 104 總履歷（104/履歷欄位.md）。");
+    print(T.no104);
     return 2;
   }
   if (args.profiles && !everything && !report.profiles.length) {
-    print("找不到個人檔案（profiles/ 裡沒有 .md 檔）。");
+    print(T.noProfiles);
     return 2;
   }
   let written: string[] = [];
   try {
     written = await writeResults(folder, report);
   } catch (e) {
-    print(
-      e instanceof FolderError
-        ? "檢查做完了，但結果檔寫不進去：checks 資料夾指到求職資料夾外面，為了安全沒有寫入。"
-        : "檢查做完了，但結果檔寫不進去：checks 資料夾或裡面的檔案可能被別的程式打開了，或不是一般的資料夾。關掉別的程式再試一次。",
-    );
-    print(summaryText(report, [], usFolder));
+    print(e instanceof FolderError ? T.writeOutside : T.writeBusy);
+    print(summaryText(report, [], usFolder, lang));
     return 2;
   }
-  print(summaryText(report, written, usFolder));
+  print(summaryText(report, written, usFolder, lang));
   return report.ok ? 0 : 1;
 }

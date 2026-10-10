@@ -1,26 +1,33 @@
 // 入口：沒有參數 → 打開介面；`check` → 命令列檢查；`read <檔案>` → 印出 Word 舊履歷的文字（給 AI 讀，不存檔）。
 // 開發時：bun src/main.ts --dir <求職資料夾> [--no-open]
-import { dirFlagRefused, resolveDataDir } from "./folder.ts";
+import { dirname } from "node:path";
+import { cliTextFor } from "./cli.text.ts";
+import { dirFlagRefused, looksLikeJobhuntFolder, resolveDataDir } from "./folder.ts";
 import { launch } from "./launch.ts";
+import { type Language, readMarketSync } from "./market.ts";
 
 const argv = process.argv.slice(2);
 const command = argv.find((a, i) => !a.startsWith("-") && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
 
-function waitForEnter() {
+/** The language of the folder's jobhunt.yaml; a folder the program does not recognise gets the Taiwan (Chinese) wording. */
+const langOf = (dir: string | null): Language => (dir && looksLikeJobhuntFolder(dir) ? readMarketSync(dir).language : "zh-TW");
+
+function waitForEnter(lang: Language) {
   // Double-clicked on Windows: keep the window open long enough to read the message.
   if (process.stdin.isTTY) {
     try {
-      prompt("按 Enter 關閉這個視窗。");
+      prompt(cliTextFor(lang).pressEnter);
     } catch {}
   }
 }
 
 async function main(): Promise<number> {
   if (dirFlagRefused(command, argv)) {
-    console.log(`「${command}」不接受 --dir／--folder：只處理程式所在的這個求職資料夾。請在求職資料夾裡執行，不要加 --dir。`);
+    console.log(cliTextFor(langOf(dirname(process.execPath))).dirRefused(command!));
     return 2;
   }
   const dir = resolveDataDir(argv);
+  const T = cliTextFor(langOf(dir));
 
   if (command === "check") {
     const { runCheck } = await import("./check.ts");
@@ -34,18 +41,18 @@ async function main(): Promise<number> {
   // or the AI's command never returns.
   const unknown = argv.filter((a, i) => a.startsWith("-") && !/^--(?:dir|folder)(?:=.*)?$/.test(a) && a !== "--no-open" && !/^-psn_/.test(a) && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
   if (command || unknown.length) {
-    console.log(`不認得「${command ?? unknown.join(" ")}」。`);
-    console.log("用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104；只查個人檔案（美國版）：check --profiles）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」。");
+    console.log(T.unknownCommand(command ?? unknown.join(" ")));
+    console.log(T.usage(dir !== null && langOf(dir) === "en" && readMarketSync(dir).market === "us"));
     return 2;
   }
   if (!dir) {
-    console.log("開發模式要用 --dir 指定求職資料夾，例如：bun src/main.ts --dir ../jobhunt/scaffold/workspace-general");
+    console.log(T.devNeedsDir);
     return 2;
   }
 
   const result = await launch(dir, { open: !argv.includes("--no-open") });
   if (result.kind === "not-folder") {
-    waitForEnter();
+    waitForEnter("zh-TW"); // the folder is not recognised: launch() printed the Chinese wording
     return 1;
   }
   if (result.kind === "already-running") return 0;

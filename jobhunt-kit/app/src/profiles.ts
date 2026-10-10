@@ -3,6 +3,8 @@
 // the block parsing and source-line logic are the 104 ones in blocks104.ts, run in English mode.
 //
 // Official limits (LinkedIn help) are errors; limits that come from third-party guides are warnings only.
+import { textFor } from "./check.text.ts";
+import type { Language } from "./market.ts";
 
 export type ProfileKind = "linkedin" | "handshake";
 export type Fill = "paste" | "pick" | "guide";
@@ -145,20 +147,22 @@ export function contactMatches(line: string): { kind: "email" | "phone" | "addre
 const EMOJI = /\p{Emoji_Presentation}|[\u{1F000}-\u{1FAFF}☀-➿️]/u;
 
 /** Plain-text rules for a body line of a pasted block: no "- " bullets, bold, links or emoji. null = fine. */
-export function bodyLineProblem(line: string): string | null {
-  if (/^\s*[-*+]\s/.test(line)) return "內文的重點符號要用「• 」（不是 - 或 *），以「- 」開頭的行會被當成註記，不會貼出去";
-  if (/^\s*#/.test(line)) return "內文不能用 # 標題";
-  if (/\*\*|__|`/.test(line)) return "內文不能有粗體或程式碼標記";
-  if (/https?:\/\/|\bwww\./i.test(line) || /\]\(/.test(line)) return "內文不能放連結";
-  if (EMOJI.test(line)) return "內文不能有表情符號";
+export function bodyLineProblem(line: string, lang: Language = "zh-TW"): string | null {
+  const T = textFor(lang);
+  if (/^\s*[-*+]\s/.test(line)) return T.bodyDash;
+  if (/^\s*#/.test(line)) return T.bodyHash;
+  if (/\*\*|__|`/.test(line)) return T.bodyBold;
+  if (/https?:\/\/|\bwww\./i.test(line) || /\]\(/.test(line)) return T.bodyLink;
+  if (EMOJI.test(line)) return T.bodyEmoji;
   return null;
 }
 
 /** LinkedIn custom URL (official, linkedin.com/help/linkedin/answer/a542685): 3 to 100 letters and digits, no "linkedin". */
-export function customUrlProblem(v: string): string | null {
+export function customUrlProblem(v: string, lang: Language = "zh-TW"): string | null {
+  const T = textFor(lang);
   const s = v.trim();
-  if (!/^[A-Za-z0-9]+$/.test(s)) return "自訂網址只能用英文字母和數字，不能有空白、符號或特殊字元";
-  if (s.length < 3 || s.length > 100) return "自訂網址要 3 到 100 個字";
-  if (/linkedin/i.test(s)) return "自訂網址不能含有 linkedin";
+  if (!/^[A-Za-z0-9]+$/.test(s)) return T.urlChars;
+  if (s.length < 3 || s.length > 100) return T.urlLength;
+  if (/linkedin/i.test(s)) return T.urlLinkedin;
   return null;
 }

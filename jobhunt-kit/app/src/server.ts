@@ -1,21 +1,26 @@
 // 本機小伺服器：只聽 127.0.0.1，每次啟動一組隨機通行碼（token），只認自己的 Host。
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import indexHtml from "../ui/index.html" with { type: "text" };
+import indexEnHtml from "../ui/index-en.html" with { type: "text" };
 import appJs from "../ui/app.js" with { type: "text" };
 import styleCss from "../ui/style.css" with { type: "text" };
+import styleEnCss from "../ui/style-en.css" with { type: "text" };
 import { Applications, UserError } from "./applications.ts";
 import { runChecks } from "./check.ts";
 import { Folder } from "./folder.ts";
+import { readMarket } from "./market.ts";
+import { serverText } from "./server.text.ts";
 import { stripComments } from "./htmltext.ts";
 
 export const APP_ID = "jobhunt";
 export const VERSION = "0.1.0";
 
+// The start page depends on the folder's `language` (jobhunt.yaml): index.html for zh-TW (unchanged), index-en.html for en.
+const PAGES = new Set(["/", "/index.html"]);
 const ASSETS: Record<string, { body: string; type: string }> = {
-  "/": { body: indexHtml, type: "text/html; charset=utf-8" },
-  "/index.html": { body: indexHtml, type: "text/html; charset=utf-8" },
   "/app.js": { body: appJs, type: "text/javascript; charset=utf-8" },
   "/style.css": { body: styleCss, type: "text/css; charset=utf-8" },
+  "/style-en.css": { body: styleEnCss, type: "text/css; charset=utf-8" },
 };
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -30,8 +35,6 @@ const SECURITY_HEADERS: Record<string, string> = {
   // A tab one of our pages opened (the print tab) loses its link back to us as soon as it lands on another site.
   "Cross-Origin-Opener-Policy": "same-origin",
 };
-
-const BAD_REQUEST = "出了點問題，請關掉這個分頁，再從程式重新打開。";
 
 /** Resume files are written by the AI: shown as-is but nothing in them may run, call home or load from elsewhere.
  * Only the one print script the app adds (with a fresh nonce) runs. Framing is allowed for the app's own preview. */
@@ -71,8 +74,8 @@ export function cleanResume(html: string): string {
   });
 }
 
-function viewPage(title: string, msg: string): string {
-  return `<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><title>${esc(title)}</title></head>` +
+function viewPage(title: string, msg: string, htmlLang: string): string {
+  return `<!doctype html><html lang="${htmlLang}"><head><meta charset="utf-8"><title>${esc(title)}</title></head>` +
     `<body style="font-family:sans-serif;padding:24px;line-height:1.7"><h1 style="font-size:20px">${esc(title)}</h1><p>${esc(msg)}</p></body></html>`;
 }
 
@@ -91,7 +94,16 @@ export type DiffPart = { t: "same" | "add" | "del"; s: string };
 /** Character-level diff (longest common subsequence over code points). Chinese has no spaces to split words on,
  * so one character at a time is the unit. Long inputs fall back to "all removed, all added". */
 export function charDiff(before: string, after: string, max = 1500): DiffPart[] {
-  const a = Array.from(before), b = Array.from(after);
+  return diffTokens(Array.from(before), Array.from(after), before, after, max);
+}
+
+/** Same diff, one word at a time (each word keeps the space after it). English is read in words, not letters. */
+export function wordDiff(before: string, after: string, max = 1500): DiffPart[] {
+  const words = (s: string) => s.match(/\S+\s*/g) ?? [];
+  return diffTokens(words(before), words(after), before, after, max);
+}
+
+function diffTokens(a: string[], b: string[], before: string, after: string, max: number): DiffPart[] {
   const out: DiffPart[] = [];
   const push = (t: DiffPart["t"], s: string) => {
     if (!s) return;
@@ -160,6 +172,7 @@ export async function resumeInfo(folder: Folder): Promise<ResumeInfo> {
       drafts.push({ id: String(fm.id ?? name.replace(/\.md$/i, "")), title: String(fm.title ?? "").trim() });
   }
 
+  const diff = (await readMarket(folder)).language === "en" ? wordDiff : charDiff;
   const confirmed = new Map<string, string>();
   try {
     const r: any = await folder.readYaml("resume.yaml");
@@ -188,7 +201,7 @@ export async function resumeInfo(folder: Folder): Promise<ResumeInfo> {
       for (const [bullet, text] of Object.entries(ov)) {
         const after = squash(text);
         const before = confirmed.get(bullet) ?? null;
-        rewrites.push({ bullet, before, after, parts: before == null ? [{ t: "add", s: after }] : charDiff(before, after) });
+        rewrites.push({ bullet, before, after, parts: before == null ? [{ t: "add", s: after }] : diff(before, after) });
       }
     items[id] = {
       confirm: Array.isArray(t.confirm) ? t.confirm.length : 0,
@@ -243,8 +256,8 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
     return r;
   };
 
-  /** 姓名_履歷_公司: the print dialog offers the page title as the PDF's file name. */
-  async function pdfName(id: string): Promise<string> {
+  /** 姓名_履歷_公司 (en: Name_Resume_Company): the print dialog offers the page title as the PDF's file name. */
+  async function pdfName(id: string, word: string): Promise<string> {
     let person = "";
     let company = "";
     try {
@@ -260,7 +273,7 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
         }
       } catch {}
     }
-    return [person, "履歷", company]
+    return [person, word, company]
       .map((x) => x.replace(/[\\/:*?"<>|\r\n\t]+/g, " ").trim())
       .filter(Boolean)
       .join("_");
@@ -269,22 +282,24 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
   async function view(req: Request, url: URL): Promise<Response> {
     if (req.method !== "GET" && req.method !== "HEAD") return text("Method Not Allowed", 405);
     const nonce = randomBytes(16).toString("base64");
-    const page = (status: number, title: string, msg: string) => new Response(viewPage(title, msg), { status, headers: viewHeaders(nonce) });
-    if (!sameToken(cookieValue(req, cookieName()), viewToken)) return page(401, "要重新打開", "請回到求職小幫手的分頁再按一次；還是不行就關掉分頁，從程式重新打開。");
+    const M = await readMarket(folder);
+    const T = serverText(M.language);
+    const page = (status: number, title: string, msg: string) => new Response(viewPage(title, msg, T.htmlLang), { status, headers: viewHeaders(nonce) });
+    if (!sameToken(cookieValue(req, cookieName()), viewToken)) return page(401, T.reopenTitle, T.reopenMsg);
     const site = req.headers.get("sec-fetch-site");
-    if (site && site !== "same-origin" && site !== "none") return page(403, "不能打開", "這個網址只能從求職小幫手裡打開。");
+    if (site && site !== "same-origin" && site !== "none") return page(403, T.forbiddenTitle, T.forbiddenMsg);
     let id = "";
     try {
       id = decodeURIComponent(url.pathname.slice("/view/".length));
     } catch {}
-    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.startsWith(".")) return page(404, "找不到這份履歷", "");
+    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.startsWith(".")) return page(404, T.notFoundTitle, "");
     let html: string | null = null;
     try {
       html = await folder.readText(`resumes/${id}.html`);
     } catch {}
-    if (html == null) return page(404, "找不到這份履歷檔", "請跟 AI 說「做成履歷檔」，做好再回來。");
+    if (html == null) return page(404, T.noResumeTitle, T.noResumeMsg);
     html = cleanResume(html);
-    const name = await pdfName(id);
+    const name = await pdfName(id, T.pdfWord);
     if (name)
       html = html
         .replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/i, "")
@@ -292,6 +307,8 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
     // The photo is never in the folder (the template's onerror handler that hides the empty frame can't run here).
     // The template's yellow tip says "press Ctrl+P"; the app shows its own steps next to its PDF button instead.
     let extra = "<style>#photo-slot{display:none !important}.print-tip{display:none !important}</style>";
+    // Letter folders: the print dialog gets Letter even if the AI used a template that says A4. A4 folders add nothing.
+    if (M.paper === "letter") extra += "<style>@page{size:letter}</style>";
     if (url.searchParams.get("print") === "1")
       extra += `<script nonce="${nonce}">addEventListener("load",function(){setTimeout(function(){window.print()},400)})</script>`;
     const at = html.toLowerCase().lastIndexOf("</body>");
@@ -300,22 +317,23 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
   }
 
   async function api(req: Request, path: string): Promise<Response> {
-    if (!sameToken(req.headers.get("x-jobhunt-token"), token))
-      return json({ error: "這個分頁是舊的（程式重新打開過）。請關掉它，用程式剛打開的那個分頁。" }, 401);
+    const M = await readMarket(folder);
+    const T = serverText(M.language);
+    if (!sameToken(req.headers.get("x-jobhunt-token"), token)) return json({ error: T.staleTab }, 401);
     const origin = req.headers.get("origin");
-    if (origin && !allowedOrigins().has(origin)) return json({ error: BAD_REQUEST }, 403);
+    if (origin && !allowedOrigins().has(origin)) return json({ error: T.badRequest }, 403);
     const site = req.headers.get("sec-fetch-site");
-    if (site && site !== "same-origin" && site !== "none") return json({ error: BAD_REQUEST }, 403);
+    if (site && site !== "same-origin" && site !== "none") return json({ error: T.badRequest }, 403);
 
     let body: any = {};
     if (req.method === "POST") {
-      if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return json({ error: BAD_REQUEST }, 415);
+      if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return json({ error: T.badRequest }, 415);
       try {
         body = await req.json();
       } catch {
-        return json({ error: BAD_REQUEST }, 400);
+        return json({ error: T.badRequest }, 400);
       }
-      if (!body || typeof body !== "object") return json({ error: BAD_REQUEST }, 400);
+      if (!body || typeof body !== "object") return json({ error: T.badRequest }, 400);
     }
 
     const route = `${req.method} ${path}`;
@@ -324,7 +342,7 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
         case "GET /api/ping":
           return json({ ok: true, app: APP_ID, version: VERSION });
         case "GET /api/info":
-          return withCookie(json({ folder: folder.root, version: VERSION }));
+          return withCookie(json({ folder: folder.root, version: VERSION, market: M.market, language: M.language, paper: M.paper }));
         case "GET /api/check":
           // Read-only: the checks/<id>.md files are written by the command-line check only (the AI may be
           // editing them at the same moment).
@@ -344,7 +362,7 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
         case "POST /api/archive":
           return json(await apps.archive(body));
         default:
-          return json({ error: BAD_REQUEST }, 404);
+          return json({ error: T.badRequest }, 404);
       }
     } catch (e: any) {
       if (e instanceof UserError) {
@@ -352,7 +370,7 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
         return json({ error: e.message, ...extra }, e.status);
       }
       console.error(e);
-      return json({ error: "出了點問題，沒有存檔。請再試一次；一直不行，就把黑色視窗和這個畫面截圖，傳給給你這個工具的人。" }, 500);
+      return json({ error: T.serverError }, 500);
     }
   }
 
@@ -368,6 +386,10 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
       if (path.startsWith("/api/")) return api(req, path);
       if (path.startsWith("/view/")) return view(req, url);
       if (req.method !== "GET" && req.method !== "HEAD") return text("Method Not Allowed", 405);
+      if (PAGES.has(path)) {
+        const en = (await readMarket(folder)).language === "en";
+        return new Response(en ? indexEnHtml : indexHtml, { headers: { ...SECURITY_HEADERS, "Content-Type": "text/html; charset=utf-8" } });
+      }
       const asset = ASSETS[path];
       if (!asset) return text("Not Found", 404);
       return new Response(asset.body, { headers: { ...SECURITY_HEADERS, "Content-Type": asset.type } });

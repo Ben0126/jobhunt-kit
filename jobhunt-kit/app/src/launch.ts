@@ -2,6 +2,8 @@
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Folder, looksLikeJobhuntFolder } from "./folder.ts";
+import { cliTextFor } from "./cli.text.ts";
+import { readMarketSync } from "./market.ts";
 import { APP_ID, startServer, type Running } from "./server.ts";
 
 export type Lock = { port: number; token: string; pid: number; started: string };
@@ -52,12 +54,15 @@ export type LaunchResult =
 export async function launch(dir: string, opts: { open: boolean; print?: (s: string) => void }): Promise<LaunchResult> {
   const print = opts.print ?? ((s: string) => console.log(s));
   if (!looksLikeJobhuntFolder(dir)) {
-    print("這個資料夾看起來不是求職資料夾，所以沒有打開介面。");
-    print(`程式現在在：${dir}`);
-    print("請把這個程式放進你的求職資料夾（裡面有「開始使用.md」和 AGENTS.md 的那個資料夾），再點兩下打開。");
-    print("如果你是在 .zip 壓縮檔裡面直接點的：要先把整個壓縮檔解壓縮，再到解壓縮出來的資料夾裡點兩下。");
+    // No AGENTS.md means no jobhunt.yaml to ask either: the Taiwan (Chinese) wording.
+    const T = cliTextFor("zh-TW");
+    print(T.notFolder1);
+    print(T.programAt(dir));
+    print(T.notFolder3);
+    print(T.notFolder4);
     return { kind: "not-folder", dir };
   }
+  const T = cliTextFor(readMarketSync(dir).language);
   const folder = new Folder(dir);
   const lockPath = folder.lockPath;
 
@@ -65,7 +70,7 @@ export async function launch(dir: string, opts: { open: boolean; print?: (s: str
   if (existing && (await lockAlive(existing))) {
     const url = lockUrl(existing);
     if (opts.open) openBrowser(url);
-    print("介面已經開著了，幫你在瀏覽器再打開一次。");
+    print(T.alreadyRunning);
     print(url);
     return { kind: "already-running", url };
   }
@@ -88,8 +93,8 @@ export async function launch(dir: string, opts: { open: boolean; print?: (s: str
 
   if (opts.open) {
     openBrowser(running.url);
-    print("介面已經在瀏覽器打開。用完再關掉這個視窗。");
-  } else print("介面已經準備好，請用瀏覽器打開下面的網址。用完再關掉這個視窗。");
+    print(T.started);
+  } else print(T.startedNoOpen);
   print(running.url);
   return { kind: "started", running, stop };
 }

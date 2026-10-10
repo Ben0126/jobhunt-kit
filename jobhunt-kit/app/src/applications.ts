@@ -2,6 +2,8 @@
 import { createHash } from "node:crypto";
 import { ensureColumn, parseCsv, rowToObject, serializeCsv, type CsvDoc } from "./csv.ts";
 import { Folder } from "./folder.ts";
+import { appsText, STATUSES_ZH, type StatusDef } from "./applications.text.ts";
+import { readMarket, type Language } from "./market.ts";
 
 export const CSV_PATH = "data/applications.csv";
 
@@ -11,16 +13,8 @@ export const KIT_HEADER = [
   "next_action", "next_action_date", "contact", "source", "notes", "resume_file", "resume_commit", "resume_rev", "link",
 ];
 
-export const STATUSES: { code: string; label: string }[] = [
-  { code: "todo", label: "待投遞" },
-  { code: "applied", label: "已投遞" },
-  { code: "oa", label: "筆試測驗" },
-  { code: "interview", label: "面試中" },
-  { code: "offer", label: "錄取" },
-  { code: "rejected", label: "未錄取" }, // not 「拒絕」: it could also read as "I turned them down" (that is withdrawn)
-  { code: "ghosted", label: "無回應" },
-  { code: "withdrawn", label: "放棄" },
-];
+/** Status names for the Taiwan (zh-TW) board; English ones are in applications.text.ts. */
+export const STATUSES: StatusDef[] = STATUSES_ZH;
 const STATUS_CODES = new Set(STATUSES.map((s) => s.code));
 
 export const EDITABLE = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "notes", "link"] as const;
@@ -31,7 +25,7 @@ const DATE_FIELDS = new Set(["applied_date", "next_action_date"]);
 export const FOLLOW_UP_DAYS = 10;
 export const GHOST_DAYS = 28;
 
-/** A problem to show the user as-is (plain Chinese). */
+/** A problem to show the user as-is (plain words, in the folder's language). */
 export class UserError extends Error {
   constructor(message: string, readonly status = 400) {
     super(message);
@@ -74,21 +68,22 @@ export type FollowUp = { index: number; company: string; role: string; kind: "ap
 export type Board = {
   version: string;
   today: string;
-  statuses: typeof STATUSES;
+  statuses: StatusDef[];
   rows: Row[];
   followUps: FollowUp[];
 };
 
-function shortDate(s: string, today: string): string {
+function shortDate(s: string, today: string, lang: Language): string {
   const [y, m, d] = s.split("-").map(Number);
-  return y === Number(today.slice(0, 4)) ? `${m}/${d}` : `${y}/${m}/${d}`;
+  return appsText(lang).shortDate(y, m, d, y === Number(today.slice(0, 4)));
 }
 
 /** 「該追蹤了」：
  * - 已投遞：10 天以上沒更新 → 問進度；28 天以上 → 可能石沉大海（不需要聯絡人）。
  * - 面試中：約好的日期已過。
  * - 待投遞：截止日（下一步日期）是今天或已經過了。 */
-export function followUps(rows: Record<string, string>[], today: string): FollowUp[] {
+export function followUps(rows: Record<string, string>[], today: string, lang: Language = "zh-TW"): FollowUp[] {
+  const T = appsText(lang);
   const out: FollowUp[] = [];
   rows.forEach((r, index) => {
     const status = (r.status || "").trim();
@@ -98,20 +93,20 @@ export function followUps(rows: Record<string, string>[], today: string): Follow
       if (!ref) return;
       const days = daysBetween(ref, today);
       if (days >= GHOST_DAYS)
-        out.push({ ...base, kind: "ghost", message: `已經 ${days} 天沒有消息，可能石沉大海。可以改成「無回應」，把力氣放在別的職缺。` });
+        out.push({ ...base, kind: "ghost", message: T.ghost(days) });
       else if (days >= FOLLOW_UP_DAYS)
-        out.push({ ...base, kind: "applied", message: `已經 ${days} 天沒有消息。可以寫信或打電話問進度。` });
+        out.push({ ...base, kind: "applied", message: T.applied(days) });
     } else if (status === "interview") {
       const d = r.next_action_date;
       if (d && isValidDate(d) && daysBetween(d, today) > 0)
-        out.push({ ...base, kind: "interview", message: `約好的日期（${shortDate(d, today)}）已經過了。結果如何？記得更新狀態。` });
+        out.push({ ...base, kind: "interview", message: T.interview(shortDate(d, today, lang)) });
     } else if (status === "todo") {
       const d = r.next_action_date;
       if (!d || !isValidDate(d)) return;
       const late = daysBetween(d, today);
-      if (late === 0) out.push({ ...base, kind: "deadline", message: `今天（${shortDate(d, today)}）是截止日。要投的話今天投。` });
+      if (late === 0) out.push({ ...base, kind: "deadline", message: T.deadlineToday(shortDate(d, today, lang)) });
       else if (late > 0)
-        out.push({ ...base, kind: "deadline", message: `截止日（${shortDate(d, today)}）已經過了。投了就改成「已投遞」；不投了就改成「放棄」。` });
+        out.push({ ...base, kind: "deadline", message: T.deadlinePast(shortDate(d, today, lang)) });
     }
   });
   return out;
@@ -134,18 +129,23 @@ export class Applications {
     return { doc: parseCsv(new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)) /* keep the BOM so it is written back */, version: versionOf(bytes) };
   }
 
-  private async save(doc: CsvDoc): Promise<void> {
+  /** The words for this folder (jobhunt.yaml `language`). Read per call: the file may change while the app is open. */
+  private async tx() {
+    return appsText((await readMarket(this.folder)).language);
+  }
+
+  private async save(doc: CsvDoc, T: ReturnType<typeof appsText>): Promise<void> {
     try {
       await this.folder.writeText(CSV_PATH, serializeCsv(doc));
     } catch (e: any) {
       if (e && (e.code === "EBUSY" || e.code === "EPERM" || e.code === "EACCES"))
-        throw new UserError("進度表正被別的程式（例如 Excel）打開，請先關掉再試一次。", 423);
+        throw new UserError(T.fileOpen, 423);
       throw e;
     }
   }
 
-  private checkVersion(current: string, given: unknown) {
-    if (given !== current) throw new UserError("進度表剛剛被改過（可能是 AI 改的）。畫面已經更新，請再改一次。", 409);
+  private checkVersion(current: string, given: unknown, T: ReturnType<typeof appsText>) {
+    if (given !== current) throw new UserError(T.changedUnderneath, 409);
   }
 
   /** Names of what is saved in submitted/: frozen snapshots ("261008-01_2.json" → "261008-01_2") and resume
@@ -167,6 +167,7 @@ export class Applications {
 
   async board(): Promise<Board> {
     const { doc, version } = await this.load();
+    const lang = (await readMarket(this.folder)).language;
     const today = this.today();
     const submitted = this.submittedIds();
     const objs = doc.rows.map((r) => rowToObject(doc.header, r));
@@ -175,7 +176,7 @@ export class Applications {
       full._deletable = !this.hasSnapshot((o.job_id || "").trim(), submitted, o.resume_file || "");
       return full;
     });
-    return { version, today, statuses: STATUSES, rows, followUps: followUps(objs, today) };
+    return { version, today, statuses: appsText(lang).statuses, rows, followUps: followUps(objs, today, lang) };
   }
 
   // ---- job id (AGENTS.md「職缺代號」)
@@ -226,17 +227,18 @@ export class Applications {
 
   async add(input: { company?: unknown; role?: unknown; link?: unknown; version?: unknown }): Promise<Board> {
     return this.serial(async () => {
+      const T = await this.tx();
       const company = cleanLine(input.company);
       const role = cleanLine(input.role);
       const link = cleanLine(input.link);
-      if (!company) throw new UserError("請填公司名稱。");
-      if (!role) throw new UserError("請填職稱。");
-      if (link && !/^https?:\/\/\S+$/i.test(link)) throw new UserError("職缺網址要用 http:// 或 https:// 開頭。");
+      if (!company) throw new UserError(T.needCompany);
+      if (!role) throw new UserError(T.needRole);
+      if (link && !/^https?:\/\/\S+$/i.test(link)) throw new UserError(T.badLink);
       const { doc, version } = await this.load();
-      this.checkVersion(version, input.version);
+      this.checkVersion(version, input.version, T);
       const ci = doc.header.indexOf("company"), ri = doc.header.indexOf("role");
       if (ci >= 0 && ri >= 0 && doc.rows.some((r) => (r[ci] || "").trim() === company && (r[ri] || "").trim() === role))
-        throw new UserError("清單裡已經有這家公司的這個職缺了。");
+        throw new UserError(T.duplicate);
 
       const jobId = (await this.existingJob(company, role)) ?? this.newJobId(company, role, this.usedIds(doc));
       const values: Record<string, string> = {
@@ -251,16 +253,17 @@ export class Applications {
       // Add only the columns this row needs that the file lacks; never drop or reorder what is there.
       for (const [k, v] of Object.entries(values)) if (v && !doc.header.includes(k)) ensureColumn(doc, k);
       doc.rows.push(doc.header.map((h) => values[h] ?? ""));
-      await this.save(doc);
+      await this.save(doc, T);
       return this.board();
     });
   }
 
   async update(input: { index?: unknown; job_id?: unknown; version?: unknown; changes?: unknown }): Promise<Board> {
     return this.serial(async () => {
+      const T = await this.tx();
       const { doc, version } = await this.load();
-      this.checkVersion(version, input.version);
-      const row = this.pick(doc, input.index, input.job_id);
+      this.checkVersion(version, input.version, T);
+      const row = this.pick(doc, input.index, input.job_id, T);
       const changes = (input.changes && typeof input.changes === "object" ? input.changes : {}) as Record<string, unknown>;
       const today = this.today();
       const get = (k: string) => {
@@ -274,12 +277,12 @@ export class Applications {
 
       const next: Partial<Record<Editable, string>> = {};
       for (const [k, raw] of Object.entries(changes)) {
-        if (!(EDITABLE as readonly string[]).includes(k)) throw new UserError("有欄位不能在這裡改。");
+        if (!(EDITABLE as readonly string[]).includes(k)) throw new UserError(T.fieldLocked);
         const v = cleanLine(raw);
-        if ((k === "company" || k === "role") && !v) throw new UserError(k === "company" ? "公司名稱不能空白。" : "職稱不能空白。");
-        if (k === "status" && !STATUS_CODES.has(v)) throw new UserError("狀態不對，請從選單選。");
-        if (DATE_FIELDS.has(k) && v && !isValidDate(v)) throw new UserError("日期格式不對，請用日期選單選。");
-        if (k === "link" && v && !/^https?:\/\/\S+$/i.test(v)) throw new UserError("職缺網址要用 http:// 或 https:// 開頭。");
+        if ((k === "company" || k === "role") && !v) throw new UserError(k === "company" ? T.emptyCompany : T.emptyRole);
+        if (k === "status" && !STATUS_CODES.has(v)) throw new UserError(T.badStatus);
+        if (DATE_FIELDS.has(k) && v && !isValidDate(v)) throw new UserError(T.badDate);
+        if (k === "link" && v && !/^https?:\/\/\S+$/i.test(v)) throw new UserError(T.badLink);
         if (k === "link" && !doc.header.includes("link") && !v) continue; // nothing to store, don't add the column
         next[k as Editable] = v;
       }
@@ -295,23 +298,24 @@ export class Applications {
       if (statusChanged) writes.last_update = today;
       // Columns the file lacks are appended in the kit's order.
       for (const k of KIT_HEADER) if (k in writes) set(k, writes[k]);
-      await this.save(doc);
+      await this.save(doc, T);
       return this.board();
     });
   }
 
   async remove(input: { index?: unknown; job_id?: unknown; version?: unknown }): Promise<Board> {
     return this.serial(async () => {
+      const T = await this.tx();
       const { doc, version } = await this.load();
-      this.checkVersion(version, input.version);
-      const row = this.pick(doc, input.index, input.job_id);
+      this.checkVersion(version, input.version, T);
+      const row = this.pick(doc, input.index, input.job_id, T);
       const ji = doc.header.indexOf("job_id");
       const jobId = ji >= 0 ? (row[ji] || "").trim() : "";
       const fi = doc.header.indexOf("resume_file");
       if (this.hasSnapshot(jobId, this.submittedIds(), fi >= 0 ? row[fi] || "" : ""))
-        throw new UserError("這一筆已經存過投遞當時的履歷，不能刪。不想再看到它，可以把狀態改成「放棄」。", 403);
+        throw new UserError(T.keepForSnapshot, 403);
       doc.rows.splice(doc.rows.indexOf(row), 1);
-      await this.save(doc);
+      await this.save(doc, T);
       return this.board();
     });
   }
@@ -319,24 +323,23 @@ export class Applications {
   // ---- 「我投了這份，存一份」：resumes/<id>.html → submitted/<今天>_<id>.html，並記在進度表那一列的 resume_file
 
   /** The row this resume belongs to: job_id = id, otherwise resume_version = targets/<id>. */
-  private rowForResume(doc: CsvDoc, id: string): number {
+  private rowForResume(doc: CsvDoc, id: string, T: ReturnType<typeof appsText>): number {
     const col = (k: string) => doc.header.indexOf(k);
     const ji = col("job_id"), vi = col("resume_version");
     const byJob = ji >= 0 ? doc.rows.flatMap((r, i) => ((r[ji] || "").trim() === id ? [i] : [])) : [];
     const hits = byJob.length ? byJob : vi >= 0 ? doc.rows.flatMap((r, i) => ((r[vi] || "").trim() === `targets/${id}` ? [i] : [])) : [];
-    if (!hits.length)
-      throw new UserError("進度表裡找不到這個職缺，所以不知道要記在哪一筆。先到「進度」頁按「＋ 新增一筆」，或跟 AI 說「我投了這家」，再回來存。", 404);
-    if (hits.length > 1) throw new UserError("進度表裡有好幾筆都對到這份履歷，不知道要記在哪一筆。請跟 AI 說「進度表有重複的職缺，幫我整理」。", 409);
+    if (!hits.length) throw new UserError(T.noRowForResume, 404);
+    if (hits.length > 1) throw new UserError(T.manyRowsForResume, 409);
     return hits[0];
   }
 
-  private async archivePlan(input: { id?: unknown }) {
+  private async archivePlan(input: { id?: unknown }, T: ReturnType<typeof appsText>) {
     const id = typeof input.id === "string" ? input.id : "";
-    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.includes("\u0000") || id.startsWith(".") || id.length > 120) throw new UserError("找不到這份履歷檔。", 404);
+    if (!/^[^/\\:*?"<>|]+$/.test(id) || id.includes("\u0000") || id.startsWith(".") || id.length > 120) throw new UserError(T.noResumeFile, 404);
     const from = `resumes/${id}.html`;
-    if (!this.folder.exists(from)) throw new UserError("找不到這份履歷檔。請跟 AI 說「做成履歷檔」，做好再回來存。", 404);
+    if (!this.folder.exists(from)) throw new UserError(T.noResumeFileAskAi, 404);
     const { doc, version } = await this.load();
-    const index = this.rowForResume(doc, id);
+    const index = this.rowForResume(doc, id, T);
     const o = rowToObject(doc.header, doc.rows[index]);
     const to = `submitted/${this.today()}_${id}.html`;
     const existing = await this.folder.readArchived(to);
@@ -345,7 +348,7 @@ export class Applications {
 
   /** What the button will do; writes nothing. */
   async archivePreview(input: { id?: unknown }) {
-    const p = await this.archivePlan(input);
+    const p = await this.archivePlan(input, await this.tx());
     return {
       id: p.id, from: p.from, to: p.to, index: p.index, job_id: p.row.job_id || "",
       company: p.row.company || "", role: p.row.role || "", status: p.row.status || "",
@@ -355,20 +358,21 @@ export class Applications {
 
   async archive(input: { id?: unknown; to?: unknown; version?: unknown }): Promise<{ saved: string; board: Board }> {
     return this.serial(async () => {
-      const p = await this.archivePlan(input);
-      if (input.to !== p.to) throw new UserError("日期已經換了一天，要存的檔名也跟著變。請再按一次「我投了這份，存一份」。", 409);
-      this.checkVersion(p.version, input.version);
+      const T = await this.tx();
+      const p = await this.archivePlan(input, T);
+      if (input.to !== p.to) throw new UserError(T.dateMoved, 409);
+      this.checkVersion(p.version, input.version, T);
       const already = (p.row.resume_file || "").trim();
-      if (already) throw new UserError(`這一筆已經存過一份了（${already}），為了不蓋掉，不會再存。`, 409);
+      if (already) throw new UserError(T.alreadyHasCopy(already), 409);
       const current = await this.folder.readBytes(p.from);
       if (p.existing) {
         // Same bytes: an earlier save copied the file but couldn't write the applications file. Only record it.
-        if (!current || !sameBytes(p.existing, current)) throw new UserError(`今天已經存過這份履歷了（${p.to}），為了不蓋掉，不會再存。`, 409);
+        if (!current || !sameBytes(p.existing, current)) throw new UserError(T.savedToday(p.to), 409);
       } else {
         try {
           this.folder.archiveCopy(p.from, p.to);
         } catch (e: any) {
-          if (e && e.code === "EEXIST") throw new UserError(`今天已經存過這份履歷了（${p.to}），為了不蓋掉，不會再存。`, 409);
+          if (e && e.code === "EEXIST") throw new UserError(T.savedToday(p.to), 409);
           throw e;
         }
       }
@@ -384,22 +388,22 @@ export class Applications {
         p.doc.rows[p.index][ensureColumn(p.doc, "last_update")] = today;
       }
       try {
-        await this.save(p.doc);
+        await this.save(p.doc, T);
       } catch (e: any) {
         const why = e instanceof UserError ? e.message : "";
-        throw new UserError(`履歷已經存好（${p.to}），但進度表沒有記上。${why}之後再按一次就會補記。`, e instanceof UserError ? e.status : 500);
+        throw new UserError(T.savedButNotRecorded(p.to, why), e instanceof UserError ? e.status : 500);
       }
       return { saved: p.to, board: await this.board() };
     });
   }
 
-  private pick(doc: CsvDoc, index: unknown, jobId: unknown): string[] {
+  private pick(doc: CsvDoc, index: unknown, jobId: unknown, T: ReturnType<typeof appsText>): string[] {
     if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= doc.rows.length)
-      throw new UserError("找不到這一筆，畫面已經更新，請再試一次。", 409);
+      throw new UserError(T.rowGone, 409);
     const row = doc.rows[index];
     const ji = doc.header.indexOf("job_id");
     if (ji >= 0 && typeof jobId === "string" && (row[ji] || "") !== jobId)
-      throw new UserError("找不到這一筆，畫面已經更新，請再試一次。", 409);
+      throw new UserError(T.rowGone, 409);
     return row;
   }
 }

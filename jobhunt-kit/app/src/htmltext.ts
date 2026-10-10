@@ -4,6 +4,8 @@
 //
 // Rule of thumb: when in doubt, a piece of text counts as visible. Anything skipped here is never checked, so
 // only what truly never reaches paper is skipped; markup the template doesn't use is reported by oddMarkup().
+import type { Language } from "./market.ts";
+import { textFor } from "./check.text.ts";
 
 const BLOCK = new Set([
   "address", "article", "aside", "blockquote", "body", "br", "dd", "div", "dl", "dt", "figcaption", "figure",
@@ -166,9 +168,10 @@ export function templateWords(html: string): string[] {
 /** Markup the resume templates never use and that can print text a checker doesn't see (or load things).
  * `allowedScripts`: the templates' own scripts (squashed). `allowPhoto`: the Chinese templates may show photo.jpg;
  * the US kit has no photo, so there every <img> is an error. Plain-Chinese descriptions, one per kind. */
-export function oddMarkup(html: string, allowedScripts: Set<string>, allowPhoto = true): string[] {
+export function oddMarkup(html: string, allowedScripts: Set<string>, allowPhoto = true, lang: Language = "zh-TW"): string[] {
+  const T = textFor(lang);
   const out = new Set<string>();
-  if (/<!--->?|--!>/.test(html)) out.add("註解的寫法不正常（<!--> 或 --!>），瀏覽器和檢查程式看到的內容會不一樣");
+  if (/<!--->?|--!>/.test(html)) out.add(T.oddComment);
   const src = stripComments(html);
   const re = new RegExp(TAG.source, "g");
   let m: RegExpExecArray | null;
@@ -176,21 +179,21 @@ export function oddMarkup(html: string, allowedScripts: Set<string>, allowPhoto 
     if (m[1]) continue;
     const tag = m[2].toLowerCase();
     const attrs = m[3] || "";
-    if (FOREIGN.has(tag)) out.add(`有範本沒有的 <${tag}>`);
-    if (tag === "img" && !allowPhoto) out.add("有範本沒有的圖片（美國版履歷不放任何圖片，也不放照片）");
-    else if (tag === "img" && attr(attrs, "src").trim() !== "photo.jpg") out.add("有範本沒有的圖片（範本只有大頭照 photo.jpg）");
-    if (tag === "meta" && /\shttp-equiv\s*=/i.test(` ${attrs}`)) out.add("有範本沒有的 <meta http-equiv>");
-    if (/\sstyle\s*=\s*["'][^"']*(?:url\(|(?<![-\w])content\s*:)/i.test(` ${attrs}`)) out.add("樣式裡放了圖片或文字");
-    if (tag === "script" && /\ssrc\s*=/i.test(` ${attrs}`)) out.add("有範本沒有的程式（<script src>）");
+    if (FOREIGN.has(tag)) out.add(T.oddForeignTag(tag));
+    if (tag === "img" && !allowPhoto) out.add(T.oddImgUs);
+    else if (tag === "img" && attr(attrs, "src").trim() !== "photo.jpg") out.add(T.oddImgNotPhoto);
+    if (tag === "meta" && /\shttp-equiv\s*=/i.test(` ${attrs}`)) out.add(T.oddMeta);
+    if (/\sstyle\s*=\s*["'][^"']*(?:url\(|(?<![-\w])content\s*:)/i.test(` ${attrs}`)) out.add(T.oddStyleAttr);
+    if (tag === "script" && /\ssrc\s*=/i.test(` ${attrs}`)) out.add(T.oddScriptSrc);
   }
   for (const css of [...src.matchAll(/<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi)].map((x) => x[1])) {
     for (const c of css.matchAll(/(?<![-\w])content\s*:\s*(?:"([^"]*)"|'([^']*)'|([^;}]*))/gi)) {
       const v = (c[1] ?? c[2] ?? c[3] ?? "").trim();
       if (c[3] != null && /^(?:none|normal|initial|inherit|unset|"")?$/i.test(v)) continue;
-      if (/[\p{L}\p{N}]/u.test(v.replace(/\\[0-9a-f]{1,6}\s?/gi, "x"))) out.add("樣式裡藏了文字（content）");
+      if (/[\p{L}\p{N}]/u.test(v.replace(/\\[0-9a-f]{1,6}\s?/gi, "x"))) out.add(T.oddStyleContent);
     }
-    if (/url\(|@import/i.test(css)) out.add("樣式裡放了圖片或外部檔案（url / @import）");
+    if (/url\(|@import/i.test(css)) out.add(T.oddStyleUrl);
   }
-  for (const s of scriptsOf(html)) if (s && !allowedScripts.has(s)) out.add("有範本沒有的程式（<script>）");
+  for (const s of scriptsOf(html)) if (s && !allowedScripts.has(s)) out.add(T.oddScript);
   return [...out];
 }
