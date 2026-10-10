@@ -11,6 +11,8 @@ bun src/main.ts read --dir <求職資料夾> inbox/舊履歷.docx       # 印出
 bun test                                                     # 單元測試
 bun build.ts                                                 # 打包這台電腦的版本到 dist/
 bun build.ts --target win|mac-arm64|mac-x64|all
+bun build.ts --version 0.8                                   # 把版本號包進程式（或環境變數 JOBHUNT_VERSION；沒給就是 dev）
+jobhunt --version                                            # 印出包進去的版本號（發布版是 tag 去掉 v；本機打包是 dev）
 bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包好的執行檔跑冒煙測試
 ```
 
@@ -23,6 +25,17 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 只讀寫白名單（`src/folder.ts`）：寫入只有 `data/applications.csv` 和 `checks/*.md`（先寫暫存檔再改名）。另外「我投了這份，存一份」可以把 `resumes/<代號>.html` 複製成 `submitted/<YYYY-MM-DD>_<代號>.html`：只能從 `resumes/*.html` 複製、只能是新檔（`COPYFILE_EXCL`，已經有就拒絕），一般的寫入碰不到 `submitted/`。`checks/*.md` 只換「## 程式檢查」那一節（`src/checksfile.ts`），AI 寫的其他節不動；只有命令列的 check 會寫，介面上的檢查只讀不寫。
 - 履歷預覽和列印（`/view/<代號>`）：要有呼叫過 API 後拿到的 HttpOnly cookie（另一組只給預覽用的隨機值，不是 API 通行碼）；送出前拿掉檔案裡的 `<script>`（拆到乾淨為止）、`on…=` 屬性和 `<meta http-equiv>`，CSP 只允許程式自己加的列印程式（nonce）。所有頁面帶 `Cross-Origin-Opener-Policy: same-origin`，列印分頁用 `noopener` 打開。另外程式自己用 `.jobhunt/app.lock`（埠和通行碼）做「只開一份」。
 - 進度表保留原本的標題列順序、不認得的欄位、BOM 和換行格式；缺的欄位只在需要寫值時加在最後。寫入前比對檔案版本，AI 在背景改過就拒絕並請使用者重來，不會蓋掉。
+
+## 新版本提醒（`src/update.ts`）
+
+只在本機介面顯示，`check`／`read` 的輸出裡沒有（AI 會讀那些）。
+
+- 版本號在打包時包進程式（`src/version.ts`，`bun build.ts --version 0.8`，`release.yml` 傳 tag 去掉 v；沒給就是 `dev`）。**v0.6、v0.7 的程式沒有版本號**（寫死 0.1.0），所以這個提醒從下一次發布才開始有用。`dev` 版本永遠不查、不提醒。
+- 預設開著。介面載好之後才問 `GET /api/update`；程式最多每 24 小時對 `https://api.github.com/repos/Ben0126/jobhunt-kit/releases/latest` 發一次 GET（沒有任何使用者資料、沒有查詢參數，User-Agent 固定是 `jobhunt-kit/<版本>`，逾時 3 秒），任何失敗都不出聲、也不再重試到隔天。草稿和 prerelease 不算。版本號用數字一段一段比（v0.10 > v0.9）。
+- 關掉：`jobhunt.yaml` 寫 `update_check: false`（兩套資料夾的 jobhunt.yaml 都有註解說明）。關掉時完全不連線。
+- 上次問的時間和結果存在資料夾裡的 `.jobhunt/update.json`（和 `app.lock` 同一個地方，不在 `folder.ts` 的任何白名單裡，AI 和介面都碰不到）。它只在執行時才出現，發布 zip 裡沒有。
+- 橫幅給的下載連結是這個使用者自己的那一個：`assetName(市場, 系統, 晶片)` 回 `job-hunt[-us]-{windows,mac-apple,mac-intel}.zip`，`programName()` 回要換的程式檔。第二階段（一鍵更新）會用同樣兩個函式，設計草稿在 `../docs/plan-update.zh-TW.md`。
+- 測試一律注入假的 `fetch` 和時鐘，不碰網路（`tests/update.test.ts`）。
 
 ## 測試資料夾
 

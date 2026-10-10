@@ -66,11 +66,12 @@ jobs:
           codesign --force --sign - "dist/${{ matrix.bin }}"
           codesign -v --verbose=2 "dist/${{ matrix.bin }}"
 
+      # 這裡沒給版本號，打包出來的程式版本是 dev（不會顯示「有新版本」提醒）；發布版見 release.yml。
       - name: Smoke test the compiled binary
-        run: bun tests/smoke.ts "dist/${{ matrix.bin }}"
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --expect-version dev
 
       - name: Smoke test the compiled binary (US kit)
-        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us --expect-version dev
 
       - name: Package (macOS keeps the exec bit with ditto)
         if: runner.os == 'macOS'

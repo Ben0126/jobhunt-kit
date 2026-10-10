@@ -9,7 +9,9 @@ import { basename, join, resolve } from "node:path";
 
 const argv = process.argv.slice(2);
 const usMode = argv.includes("--us");
-const posArgs = argv.filter((a) => a !== "--us");
+const ev = argv.indexOf("--expect-version"); // release.yml: the compiled program must report the tag it was built for
+const expectVersion = ev >= 0 ? argv[ev + 1] : null;
+const posArgs = argv.filter((a, i) => a !== "--us" && !(ev >= 0 && (i === ev || i === ev + 1)));
 const bin = posArgs[0] && resolve(posArgs[0]);
 const fixture = resolve(posArgs[1] ?? (usMode ? join(import.meta.dir, "..", "..", "jobhunt", "scaffold", "workspace-us") : join(import.meta.dir, "fixture")));
 if (!bin || !existsSync(bin)) {
@@ -43,6 +45,14 @@ async function runToEnd(cmd: string[], timeoutMs: number): Promise<{ code: numbe
   return { code, out: out + err };
 }
 
+// `jobhunt --version` prints one word: the version baked in at build time (dev for a local build).
+async function checkVersion(exe: string) {
+  const v = await runToEnd([exe, "--version"], 20000);
+  const word = v.out.trim();
+  check(v.code === 0 && /^(dev|\d+\.\d+(\.\d+)?)$/.test(word), "`--version` prints one version word, exit 0", `exit=${v.code} out=${word}`);
+  if (expectVersion != null) check(word === expectVersion, `\`--version\` equals the release tag (${expectVersion})`, `got ${word}`);
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const CJK = /[　-〿㐀-䶿一-鿿＀-￯]/;
@@ -62,6 +72,7 @@ async function runUs() {
   const folder = join(work, "job-hunt-us", "folder with space");
   cpSync(fixture, folder, { recursive: true });
   const exe = placeBinary(folder);
+  await checkVersion(exe);
   const ck = await runToEnd([exe, "check"], 30000);
   check(ck.code === 0 && ck.out.includes("Program check") && !CJK.test(ck.out), "`check` in a fresh US folder → English, exit 0", `exit=${ck.code}`);
   const ck2 = await runToEnd([exe, "check", "no-such-job"], 30000);
@@ -126,6 +137,7 @@ try {
   const exe = placeBinary(folder);
   const checksFile = join(folder, "checks", "261008-01.md");
   const checksBefore = existsSync(checksFile) ? readFileSync(checksFile, "utf-8") : "";
+  await checkVersion(exe);
   const ck = await runToEnd([exe, "check"], 30000);
   check(ck.code === 1 && ck.out.includes("程式檢查") && ck.out.includes("佔位字「OO」"), "`check` finds the placeholder, exit 1", `exit=${ck.code}`);
   const checksAfter = existsSync(checksFile) ? readFileSync(checksFile, "utf-8") : "";

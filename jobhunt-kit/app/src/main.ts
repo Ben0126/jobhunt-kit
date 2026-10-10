@@ -5,6 +5,7 @@ import { cliTextFor } from "./cli.text.ts";
 import { dirFlagRefused, looksLikeJobhuntFolder, resolveDataDir } from "./folder.ts";
 import { launch } from "./launch.ts";
 import { type Language, readMarketSync, unrecognisedLanguage } from "./market.ts";
+import { VERSION } from "./version.ts";
 
 const argv = process.argv.slice(2);
 const command = argv.find((a, i) => !a.startsWith("-") && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
@@ -22,6 +23,11 @@ function waitForEnter(lang: Language) {
 }
 
 async function main(): Promise<number> {
+  // `jobhunt --version`: the version baked in at build time ("dev" for a build that was not given one).
+  if (argv.length === 1 && argv[0] === "--version") {
+    console.log(VERSION);
+    return 0;
+  }
   if (dirFlagRefused(command, argv)) {
     console.log(cliTextFor(langOf(dirname(process.execPath))).dirRefused(command!));
     return 2;

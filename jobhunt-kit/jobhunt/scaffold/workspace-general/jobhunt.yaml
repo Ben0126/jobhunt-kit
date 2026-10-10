@@ -4,6 +4,7 @@ language: zh-TW        # 介面和進度表狀態用繁體中文
 market: tw             # 求職市場：tw 台灣、us 美國（給之後的正式程式用）
 paper: a4              # 紙張：a4 或 letter（給之後的正式程式用）
 kit_format: folder-v0  # 這個資料夾是「資料夾版 v0」做的（給之後的正式程式辨認、搬資料用）
+update_check: true    # 程式每天最多問 GitHub 一次有沒有新版本（只問版本號、不傳你的資料）。不想要提醒，把 true 改成 false。
 
 resume:
   source: resume.yaml

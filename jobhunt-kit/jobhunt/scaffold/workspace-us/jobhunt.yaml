@@ -4,6 +4,7 @@ language: en           # interface and tracker status words in English
 market: us             # job market: tw Taiwan, us United States
 paper: letter          # paper: a4 or letter
 kit_format: folder-v0  # this folder was made from the folder-format v0 kit (lets later versions recognise it and move data)
+update_check: true    # The program asks GitHub at most once a day whether a newer version exists (version number only, none of your information). To turn the reminder off, change true to false.
 
 resume:
   source: resume.yaml

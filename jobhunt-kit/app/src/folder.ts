@@ -205,4 +205,9 @@ export class Folder {
   get lockPath(): string {
     return join(this.root, ".jobhunt", "app.lock");
   }
+
+  /** When the program last asked GitHub about a newer version (src/update.ts): bookkeeping too, in no rule above. */
+  get updatePath(): string {
+    return join(this.root, ".jobhunt", "update.json");
+  }
 }

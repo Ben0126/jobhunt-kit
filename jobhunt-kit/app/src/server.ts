@@ -11,9 +11,11 @@ import { Folder } from "./folder.ts";
 import { readMarket } from "./market.ts";
 import { serverText } from "./server.text.ts";
 import { stripComments } from "./htmltext.ts";
+import { createUpdateChecker, type UpdateChecker } from "./update.ts";
+import { VERSION } from "./version.ts";
 
 export const APP_ID = "jobhunt";
-export const VERSION = "0.1.0";
+export { VERSION };
 
 // The start page depends on the folder's `language` (jobhunt.yaml): index.html for zh-TW (unchanged), index-en.html for en.
 const PAGES = new Set(["/", "/index.html"]);
@@ -235,8 +237,9 @@ function text(body: string, status: number): Response {
 
 export type Running = { port: number; token: string; url: string; stop: () => void };
 
-export function startServer(opts: { folder: Folder; apps?: Applications; token?: string; port?: number }): Running {
+export function startServer(opts: { folder: Folder; apps?: Applications; token?: string; port?: number; update?: UpdateChecker }): Running {
   const folder = opts.folder;
+  const updater = opts.update ?? createUpdateChecker({ folder });
   const apps = opts.apps ?? new Applications(folder);
   const token = opts.token ?? newToken();
   // The preview cookie is a random value of its own, not the API token: cookies on 127.0.0.1 are sent to every
@@ -343,6 +346,11 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
           return json({ ok: true, app: APP_ID, version: VERSION });
         case "GET /api/info":
           return withCookie(json({ folder: folder.root, version: VERSION, market: M.market, language: M.language, paper: M.paper }));
+        case "GET /api/update": {
+          // The "newer version" reminder: the page asks after it has loaded. Never part of check/read output.
+          const u = await updater.get();
+          return json(u ? { available: true, ...u } : { available: false });
+        }
         case "GET /api/check":
           // Read-only: the checks/<id>.md files are written by the command-line check only (the AI may be
           // editing them at the same moment).

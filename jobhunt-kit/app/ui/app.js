@@ -18,6 +18,21 @@ const TEXT = {
     offline: "連不到程式。程式的視窗是不是被關掉了？請再點兩下程式打開。",
     genericError: "出了點問題，請再試一次。",
     gotIt: "知道了",
+    updateTitle: (v) => `有新版本可以更新：${v}`,
+    updateNotes: "看這個版本改了什麼",
+    updateDownload: (zip) => `下載你要用的檔案：${zip}`,
+    updateHow: "怎麼更新（照順序做）：",
+    updateSteps: (program) => [
+      "先把程式的文字視窗關掉。",
+      "把剛下載的 zip 解壓縮到另一個資料夾，例如桌面。不要解壓縮到你現在用的求職資料夾。",
+      `只從解壓縮出來的資料夾裡，複製「${program === "jobhunt.exe" ? "jobhunt」（類型是「應用程式」的那個，完整檔名是 jobhunt.exe）" : program + "」"}這一個檔案，貼到你現在用的求職資料夾，選「取代」。`,
+      "再點兩下程式打開。",
+    ],
+    updateWinNote: "第一次打開新的程式時，如果跳出「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。",
+    updateMacNote: "Mac 換完第一次打開，可能要再按一次右鍵 →「打開」。",
+    updateWarn: "千萬不要把整個 zip 直接解壓縮、蓋過你現在用的求職資料夾。新 zip 裡的履歷資料和投遞進度表是空白的，會蓋掉你確認過的經歷和投遞進度。",
+    updateOffHint: "程式每天最多問 GitHub 一次有沒有新版本，不會傳你的資料。要關掉：用記事本打開求職資料夾裡的 jobhunt.yaml，在最後加一行 update_check: false，存檔。",
+    updateLater: "先不要",
     unknownStatus: (code) => `看不懂的狀態「${code}」`,
     noStatus: "還沒填狀態",
     folderLabel: (name) => `資料夾：${name}`,
@@ -134,6 +149,21 @@ const TEXT = {
     offline: "Cannot reach the program. Was its window closed? Open the program again.",
     genericError: "Something went wrong. Please try again.",
     gotIt: "Got it",
+    updateTitle: (v) => `A new version is available: ${v}`,
+    updateNotes: "See what changed",
+    updateDownload: (zip) => `Download the file for your computer: ${zip}`,
+    updateHow: "How to update (in this order):",
+    updateSteps: (program) => [
+      "Close the program's text window.",
+      "Unzip the file you downloaded into a different folder, for example your Desktop. Do not unzip it into the job-search folder you use now.",
+      `From the unzipped folder, copy only ${program === "jobhunt.exe" ? 'the file "jobhunt" whose type is "Application" (its full name is jobhunt.exe)' : `the file "${program}"`} into your job-search folder and choose Replace.`,
+      "Double-click the program again.",
+    ],
+    updateWinNote: "The first time you open the new program, if Windows shows \"Windows protected your PC\", click \"More info\", then \"Run anyway\".",
+    updateMacNote: "On a Mac, the first time you open the new program you may need to right-click it and choose Open again.",
+    updateWarn: "Never unzip the whole file over your job-search folder. The resume and the application tracker inside the new zip are blank, and they would replace your confirmed experience and your application progress.",
+    updateOffHint: "The program asks GitHub at most once a day whether a newer version exists, and sends none of your information. To turn this off: open the settings file named jobhunt in your job-search folder (the one that is not an application) with Notepad or TextEdit, add this line at the very end, and save: update_check: false",
+    updateLater: "Not now",
     unknownStatus: (code) => `Unknown status "${code}"`,
     noStatus: "No status yet",
     folderLabel: (name) => `Folder: ${name}`,
@@ -349,6 +379,33 @@ function fail(e) {
 /** A load worked: a "can't reach the program" message is no longer true. */
 function loaded() {
   if (noticeKind === "offline") hideNotice();
+}
+
+// ---- 新版本提醒：頁面載好之後才問程式（程式自己每天最多問 GitHub 一次）；沒有新版、關掉、連不上都不顯示任何東西
+function showUpdate(u) {
+  if ($("update-banner")) return;
+  const link = (href, text) => h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
+  const banner = h(
+    "section",
+    { id: "update-banner", class: "update-banner", role: "status" },
+    h("h2", {}, T.updateTitle(u.version)),
+    h("p", {}, link(u.notesUrl, T.updateNotes)),
+    h("p", {}, link(u.downloadUrl, T.updateDownload(u.zipName))),
+    h("p", { class: "how" }, T.updateHow),
+    h("ol", {}, T.updateSteps(u.programName).map((s) => h("li", {}, s))),
+    u.programName === "jobhunt.exe" ? h("p", { class: "hint" }, T.updateWinNote) : null,
+    /^jobhunt-mac/.test(u.programName) ? h("p", { class: "hint" }, T.updateMacNote) : null,
+    h("p", { class: "warn" }, T.updateWarn),
+    h("p", { class: "hint" }, T.updateOffHint),
+    h("div", { class: "actions" }, h("button", { type: "button", onclick: () => banner.remove() }, T.updateLater)),
+  );
+  $("notice").before(banner);
+}
+async function checkUpdate() {
+  try {
+    const u = await api("GET", "/api/update");
+    if (u && u.available && u.version && u.notesUrl && u.downloadUrl && u.zipName && u.programName) showUpdate(u);
+  } catch {}
 }
 
 // ---- 分頁
@@ -1059,4 +1116,5 @@ folderInfo().then((info) => {
   if (info && (info.market === "us" || info.market === "tw")) INFO = { market: info.market, paper: info.paper === "letter" ? "letter" : "a4" };
   for (const a of document.querySelectorAll('.tabs a[data-tab="104"]')) a.hidden = INFO.market === "us";
   showTab();
+  if (token) checkUpdate();
 });

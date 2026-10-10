@@ -70,6 +70,14 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      # 沒寫這一版的「這次改了什麼」就不發布（避免發布頁空白或留著範例文字）。
+      - name: Check release notes exist
+        working-directory: ${{ github.workspace }}
+        run: |
+          for f in "release-notes/$TAG.zh.md" "release-notes/$TAG.en.md"; do
+            test -s "$f" || { echo "missing $f: write what changed in this release before tagging"; exit 1; }
+          done
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -77,8 +85,9 @@ jobs:
       - name: Unit tests
         run: bun test
 
+      # 把 tag 去掉開頭的 v 當版本號包進程式（jobhunt --version 會印出來；介面的「有新版本」提醒也用它比較）。
       - name: Build
-        run: bun build.ts --target ${{ matrix.target }}
+        run: bun build.ts --target ${{ matrix.target }} --version "${TAG#v}"
 
       - name: Ad-hoc codesign (macOS)
         if: runner.os == 'macOS'
@@ -86,12 +95,13 @@ jobs:
           codesign --force --sign - "dist/${{ matrix.bin }}"
           codesign -v --verbose=2 "dist/${{ matrix.bin }}"
 
+      # --expect-version：程式回報的版本號必須等於 tag（去掉 v）。
       - name: Smoke test the compiled binary
-        run: bun tests/smoke.ts "dist/${{ matrix.bin }}"
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --expect-version "${TAG#v}"
 
       # 美國版：同一個程式，對美國版資料夾再跑一次，輸出要全英文。
       - name: Smoke test the compiled binary (US kit)
-        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us
+        run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us --expect-version "${TAG#v}"
 
       # 只會帶到 git 追蹤的檔案（CI 是全新 checkout），本機的暫存檔不會被包進去。
       # 台灣版 → pkg/job-hunt，美國版 → pkg/job-hunt-us，各放一份同一個程式。
@@ -234,9 +244,9 @@ jobs:
             dir="$RUNNER_TEMP/unzipped/$kit"
             if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
             if [ "$kit" = "job-hunt-us" ]; then
-              bun tests/smoke.ts "$dir/$BIN" --us
+              bun tests/smoke.ts "$dir/$BIN" --us --expect-version "${TAG#v}"
             else
-              bun tests/smoke.ts "$dir/$BIN"
+              bun tests/smoke.ts "$dir/$BIN" --expect-version "${TAG#v}"
             fi
             # 在解出來的資料夾裡直接跑 check：程式要認得這是求職資料夾（認不得會回 2）。全新的資料夾應該回 0。
             code=0
@@ -264,6 +274,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # 每個版本「這次改了什麼」寫在 release-notes/<tag>.zh.md 和 <tag>.en.md（發版前 commit 進 repo）。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          sparse-checkout: release-notes
+
       - uses: actions/download-artifact@v4
         with:
           pattern: job-hunt-*.zip
@@ -281,10 +297,28 @@ jobs:
             test -s "out/$f" || { echo "missing out/$f"; exit 1; }
           done
 
+          NOTES_ZH=$(cat "release-notes/$TAG.zh.md")
+          NOTES_EN=$(cat "release-notes/$TAG.en.md")
+
           cat > notes.md <<EOF
           下載一個 zip，解壓縮，打開裡面的「開始使用.md」（用「記事本」就能打開），照著一步一步做。
 
           Windows 解壓縮後常常會多一層資料夾：點進去看得到「開始使用.md」的那個 job-hunt 資料夾，才是要在 Claude 裡選的資料夾。
+
+          ## 這次改了什麼
+
+          ${NOTES_ZH}
+
+          ## 已經在用舊版？
+
+          不要重新照著下面的步驟安裝。只換程式檔就好：
+
+          1. 先把程式的文字視窗關掉。
+          2. 下載你要的 zip（下面「要下載哪一個」），解壓縮到**另一個**資料夾，例如桌面。
+          3. 只從裡面複製程式檔，貼到你現在用的求職資料夾，選「取代」。Windows 是 jobhunt.exe（檔案總管常常只顯示「jobhunt」，類型是「應用程式」的那個）；Mac 是 jobhunt-mac-arm64 或 jobhunt-mac-x64。
+          4. 再點兩下程式打開。第一次打開可能還會跳一次警告，照「開始使用.md」處理。
+
+          **千萬不要把整個 zip 直接解壓縮、蓋過你現在用的求職資料夾。** 新 zip 裡的 resume.yaml 和 data/applications.csv 是空白範本，會蓋掉你確認過的經歷和投遞進度。
 
           ## 要下載哪一個
 
@@ -316,6 +350,21 @@ jobs:
           ## US edition (English)
 
           For students and new grads looking for jobs in the United States, including international students on F-1 OPT / CPT. Everything in the folder and the local app is in English. This release has two kits: the Chinese files above are the Taiwan edition; the files named **job-hunt-us-*.zip** are the US edition.
+
+          ### What changed
+
+          ${NOTES_EN}
+
+          ### Already using an older version?
+
+          Do not reinstall from the steps below. Replace only the program file:
+
+          1. Close the program's text window.
+          2. Download the zip for your computer (below) and unzip it into a different folder, for example your Desktop.
+          3. Copy only the program file into the job-search folder you use now and choose Replace. On Windows it is jobhunt.exe (File Explorer often shows just "jobhunt"; pick the one whose type is "Application"). On a Mac it is jobhunt-mac-arm64 or jobhunt-mac-x64.
+          4. Double-click the program again. The first time you open it, Windows or macOS may show the warning again; START-HERE.md explains what to click.
+
+          **Do not unzip the whole zip over your job-search folder.** The resume.yaml and data/applications.csv inside the new zip are blank templates and would replace your confirmed experience and your application progress.
 
           Download one zip, unzip it, and open START-HERE.md inside (any text editor works). If unzipping gives you a folder inside a folder, use the inner job-hunt-us folder, the one that contains START-HERE.md.
 

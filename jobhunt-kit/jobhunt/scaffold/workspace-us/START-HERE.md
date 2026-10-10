@@ -84,7 +84,7 @@ If the folder contains the "jobhunt" program, you can open a small page in your 
 - A text window opens too (a black window on Windows, Terminal on a Mac). That window is the program. Do not close it while you use the page. Close it when you are done. On a Mac, if it asks whether to terminate, choose Terminate.
 - If the browser does not open by itself, copy the line that starts with http://127.0.0.1 from that window into your browser.
 - If you closed the browser tab by accident, double-click the program again. It opens a new one.
-- The program runs only on your computer and sends nothing over the internet.
+- The program runs on your computer and does not send your information anywhere. The only thing it goes online for: at most once a day it asks GitHub whether a newer version exists (it asks for the version number only and sends none of your information). If there is one, a reminder appears at the top of the page and tells you how to update. To turn the reminder off, open jobhunt.yaml in this folder with Notepad (or TextEdit), find the line "update_check: true", change true to false, and save. If you cannot find that line (folders from older versions do not have it), add this line at the very end of the file: update_check: false
 
 ## If you use Cowork instead (backup)
 
