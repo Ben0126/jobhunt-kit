@@ -29,9 +29,14 @@ import {
   PROFILE_SPECS,
   profileKind,
   type ProfileKind,
+  backgroundLineOk,
+  headlineSegmentOk,
+  mdSection,
+  profileFacts,
   resumeIndex,
   skillCodes,
   splitHeading,
+  splitList,
 } from "./profiles.ts";
 import { leftoverSlots, oddMarkup, scriptsOf, stripComments, stylesOf, templateWords, visibleLines } from "./htmltext.ts";
 
@@ -69,7 +74,8 @@ export type Item = {
  * `warnings` are limits only third-party sources give: shown, but they do not fail the check. */
 export type ProfileFile = { file: string; problems: Problem[]; warnings: Problem[]; blocks: Block[] };
 
-export type Report = { checkedAt: string; items: Item[]; general: File104 | null; profiles: ProfileFile[]; problems: number; ok: boolean };
+/** `resumeData` (market us only; absent in a Taiwan folder): resume.yaml against the confirmed cards. */
+export type Report = { checkedAt: string; items: Item[]; general: File104 | null; profiles: ProfileFile[]; resumeData?: Problem[]; problems: number; ok: boolean };
 
 export const GENERAL_104 = "104/履歷欄位.md";
 export const GENERAL_CHECKS = "checks/_104.md";
@@ -147,7 +153,52 @@ function tailorMessage(msg: string, T: CheckText, us: boolean): { message: strin
 
 // ---------------------------------------------------------------- folder context
 
-type Story = { status: string; title: string; org: string } | null;
+/** What a story file says under "## Sentence at confirmation (do not change)": `Title:` and the numbered sentences, or one
+ * `Skills: a, b` line. Reading stops at the first blank line after them (the "Shown back" translation and notes come later). */
+export type Confirmed = { title: string | null; sentences: string[]; skills: string[]; /** the section is there but not in the exact format */ bad?: true };
+type Story = { status: string; title: string; org: string; conf?: Confirmed | null } | null;
+
+export function parseConfirmed(text: string): Confirmed | null {
+  const lines = text.split(/\r?\n/);
+  const h = lines.findIndex((l) => /^##\s+Sentence at confirmation/i.test(l.trim()));
+  if (h < 0) return null;
+  // The exact format (dig-experience.md section 6): the heading, a blank line, then ONE block of lines up to the next blank line.
+  // The block is `[Title: x]` and numbered sentences, or a single `Label: items` line. Anything else in it (a note, a
+  // "Confirmed by:" line, a sentence without a number) makes the section malformed: `bad`. Text after the block (the translation,
+  // later notes) is not read.
+  const block: string[] = [];
+  for (const raw of lines.slice(h + 1)) {
+    const l = raw.normalize("NFKC").trim();
+    if (/^##\s/.test(l)) break;
+    if (!l) {
+      if (block.length) break;
+      continue;
+    }
+    block.push(l);
+  }
+  const out: Confirmed = { title: null, sentences: [], skills: [] };
+  const bad = (): Confirmed => ({ title: null, sentences: [], skills: [], bad: true });
+  const labelOf = (l: string) => /^([A-Za-z][A-Za-z &/-]{0,40}):\s*(.*)$/.exec(l);
+  let rest = block;
+  const first = block.length ? labelOf(block[0]) : null;
+  if (first && /^title$/i.test(first[1])) {
+    out.title = norm(first[2]);
+    rest = block.slice(1);
+    if (!rest.length || !out.title) return bad();
+  }
+  if (rest.length === 1 && out.title == null && first && !/^(title|shown back)/i.test(first[1])) {
+    out.skills.push(...splitList(first[2]));
+    return out.skills.length ? out : bad();
+  }
+  for (const l of rest) {
+    const num = /^[0-9]+[.)]\s+(.+)$/.exec(l);
+    if (!num) return bad();
+    out.sentences.push(norm(num[1]));
+  }
+  return out.sentences.length ? out : bad();
+}
+/** Straight quotes and one kind of space, so a pasted sentence is compared by its words. */
+const normQ = (s: unknown) => norm(String(s ?? "")).replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 
 const INVISIBLE = /[\u00AD\u200B-\u200F\u2060-\u2064\uFEFF]/g;
 const YM = /(?<![0-9])((?:19|20)[0-9]{2})\s?(?:[-/.]|年)\s?(0?[1-9]|1[0-2])(?![0-9])/g; // 2024-03、2024/3、2024 年 3 月
@@ -220,6 +271,8 @@ class Context {
   years = new Set<string>();
   yearMonths = new Set<string>();
   profile = "";
+  /** me/profile.md as written (line breaks kept), for the "## " sections */
+  profileRaw = "";
   private stories = new Map<string, Story>();
   /** Names (org / title) of stories that are not confirmed and appear nowhere in the confirmed data. */
   draftNames: { code: string; name: string; status: string }[] = [];
@@ -244,7 +297,8 @@ class Context {
       if (v && typeof v === "object") this.voice = new R.Voice(asList(v.extra_words), asList(v.allow_words));
     } catch {}
     try {
-      this.profile = norm((await this.folder.readText("me/profile.md")) ?? "");
+      this.profileRaw = (await this.folder.readText("me/profile.md")) ?? "";
+      this.profile = norm(this.profileRaw);
     } catch {}
 
     this.facts = R.facts(this.resume);
@@ -286,13 +340,96 @@ class Context {
       if (t != null) {
         const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(t);
         const fm: any = m ? Bun.YAML.parse(m[1]) : null;
-        s = { status: String(fm?.status ?? "").trim(), title: String(fm?.title ?? ""), org: String(fm?.org ?? "") };
+        s = { status: String(fm?.status ?? "").trim(), title: String(fm?.title ?? ""), org: String(fm?.org ?? ""), conf: parseConfirmed(t) };
       }
     } catch {
       s = { status: "?", title: "", org: "" };
     }
     this.stories.set(code, s);
     return s;
+  }
+
+  /** market us: resume.yaml against each story's "Sentence at confirmation". Every bullet of an experience / project must name
+   * an S- card and be one of the sentences of those cards (all of them, when it names several); the item's role must be the
+   * Title of one of the cards its bullets (or the item itself) name, when any of them has a Title; a skills item must be on the
+   * Skills line of the cards its line names; an education detail follows its card, or, when only Education is its source,
+   * must be written under "## Education" in me/profile.md. A confirmed card that is named but has no section in the exact
+   * format cannot be compared, which is an error too (the program must not skip the comparison). Unconfirmed cards are the
+   * source checks' business. */
+  async confirmedProblems(): Promise<Problem[]> {
+    const out: Problem[] = [];
+    if (this.market.market !== "us") return out;
+    const where = this.T.resumeData;
+    const T = this.T;
+    const srcList = (o: any): string[] => {
+      const src = o?.sources ?? o?.source;
+      return (Array.isArray(src) ? src.map(String) : src ? splitSources(String(src), true) : []).map((c) => c.normalize("NFKC").trim()).filter(Boolean);
+    };
+    const sOf = (o: any): string[] => [...new Set(srcList(o).filter((c) => /^S-[0-9]+$/i.test(c)).map((c) => c.toUpperCase()))];
+    const reported = new Set<string>();
+    /** What the confirmed cards among `codes` say; `ok` = at least one card could be read (otherwise nothing to compare with). */
+    const cards = async (codes: string[]) => {
+      const r = { sentences: new Set<string>(), titles: [] as string[], skills: new Set<string>(), ok: false };
+      for (const c of codes) {
+        const s = await this.story(c);
+        if (!s || s.status !== "confirmed") continue;
+        if (!s.conf || s.conf.bad) {
+          if (!reported.has(c)) out.push({ where, message: T.confirmedNoSection(c, !!s.conf) });
+          reported.add(c);
+          continue;
+        }
+        r.ok = true;
+        s.conf.sentences.forEach((x) => r.sentences.add(normQ(x)));
+        s.conf.skills.forEach((x) => r.skills.add(normQ(x)));
+        if (s.conf.title != null) r.titles.push(s.conf.title);
+      }
+      return r;
+    };
+    for (const sec of R.BULLET_SECTIONS)
+      for (const item of asArray(this.resume[sec])) {
+        const itemCodes = sOf(item);
+        const all = new Set<string>(itemCodes);
+        for (const b of asArray(item?.bullets).filter((x: any) => x && typeof x === "object")) {
+          const codes = sOf(b).length ? sOf(b) : itemCodes;
+          if (!codes.length) {
+            out.push({ where, message: T.confirmedBulletNoCard, quote: excerpt(String(b.text ?? "")) });
+            continue;
+          }
+          codes.forEach((c) => all.add(c));
+          const c = await cards(codes);
+          if (c.ok && !c.sentences.has(normQ(b.text))) out.push({ where, message: T.confirmedBullet(codes.join(", ")), quote: excerpt(String(b.text ?? "")) });
+        }
+        if (!all.size) {
+          out.push({ where, message: T.confirmedItemNoCard, quote: excerpt(norm(String(item?.role ?? item?.name ?? item?.org ?? ""))) });
+          continue;
+        }
+        if (!norm(String(item?.role ?? ""))) continue;
+        const c = await cards([...all]);
+        if (c.titles.length && !c.titles.some((t) => normQ(t) === normQ(item.role)))
+          out.push({ where, message: T.confirmedRole([...all].join(", "), c.titles.join(" / ")), quote: excerpt(String(item.role)) });
+      }
+    for (const line of asArray(this.resume.skills)) {
+      if (!line || typeof line !== "object") continue;
+      const codes = sOf(line);
+      if (!codes.length) continue;
+      const c = await cards(codes);
+      if (!c.ok) continue;
+      for (const it of asArray(line.items)) if (!c.skills.has(normQ(it))) out.push({ where, message: T.confirmedSkill(codes.join(", ")), quote: excerpt(String(it)) });
+    }
+    const eduText = mdSection(this.profileRaw, "Education");
+    for (const e of asArray(this.resume.education)) {
+      const details = asArray(e?.details).map((d: any) => (typeof d === "string" ? d : d?.text)).filter((d: unknown) => norm(String(d ?? "")));
+      if (!details.length) continue;
+      const codes = sOf(e);
+      const c = codes.length ? await cards(codes) : null;
+      for (const d of details) {
+        const t = normQ(d);
+        if (c) {
+          if (c.ok && !c.sentences.has(t) && !c.skills.has(t)) out.push({ where, message: T.confirmedDetail(codes.join(", ")), quote: excerpt(String(d)) });
+        } else if (!eduText || !eduText.includes(t.toLowerCase())) out.push({ where, message: T.confirmedDetailEdu, quote: excerpt(String(d)) });
+      }
+    }
+    return dedupe(out);
   }
 
   /** 學歷 / 求職方向 — in a US folder also Education / Job goals (exact case): sources that are not an experience. */
@@ -835,6 +972,7 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
   });
 
   const idx = resumeIndex(ctx.resume, (s) => splitSources(s, true));
+  const facts = profileFacts(ctx.resume, ctx.profileRaw, (s) => splitSources(s, true));
   const seen = new Set<string>();
   const raw = parse104(text, true);
   if (!raw.some((b) => !b.group)) problems.push({ where: file, message: T.profileNoBlocks });
@@ -879,6 +1017,36 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
         bp.push(...ctx.textProblems(tl.filter((l) => !isSkills(l)).join("\n"), where, { only, visaCovered: true }), ...ctx.textProblems(tl.filter(isSkills).join("\n"), where, { skills: true, only, visaCovered: true }));
       } else bp.push(...ctx.textProblems(t, where, { skills: !!spec.list || name === "Headline", only, visaCovered: true }));
       bp.push(...ctx.mentionProblems(t, where));
+      // Every line that is not a "• " bullet or a Source line is compared with resume.yaml too (a sentence cannot be added to a
+      // headline, an About opening, a skills line or a paragraph title just because it is not a bullet).
+      const notBullet = (l: string) => !!l.trim() && !/^\s*•/.test(l) && !SOURCE_LINE.test(l);
+      if (name === "Headline") {
+        for (const l of b.body.filter(notBullet))
+          norm(l)
+            .split(/\s*\|\s*/)
+            .forEach((seg, i) => {
+              if (!headlineSegmentOk(seg, facts, idx, i === 0)) bp.push({ where, message: T.profileHeadlineSegment(seg), quote: excerpt(l) });
+            });
+      } else if (name === "About" || name === "My Journey") {
+        // a title line must be the title of an experience this paragraph's Source line lists
+        const titleOk = (text: string, sources: Set<string>) => [...(facts.titleCodes.get(text) ?? [])].some((c) => sources.has(c));
+        for (const p of ps) {
+          const sources = new Set((p.sources ?? []).map(canonSource));
+          const pitch = ![...sources].some((c) => /^S-[0-9]+$/.test(c)); // only Education / Job goals (or no Source at all): the opening
+          let first = true;
+          for (const l of p.lines.filter(notBullet)) {
+            const text = norm(l);
+            const skills = /^Skills:\s*(.*)$/i.exec(text);
+            if (skills) {
+              for (const it of splitList(skills[1])) if (!skillCodes(it, idx)) bp.push({ where, message: T.profileSkillNotIn(it), quote: excerpt(l) });
+            } else if (!((first && titleOk(text, sources)) || (pitch && backgroundLineOk(text, facts)))) bp.push({ where, message: T.profileLineNotOriginal, quote: excerpt(l) });
+            first = false;
+          }
+        }
+      } else {
+        // Experience, Projects, Education, Skills ...: only "• " lines and Source lines belong in the body
+        for (const l of b.body.filter(notBullet)) bp.push({ where, message: T.profileLineNotOriginal, quote: excerpt(l) });
+      }
       for (const p of ps) {
         bp.push(...(await ctx.paragraphProblems(p, where, "Source:")));
         // every "• " line is a resume.yaml sentence (or skills item) and its source is on the Source line
@@ -891,6 +1059,9 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
             const codes = skillCodes(bullet, idx);
             if (!codes) bp.push({ where, message: T.profileSkillNotIn(bullet), quote: excerpt(l) });
             else codes.forEach((c) => need.add(c));
+          } else if (name === "Courses") {
+            // course names: word for word an education detail or a resume.yaml bullet (handshake-profile.md 3.2)
+            if (!idx.bullets.has(bullet)) bp.push({ where, message: T.profileCourseNotIn, quote: excerpt(l) });
           } else if (!spec.list) {
             const codes = idx.bullets.get(bullet);
             if (!codes) bp.push({ where, message: T.profileBulletNotOriginal, quote: excerpt(l) });
@@ -965,9 +1136,13 @@ export async function runChecks(folder: Folder, opts: { ids?: string[] | null; g
     if (general && ctx.resumeProblem) general.problems.unshift({ where: ctx.T.resumeData, message: ctx.resumeProblem, detail: ctx.resumeDetail });
   }
   const profiles = (opts.profiles ?? true) ? await checkProfiles(ctx) : [];
+  const resumeData = ctx.market.market === "us" ? await ctx.confirmedProblems() : null;
   const count =
-    items.reduce((n, i) => n + i.problems.length, 0) + (general ? generalProblems(general).length : 0) + profiles.reduce((n, f) => n + f.problems.length, 0);
-  return { checkedAt: localStamp(opts.now ?? new Date()), items, general, profiles, problems: count, ok: count === 0 };
+    items.reduce((n, i) => n + i.problems.length, 0) +
+    (general ? generalProblems(general).length : 0) +
+    profiles.reduce((n, f) => n + f.problems.length, 0) +
+    (resumeData?.length ?? 0);
+  return { checkedAt: localStamp(opts.now ?? new Date()), items, general, profiles, ...(resumeData ? { resumeData } : {}), problems: count, ok: count === 0 };
 }
 
 export function generalProblems(f: File104): Problem[] {
@@ -1058,7 +1233,8 @@ export function summaryText(report: Report, written: string[], us = false, lang:
       for (const l of problemLines(f.warnings.slice(0, MAX_PRINTED), T)) out.push(`    ${l}`);
     }
   }
-  if (!report.items.length && !report.general && !report.profiles.length) out.push("", T.nothingYet);
+  if (report.resumeData?.length) block("resume.yaml", report.resumeData);
+  if (!report.items.length && !report.general && !report.profiles.length && !report.resumeData?.length) out.push("", T.nothingYet);
   out.push("", report.ok ? T.allPassed : T.failedTotal(report.problems));
   if (written.length) out.push(T.writtenTo(written, (us || lang === "en" ? SECTION_EN : SECTION).replace(/^## /, "")));
   out.push(T.notChecked);

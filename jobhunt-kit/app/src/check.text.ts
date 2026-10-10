@@ -108,6 +108,20 @@ const ZH = {
   profileNoSource: "這個區塊沒有 Source: 那一行，不知道根據哪一則經歷",
   profileSkillNotIn: (bullet: string) => `專長項目「${bullet}」不在 resume.yaml 的專長裡（句子裡寫到的工具，要先出專長卡、加進 skills 才能用）`,
   profileBulletNotOriginal: "這一行不是 resume.yaml 的重點原句（重點只能挑選、排序，不能改寫）",
+  profileCourseNotIn: "這個課程名稱不在 resume.yaml 學歷的 details 裡，也不是 resume.yaml 的重點原句（課程只能逐字照抄）",
+  profileLineNotOriginal: "這一行不是固定句型，也不是 resume.yaml 的職稱、單位或專案名稱（只能照格式複製，不能自己加句子）",
+  profileHeadlineSegment: (seg: string) => `標題的這一段「${seg}」不是 resume.yaml 裡有的學歷、職稱、單位或專長，也不是「Seeking … roles」`,
+  confirmedBullet: (code: string) => `resume.yaml 的這句和 ${code} 確認卡上「Sentence at confirmation」的句子不一樣（不能自己改寫，要改就重新出卡確認）`,
+  confirmedRole: (code: string, title: string) => `resume.yaml 的職稱和 ${code} 確認卡上的職稱「${title}」不一樣（要改就重新出卡確認）`,
+  confirmedSkill: (code: string) => `resume.yaml 的這個專長項目不在 ${code} 確認卡上「Sentence at confirmation」的專長裡`,
+  confirmedNoSection: (code: string, malformed: boolean) =>
+    malformed
+      ? `${code} 確認卡上「Sentence at confirmation (do not change)」這一段的格式不對（標題後面只能是：可有的 Title: 行加編號原句，或單獨一行「類別: 項目」），程式無法拿它對照 resume.yaml`
+      : `${code} 已確認，但檔案裡沒有「## Sentence at confirmation (do not change)」這一段，程式無法拿它對照 resume.yaml`,
+  confirmedBulletNoCard: "resume.yaml 的這句重點沒有寫 S- 開頭的來源（每一句都要連到一張已確認的卡）",
+  confirmedItemNoCard: "resume.yaml 的這筆經歷或專案沒有連到任何已確認的卡（重點的 source 或項目本身的 source 要寫 S- 代號）",
+  confirmedDetail: (code: string) => `resume.yaml 學歷的這項細節不在 ${code} 確認卡上「Sentence at confirmation」裡`,
+  confirmedDetailEdu: "resume.yaml 學歷的這項細節在 me/profile.md 的「## Education」裡找不到（只有來源是 Education 的細節，要逐字寫在那裡）",
   profileNeedSource: (skill: boolean, c: string) => `Source: 那一行沒有寫這${skill ? "項專長" : "條重點"}的來源 ${c}`,
   profileMetaOver: (k: string, len: number, n: number) => `${k} 有 ${len} 字，超過上限 ${n} 字（網站實際顯示的數字為準）`,
   profileItemsOver: (items: number, n: number) => `有 ${items} 個項目，超過上限 ${n} 個`,
@@ -281,6 +295,20 @@ const EN: CheckText = {
   profileNoSource: "This section has no Source: line, so it is unclear which experience it came from",
   profileSkillNotIn: (bullet) => `The skill "${bullet}" is not in the skills of resume.yaml (a tool named in a sentence needs a skill card and a skills entry first)`,
   profileBulletNotOriginal: "This line is not a bullet sentence from resume.yaml (bullets can only be picked and reordered, not reworded)",
+  profileCourseNotIn: "This course name is not in the details of an education entry in resume.yaml, and not a bullet sentence of resume.yaml (course names are copied word for word)",
+  profileLineNotOriginal: "This line is not a fixed sentence frame, and it is not a title, employer or project name from resume.yaml (copy the format only; do not add sentences). In \"Looking for <roles> roles in <place>.\" the roles must be written in \"Work they want\" and the place in \"Location and work type\" of me/profile.md; a title line must belong to the experience listed on the Source line",
+  profileHeadlineSegment: (seg) => `This headline part "${seg}" is not an education, title, employer or skill from resume.yaml, and not "Seeking <roles> roles" with roles written in "Work they want" of me/profile.md`,
+  confirmedBullet: (code) => `This sentence in resume.yaml is not one of the sentences under "Sentence at confirmation" on the card of ${code} (do not reword it; to change it, make a new card and confirm again)`,
+  confirmedRole: (code, title) => `The title in resume.yaml is not the title "${title}" confirmed on the card of ${code} (to change it, confirm a new card)`,
+  confirmedSkill: (code) => `This skills item in resume.yaml is not among the skills under "Sentence at confirmation" on ${code}`,
+  confirmedNoSection: (code, malformed) =>
+    malformed
+      ? `The "Sentence at confirmation (do not change)" section of ${code} is not in the exact format (after the heading: an optional Title: line and the numbered sentences, or one single "Label: items" line), so the program cannot compare resume.yaml with it`
+      : `${code} is confirmed, but its file has no "## Sentence at confirmation (do not change)" section, so the program cannot compare resume.yaml with it`,
+  confirmedBulletNoCard: "This bullet in resume.yaml has no source starting with S- (every bullet must be tied to a confirmed card)",
+  confirmedItemNoCard: "This experience or project in resume.yaml is not tied to any confirmed card (a bullet's source, or the item's own source, must be an S- code)",
+  confirmedDetail: (code) => `This education detail in resume.yaml is not among the sentences under "Sentence at confirmation" on ${code}`,
+  confirmedDetailEdu: 'This education detail in resume.yaml is not written word for word under "## Education" in me/profile.md (a detail whose source is only Education must be there)',
   profileNeedSource: (skill, c) => `The Source: line does not list ${c}, the source of this ${skill ? "skill" : "bullet"}`,
   profileMetaOver: (k, len, n) => `${k} is ${len} characters, over the limit of ${n} (the number the site shows is what counts)`,
   profileItemsOver: (items, n) => `${items} items, over the limit of ${n}`,

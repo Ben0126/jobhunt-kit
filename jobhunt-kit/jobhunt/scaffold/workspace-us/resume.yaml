@@ -47,7 +47,7 @@ education: []
 #    source: Education                        # with details from a story: sources: [Education, S-010]
 #    variants: [en]
 
-# Experience: jobs, internships, student-org officer roles, on-campus jobs.
+# Experience: jobs, internships, on-campus jobs, and roles in a club or organization they belong to (type student-org).
 experience: []
 # Example:
 #  - id: campus_store
@@ -61,7 +61,7 @@ experience: []
 #        text: <the sentence on the confirmation card>
 #        source: S-001
 
-# Projects & Activities: course projects, competitions, volunteering, service learning.
+# Projects & Activities: course projects, competitions, and all volunteering and service learning (type volunteer), whatever the role was called.
 projects: []
 # Example:
 #  - id: food_drive
@@ -79,3 +79,4 @@ skills:
   - {label: Languages, items: [], sources: [], variants: [en]}        # Example: items: [Spanish (native), English (fluent)], sources: [S-003]
   - {label: Certifications, items: [], sources: [], variants: [en]}   # Example: items: [CPR certified], sources: [S-007]
 # A line whose items is empty is not printed when the resume file is made.
+# Badges and online courses go on a line with label Training (add it the first time; dig-cards.md 8.2). Certifications is for formal credentials only.

@@ -47,7 +47,8 @@ Draft text for you to paste yourself. Lines starting with "- " and "Source:" are
 - Length: about 190 characters
 - Fill: paste
 
-B.A. in Business Administration student at Northfield State University (Expected May 2027). Looking for administrative assistant and HR assistant roles in Columbus, OH.
+B.A. in Business Administration student at Northfield State University (Expected May 2027).
+Looking for administrative assistant and HR assistant roles in Columbus, OH.
 Source: Education, Job goals
 
 ## Work Experience: Sales Associate at Northfield State University Bookstore
@@ -96,13 +97,13 @@ Source: Job goals
 
 ### 3.2 Block by block
 
-- **My Journey**: one or two sentences, 300 characters at most, in this frame only: `<degree> student at <School> (<dates end>).` for a current student (end date word for word, `Expected May 2027`) or `<degree> graduate of <School> (May 2025).` if graduated; then `Looking for <role> and <role> roles in <location>.` Roles come from `Job goals`, only re-cased; leave out ` in <location>` unless they stated one. `<degree>` and `<School>` are copied from `resume.yaml`. Source: `Education, Job goals`. If it is over 300 characters, drop the location, then the second role; never abbreviate the school or degree. No adjectives, no first-person story ("I am passionate...").
+- **My Journey**: one or two sentences, 300 characters at most, each on its own line, and every line exactly one of these two shapes: `<degree> student at <School> (<end date>).` for a current student or `<degree> graduate of <School> (<end date>).` if graduated; `Looking for <role> and <role> roles in <location>.` or `Looking for <role> roles.` `<degree>` and `<School>` are copied from one `resume.yaml` `education` entry; `<end date>` is the part of its `dates` after the en dash, word for word (`Expected May 2027`, `May 2025`; the whole value if there is no dash; leave the line out if `dates` is empty). Roles come from `Job goals`, only re-cased: each role is written in `me/profile.md` under `Work they want`, the location under `Location and work type`, or the program reports the line. Leave out ` in <location>` unless they stated one. An end date that starts with `Expected` is always `student at`, never `graduate of`. Any other sentence is an error. Source: `Education, Job goals`. If it is over 300 characters, drop the location, then the second role; never abbreviate the school or degree. No adjectives, no first-person story ("I am passionate...").
 - **Education**: `School`, `Degree` (the whole confirmed string, nothing split), `Dates` from `resume.yaml`. `GPA` only if the entry's `details` has it, copied exactly; add one line in the chat: "Handshake lets you choose whether employers see your GPA; that choice is yours." Body: other `details` as bullets with `Source: Education` (the `Source:` line alone if there are none). Handshake asks for the major and degree level from menus; tell the user to pick the option that matches, never invent a menu name.
 - **Work Experience**: stories with `type: job` or `type: internship` (read the type in the story file of the entry's first bullet `source`). `Title` = `role`, `Company` = `org`, exactly. Usually 3 to 6 bullets.
 - **Organizations**: stories with `type: student-org` or `type: volunteer`. `Title` = the role, `Company` = the organization name as on the card. A `projects` entry without a role: `Title` is its `name`, and `Company` is left out.
 - **Projects**: stories with `type: project` or `type: competition`.
-- **Courses**: course names only if they appear word for word in an education entry's `details` or in a confirmed bullet. No course list from memory or from the major's name.
-- **Skills**: items from `resume.yaml` `skills` word for word, or a software or tool name that appears word for word in a confirmed bullet. Handshake suggests names as the user types; tell them to pick the suggestion that matches and skip the rest. Never invent a skill to reach a count.
+- **Courses**: course names only if they appear word for word in an education entry's `details` or in a confirmed bullet (the program reports any other name). No course list from memory or from the major's name.
+- **Skills**: items from `resume.yaml` `skills` word for word. A tool named only inside a sentence needs its own skill card first (`dig-cards.md`). Handshake suggests names as the user types; tell them to pick the suggestion that matches and skip the rest. Never invent a skill to reach a count.
 - **Career Interests**: Handshake asks for job types, roles, industries and locations from menus. List only what is in `Job goals`, or an option name the user typed to you from their screen ("the menu has 'Administrative Services'"). `Fill: pick`, with `Source: Job goals`. This block is never pasted and never filled from a posting.
 - **Privacy and Documents** (`guide` block, short, no digits): the three visibility choices and the public-document rule in the neutral terms below. No visa words.
 - Stories of other types (`cert-language`, `other`): their content lives in Skills or Education details; do not make a block of their own.

@@ -69,8 +69,9 @@ skills:
   - {label: Software, items: [Microsoft Word, "Excel (pivot tables)"], sources: [S-006], variants: [en]}
 `;
 
-const story = (id: string, title: string, org: string, status: string) =>
-  `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: ${status}\n---\n\n## Your words\n> text\n`;
+// P8-fix: a confirmed card has the "Sentence at confirmation" section (the program now compares resume.yaml with it, and a missing section is an error)
+const story = (id: string, title: string, org: string, status: string, conf = "") =>
+  `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: ${status}\n---\n\n## Your words\n> text\n` + (conf ? `\n## Sentence at confirmation (do not change)\n\n${conf}\n` : "");
 
 /** A US folder with an English resume.yaml (the playbook examples' people) and stories S-001/S-004/S-006 confirmed, S-002 a draft. */
 function usFolder(): string {
@@ -79,12 +80,19 @@ function usFolder(): string {
   write(dir, "jobhunt.yaml", read(dir, "jobhunt.yaml").replace(/^market:.*$/m, "market: us").replace(/^language:.*$/m, "language: en").replace(/^paper:.*$/m, "paper: letter"));
   write(dir, "resume.yaml", RESUME);
   for (const f of ["S-001", "S-002", "S-003", "S-004"]) rmSync(join(dir, "me/stories", `${f}.md`));
-  write(dir, "me/stories/S-001.md", story("S-001", "Sales Associate", "Northfield State University Bookstore", "confirmed"));
-  write(dir, "me/stories/S-004.md", story("S-004", "Treasurer", "Campus Food Drive Club", "confirmed"));
-  write(dir, "me/stories/S-006.md", story("S-006", "Software", "", "confirmed"));
+  write(dir, "me/stories/S-001.md", story("S-001", "Sales Associate", "Northfield State University Bookstore", "confirmed", "Title: Sales Associate\n1. Worked the register on weekends.\n2. Taught about 5 new employees to use the register at the manager's request.\n3. Helped students find textbooks."));
+  write(dir, "me/profile.md", "# Job goals\n\n## Work they want\n- Sales, administrative assistant, HR assistant\n\n## Location and work type\n- Columbus, OH\n\n## Education\n- Northfield State University, B.A. in Business Administration, Expected May 2027\n- Coursework in accounting and statistics.\n");
+  write(dir, "me/stories/S-004.md", story("S-004", "Treasurer", "Campus Food Drive Club", "confirmed", "Title: Treasurer\n1. Sorted donations with a team of volunteers."));
+  write(dir, "me/stories/S-006.md", story("S-006", "Software", "", "confirmed", "Software: Microsoft Word, Excel (pivot tables)"));
   write(dir, "me/stories/S-002.md", story("S-002", "Peer tutor", "Draft Tutoring Center", "draft"));
   return dir;
 }
+
+// a "Seeking <roles> roles" headline of exactly n characters: the roles are "sales and sales ..." (each one is written in the profile), padded with spaces
+const seekLine = (n: number) => {
+  const base = "Seeking sales" + " and sales".repeat(Math.floor((n - 19) / 10));
+  return base + " ".repeat(n - 6 - base.length) + " roles";
+};
 
 const HEAD_LI = "# LinkedIn profile text (draft)\nUpdated: 2026-10-09\nStories used: S-001\nDraft text for you to paste yourself. Lines starting with \"- \" and \"Source:\" are notes; do not paste them.\n\n";
 const HEAD_HS = HEAD_LI.replace("LinkedIn", "Handshake");
@@ -211,7 +219,8 @@ test("只寫 Education／Job goals 的一段，不能提到經歷（工作、社
   const dir = usFolder();
   const r = await li(dir, "## About\n- Fill: paste\n\nB.A. student who also served as Treasurer of Campus Food Drive Club.\nSource: Education, Job goals\n");
   expect(has(r.errors, "Campus Food Drive Club")).toBe(true);
-  const ok = await li(dir, "## About\n- Fill: paste\n\nB.A. student who also served as Treasurer of Campus Food Drive Club.\nSource: Education, Job goals, S-004\n");
+  // P8: a free sentence is not allowed in a paragraph that has a story source; the work goes in as the title line of its own paragraph
+  const ok = await li(dir, "## About\n- Fill: paste\n\nTreasurer, Campus Food Drive Club\n• Sorted donations with a team of volunteers.\nSource: S-004\n");
   expect(ok.errors).toEqual([]);
 });
 
@@ -226,7 +235,8 @@ test("提到還沒確認的經歷（S-002 草稿）：就算來源行寫別的�
 test("數字和日期：段落裡的數字要是本人說過的；N+ 只有本人說過「超過 N」才行；日期要和 resume.yaml 一樣", async () => {
   const dir = usFolder();
   const about = (s: string) => `## About\n- Fill: paste\n\n${s}\nSource: S-001\n`;
-  expect((await li(dir, about("Trained about 5 new employees."))).errors).toEqual([]);
+  // P8: a free sentence in About is now an error of its own (not a fixed frame); the number rules below are what this test is about
+  expect(has((await li(dir, about("Trained about 5 new employees."))).errors, "not in your confirmed experience")).toBe(false);
   expect(has((await li(dir, about("Served 300 customers a day."))).errors, "not in your confirmed experience")).toBe(true);
   expect(has((await li(dir, about("Trained 5+ new employees."))).errors, "more than")).toBe(true);
   expect(has((await li(dir, about("Worked there since Jun 2019."))).errors, "The date")).toBe(true);
@@ -239,7 +249,7 @@ test("數字和日期：段落裡的數字要是本人說過的；N+ 只有本�
 
 test("字數上限：第三方來源的上限只提醒（程式還是通過）；LinkedIn 技能 100 項是官方的，超過就沒通過", async () => {
   const dir = usFolder();
-  const head = (n: number) => `## Headline\n- Fill: paste\n\n${"Sales roles. ".repeat(40).slice(0, n)}\nSource: Job goals\n`;
+  const head = (n: number) => `## Headline\n- Fill: paste\n\n${seekLine(n)}\nSource: Job goals\n`; // P8: a headline starts "Seeking ... roles"
   const ok = await li(dir, head(220));
   expect(ok.errors).toEqual([]);
   expect(ok.warnings).toEqual([]);
@@ -297,8 +307,10 @@ test("重點要和 resume.yaml 一字不差；來源行要有那一條的來源�
   expect(has((await li(dir, skills(["Microsoft Word"], "S-001"))).errors, "does not list S-006, the source of this skill")).toBe(true);
 
   // Handshake: courses, skills and career interests are lists, not resume bullets
-  const courses = await hs(dir, "## Courses\n- Fill: paste\n\n• Intro to Accounting\n• Business Statistics\nSource: Education\n");
+  // P8-fix: a course name must be word for word an education detail (or a bullet) of resume.yaml; the old test pinned "any name goes"
+  const courses = await hs(dir, "## Courses\n- Fill: paste\n\n• Coursework in accounting and statistics.\nSource: Education\n");
   expect(courses.errors).toEqual([]);
+  expect(has((await hs(dir, "## Courses\n- Fill: paste\n\n• Intro to Accounting\n• Business Statistics\nSource: Education\n")).errors, "course name")).toBe(true);
   const interests = await hs(dir, "## Career Interests\n- Fill: pick\n\n• administrative assistant\nSource: Job goals\n");
   expect(interests.errors).toEqual([]);
   const wrongFill = await hs(dir, "## Career Interests\n- Fill: paste\n\n• administrative assistant\nSource: Job goals\n");
@@ -341,7 +353,7 @@ test("貼上的內文是純文字：不能有 - 開頭的行、粗體、連結�
 
 test("check --profiles：只查 profiles（不查職缺、104），寫 checks/_profiles.md；提醒印出來但結束碼 0", async () => {
   const dir = usFolder();
-  write(dir, "profiles/linkedin.md", HEAD_LI + `## Headline\n- Fill: paste\n\n${"Sales roles. ".repeat(40).slice(0, 230)}\nSource: Job goals\n`);
+  write(dir, "profiles/linkedin.md", HEAD_LI + `## Headline\n- Fill: paste\n\n${seekLine(224)}\nSource: Job goals\n`);
   const r = await cli(dir, "--profiles");
   expect(r.code).toBe(0);
   expect(r.out).toContain("profiles/linkedin.md");
@@ -415,7 +427,7 @@ test("修正：Headline 和 About 的 Skills: 行抄 resume.yaml 的 Spanish (na
   const dir = usFolder();
   write(dir, "resume.yaml", RESUME_LANG);
   expect(RESUME_LANG).toContain("English (fluent)");
-  const head = await li(dir, "## Headline\n- Fill: paste\n\nBusiness Administration student | Spanish (native), English (fluent)\nSource: Education, S-006\n");
+  const head = await li(dir, "## Headline\n- Fill: paste\n\nSeeking sales roles | Spanish (native), English (fluent)\nSource: Job goals, S-006\n");
   expect(head.errors).toEqual([]);
   const about = await li(
     dir,

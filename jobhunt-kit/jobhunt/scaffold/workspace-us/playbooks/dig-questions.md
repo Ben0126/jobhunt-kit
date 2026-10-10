@@ -156,11 +156,11 @@ Pick 1 or 2 per experience from the user's target roles. If the target is not de
 - Did you deal with a disagreement between people?
 
 **Sales**
-- Did you suggest products or add-ons? How did customers react?
-- Did you find sponsors or partners?
-- Did you have a target? Did you reach it? (Only a number they say.)
+- What did you say when customers were choosing what to buy? What happened next?
+- How did sponsors or partners come into this, and what did you do about them?
+- What was your target, and how did it go? (Only a number they say.)
 - What did you do after someone said no?
-- Did you have regular customers?
+- Tell me about a regular customer. What did you do for them?
 
 **Assistant**
 - Did you help a manager, professor or senior student: organizing files, scheduling, answering the phone?
@@ -182,7 +182,7 @@ Pick 1 or 2 per experience from the user's target roles. If the target is not de
 - Did you work shifts or in busy periods?
 
 **Marketing / social media** (if they name it)
-- Did you run a social account? What content?
-- Did you write copy or make posters? With what tool?
-- Did you promote an event so more people came? (Numbers only as they say them.)
-- Did you run a survey or market research?
+- What content did you make for the account, and how often?
+- What did you write or design, and what did you make it with?
+- What did you do to get people to come to an event? (Numbers only as they say them.)
+- What did you do to find out what people wanted?

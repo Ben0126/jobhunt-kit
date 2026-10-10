@@ -166,3 +166,141 @@ export function customUrlProblem(v: string, lang: Language = "zh-TW"): string | 
   if (/linkedin/i.test(s)) return T.urlLinkedin;
   return null;
 }
+
+// ---------------------------------------------------------------- the fixed lines of a profile (not bullets)
+
+/** "a, b (c, d), e" -> ["a", "b (c, d)", "e"]: split at commas that are not inside parentheses. */
+export function splitList(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of norm(s)) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.map(norm).filter(Boolean);
+}
+
+/** A skills item without its level in parentheses: "Excel (pivot tables)" -> "Excel". */
+export const stripParen = (s: string) => norm(s.replace(/\s*\([^)]*\)\s*$/, ""));
+
+export type ProfileFacts = {
+  /** every way resume.yaml education can be written as "<degree> student at <school> (<end>)." */
+  eduSentences: string[];
+  /** "<degree>, <school>" */
+  eduPairs: Set<string>;
+  /** "<role>, <org>" and project names: the first line of an About paragraph */
+  titles: Set<string>;
+  /** a role alone, an org alone */
+  parts: Set<string>;
+  /** title line (see `titles`) -> the S- codes of the resume.yaml item it is the title of: a paragraph may only use a title whose item it lists on its Source line */
+  titleCodes: Map<string, Set<string>>;
+  /** me/profile.md "## Work they want" (lower case, without "Inferred ..." lines) and "## Location and work type"; null = the file or the section is missing */
+  want: string | null;
+  place: string | null;
+};
+
+/** The body of a "## <name>" section of a markdown file, lower case, one space between words; null when there is none. */
+export function mdSection(md: string, name: string, skipLine?: RegExp): string | null {
+  const lines = md.split(/\r?\n/);
+  const at = lines.findIndex((l) => new RegExp(`^##\\s+${name}\\s*$`, "i").test(l.normalize("NFKC").trim()));
+  if (at < 0) return null;
+  const body: string[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^#{1,6}\s/.test(l)) break;
+    if (skipLine && skipLine.test(l.normalize("NFKC").trim())) continue;
+    body.push(l);
+  }
+  const t = norm(body.join("\n")).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').toLowerCase();
+  return t || null;
+}
+
+export function profileFacts(resume: any, profileMd = "", splitSources: (s: string) => string[] = (s) => s.split(/\s*,\s*/)): ProfileFacts {
+  const f: ProfileFacts = {
+    eduSentences: [],
+    eduPairs: new Set(),
+    titles: new Set(),
+    parts: new Set(),
+    titleCodes: new Map(),
+    want: mdSection(profileMd, "Work they want", /^[-*]?\s*inferred\b/i),
+    place: mdSection(profileMd, "Location and work type"),
+  };
+  for (const e of listOf(resume?.education)) {
+    const degree = norm(e?.degree);
+    const school = norm(e?.school);
+    if (!degree || !school) continue;
+    f.eduPairs.add(`${degree}, ${school}`);
+    const dates = norm(e?.dates);
+    const ends = new Set([dates, norm(dates.split(/\s*[–—]\s*|\s-\s/).pop())]);
+    for (const end of ends)
+      // a date that is still ahead ("Expected Dec 2026") is a student, never a graduate
+      for (const kind of /\bexpected\b/i.test(end) ? ["student at"] : ["student at", "graduate of"]) f.eduSentences.push(`${degree} ${kind} ${school}${end ? ` (${end})` : ""}.`);
+  }
+  for (const sec of ["experience", "projects"])
+    for (const item of listOf(resume?.[sec])) {
+      const role = norm(item?.role);
+      const org = norm(item?.org);
+      const name = norm(item?.name);
+      const codes = new Set<string>();
+      for (const o of [item, ...listOf(item?.bullets)]) {
+        const src = o?.sources ?? o?.source;
+        for (const c of Array.isArray(src) ? src.map(String) : src ? splitSources(String(src)) : []) codes.add(canonSource(c));
+      }
+      for (const t of [role && org ? `${role}, ${org}` : "", name])
+        if (t) {
+          f.titles.add(t);
+          f.titleCodes.set(t, new Set([...(f.titleCodes.get(t) ?? []), ...codes]));
+        }
+      if (sec === "experience") for (const x of [role, org]) if (x) f.parts.add(x);
+      if (name) f.parts.add(name);
+    }
+  return f;
+}
+
+const LOOKING = /^Looking for ((?:(?!\. ).)+?) roles(?: in ((?:(?!\. ).)+?))?\.(?= |$)/;
+
+/** The roles of "Seeking <roles> roles" / "Looking for <roles> roles": one or two role names, each (any case) written in
+ * me/profile.md "Work they want". No digits, so nothing else (a skill, a title, a claim) can ride in the roles slot. */
+export function rolesOk(roles: string, f: ProfileFacts): boolean {
+  if (!f.want) return false;
+  const parts = norm(roles).split(/\s*,\s*(?:and\s+)?|\s+and\s+/i);
+  return parts.length > 0 && parts.every((p) => /^[A-Za-z][A-Za-z &/'-]*$/.test(p) && p.length >= 3 && f.want!.includes(p.toLowerCase()));
+}
+
+/** The place of "Looking for <roles> roles in <place>.": written in me/profile.md "Location and work type". */
+const placeOk = (place: string, f: ProfileFacts) => !!f.place && norm(place).length >= 2 && f.place.includes(norm(place).toLowerCase());
+
+/** The pitch line(s) of an About / My Journey opening: "<degree> student|graduate of <school> (<end>)." and
+ * "Looking for <roles> roles[ in <place>]." in any order, and nothing else. */
+export function backgroundLineOk(line: string, f: ProfileFacts): boolean {
+  let rest = norm(line);
+  if (!rest) return true;
+  while (rest) {
+    const edu = f.eduSentences.find((s) => rest === s || rest.startsWith(s + " "));
+    if (edu) {
+      rest = rest.slice(edu.length).trim();
+      continue;
+    }
+    const m = LOOKING.exec(rest);
+    if (!m || !rolesOk(m[1], f) || (m[2] != null && !placeOk(m[2], f))) return false;
+    rest = rest.slice(m[0].length).trim();
+  }
+  return true;
+}
+
+/** One ` | ` part of a LinkedIn headline. `first` = the first part (may be "Seeking <roles> roles"). */
+export function headlineSegmentOk(seg: string, f: ProfileFacts, idx: ResumeIndex, first: boolean): boolean {
+  const s = norm(seg);
+  if (!s) return false;
+  const seeking = first ? /^Seeking (.+) roles$/.exec(s) : null;
+  if (seeking) return rolesOk(seeking[1], f);
+  if (f.eduPairs.has(s) || f.titles.has(s) || f.parts.has(s)) return true;
+  // a list of skills; the headline may drop the level in parentheses ("Excel" for "Excel (pivot tables)")
+  const base = new Set([...idx.skills.keys()].map(stripParen));
+  return splitList(s).every((it) => skillCodes(it, idx) != null || base.has(norm(it)));
+}

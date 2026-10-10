@@ -41,7 +41,7 @@ const BULLETS = [
 
 const RESUME = `basics:
   name: Jane Doe
-  email: jane@example.com
+  email: jane.doe@gmail.com
   phone: "(555) 555-0100"
   location: "Austin, TX"
   links: []
@@ -73,7 +73,7 @@ ${BULLETS.map((b, i) => `      - id: s001_${"abcdefg"[i]}\n        text: ${JSON.
     bullets:
       - id: s002_a
         text: Shelved books.
-        source: S-001
+        source: S-002
 projects: []
 skills: []
 `;
@@ -104,6 +104,11 @@ function usFolder(): string {
   dirs.push(dir);
   write(dir, "jobhunt.yaml", read(dir, "jobhunt.yaml").replace(/^market:.*$/m, "market: us").replace(/^language:.*$/m, "language: en").replace(/^paper:.*$/m, "paper: letter"));
   write(dir, "resume.yaml", RESUME);
+  // P8-fix: resume.yaml is compared with the "Sentence at confirmation" of the cards it names, so the two cards carry those sentences
+  const card = (id: string, title: string, org: string, sentences: string[]) =>
+    `---\nid: ${id}\ntitle: ${title}\ntype: job\norg: ${org}\nstatus: confirmed\nconfirmed: "2026-10-09"\nconfirmed_via: chat\nconfirmed_reply: "confirm ${id}"\n---\n\n## Your words\n\n> text\n\n## Sentence at confirmation (do not change)\n\nTitle: ${title}\n${sentences.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n`;
+  write(dir, "me/stories/S-001.md", card("S-001", "Cashier", "Campus Bookstore", BULLETS));
+  write(dir, "me/stories/S-002.md", card("S-002", "Volunteer", "City Library", ["Shelved books."]));
   write(dir, T, TARGET);
   rmSync(join(dir, HTML));
   return dir;
@@ -250,7 +255,7 @@ function fillUs(tail = ""): string {
     h = h.replace(new RegExp(`(<h2>${title}</h2>)[\\s\\S]*?(\\n  </section>)`), `$1\n${html}$2`);
   };
   h = h.replace(/\{\{Full Name\}\}/g, "Jane Doe");
-  h = h.replace(/<ul class="contact">[\s\S]*?<\/ul>/, `<ul class="contact">\n      <li>Austin, TX</li>\n      <li>(555) 555-0100</li>\n      <li>jane@example.com</li>\n    </ul>`);
+  h = h.replace(/<ul class="contact">[\s\S]*?<\/ul>/, `<ul class="contact">\n      <li>Austin, TX</li>\n      <li>(555) 555-0100</li>\n      <li>jane.doe@gmail.com</li>\n    </ul>`);
   h = h.replace(/<p class="summary">[^<]*<\/p>/, `<p class="summary">Cashier with campus experience.</p>`);
   body("Education", `    <div class="entry">\n      <div class="entry-head">\n        <div class="entry-title">State University<span class="role">B.A. in Communication</span></div>\n        <div class="entry-date">Aug 2021 – Expected May 2027</div>\n      </div>\n    </div>`);
   body(

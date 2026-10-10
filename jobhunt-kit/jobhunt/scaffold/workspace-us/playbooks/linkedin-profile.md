@@ -15,7 +15,7 @@ AGENTS.md red lines always win. You talk in the user's language; the file and ev
 5. Then one blank line, then the **body**: paragraphs separated by blank lines. Bullets are `• ` (U+2022 and a space), one per line. No `-`, `*`, `#`, bold, links, emoji or tables inside a body.
 6. **Every paragraph of a `paste` block ends with one line `Source: S-003, S-007`**, in the same paragraph (no blank line before it). Tokens are separated by a comma and a space. Each token is exactly `S-` plus digits, `Education` or `Job goals` (capital first letter, one space in `Job goals`). Use `Source:` with this capital S. A block with no body text (for example an Education block with no details) is just the meta lines, a blank line and one `Source:` line. `guide` blocks have no `Source:` line.
 7. The **copy text** of a block is its body without `Source:` lines: trailing spaces removed, three or more line breaks shortened to two, ends trimmed. Length is counted on that text in characters; each line break counts 1. The program recounts and ignores your `Length` line, so write `- Length: about 780 characters` only as a guide.
-8. Each bullet line (after `• `) must be a sentence from `resume.yaml` word for word (see 3.1), except in the Skills block. The `Source:` line must contain the `source` code of every bullet in the paragraph. A paragraph sourced only by `Education` or `Job goals` must not name an experience.
+8. Each bullet line (after `• `) must be a sentence from `resume.yaml` word for word (see 3.1), except in the Skills block. The `Source:` line must contain the `source` code of every bullet in the paragraph. A paragraph sourced only by `Education` or `Job goals` must not name an experience. **Lines that are not bullets are checked too**: the Headline, the About opening, the first line of each About paragraph and the About `Skills:` line may only take the exact shapes in 3.2, built from `resume.yaml` text. Anything else ("Fluent in Mandarin", "Certified", a title or a skill that is not in `resume.yaml`) is an error.
 9. No phone number, email address, street address, visa or work-authorization word, ID number, photo or placeholder (`[Name]`, `TBD`, `XX`) anywhere in the file, `guide` blocks included.
 
 ### 1.2 Blocks
@@ -46,14 +46,15 @@ Draft text for you to paste yourself. Lines starting with "- " and "Source:" are
 - Length: about 110 characters
 - Fill: paste
 
-Seeking administrative assistant roles | B.A. in Business Administration, Northfield State University | Microsoft Word, Excel
+Seeking administrative assistant roles | B.A. in Business Administration, Northfield State University | Microsoft Word, Excel (pivot tables)
 Source: Education, Job goals, S-006
 
 ## About
 - Limit: 2,600 characters
 - Fill: paste
 
-B.A. in Business Administration student at Northfield State University (Expected May 2027). Looking for administrative assistant and HR assistant roles in Columbus, OH.
+B.A. in Business Administration student at Northfield State University (Expected May 2027).
+Looking for administrative assistant and HR assistant roles in Columbus, OH.
 Source: Education, Job goals
 
 Sales Associate, Northfield State University Bookstore
@@ -116,9 +117,16 @@ Source: S-006
 
 These are the only sentences you may write yourself. They only restate confirmed data; no adjective, no claim.
 
-- **Headline** (one line, segments separated by ` | `): `Seeking <role> roles | <degree>, <School> | <skill>, <skill>`. `<role>`: one or two roles from `Job goals`, only re-cased, never reworded. `<degree>` and `<School>`: copied from `resume.yaml` education. `<skill>`: items copied from `resume.yaml` `skills`, up to 3 (or the title and employer of the most relevant job in place of skills). Leave out a segment whose data is missing. Do not write "Recent graduate", "Job seeker", "Open to work" or "Looking for opportunities" as the headline or its main part. Source line: `Education` if the degree or school is used, `Job goals` if roles are, the story codes of the skills or job used.
-- **About, paragraph 1**: sentence 1 `<degree> student at <School> (<dates end>).` for a current student, copying the end date word for word (`Expected May 2027`); `<degree> graduate of <School> (May 2025).` if already graduated. Sentence 2 `Looking for <role> and <role> roles in <location>.` (roles from `Job goals`; leave out ` in <location>` unless they stated one). Source: `Education, Job goals`. This is the pitch, so it stays first.
-- **About, next paragraphs**: for each of the one to three most relevant roles or projects, a line with the title and employer exactly as on the card, then its bullets (3 at most each), then `Source:` with that story's code. Optionally a last paragraph `Skills: item, item` with items copied from `resume.yaml` `skills` and the `sources` of those lines.
+- **Headline** (one line, segments separated by ` | `). The first segment is always `Seeking <role> roles` (or `Seeking <role> and <role> roles`): one or two roles from `Job goals`, only re-cased, never reworded: each role must be written in `me/profile.md` under `Work they want` (a line marked "Inferred" does not count), or the program reports the headline. Every later segment is exactly one of these three shapes, and nothing else:
+  1. `<degree>, <School>`, both copied from one `resume.yaml` `education` entry.
+  2. Skill items copied from `resume.yaml` `skills` word for word, whole (with their brackets), separated by `, `, up to 3: `Microsoft Word, Excel (pivot tables)`.
+  3. `<role>, <org>` of one `experience` entry, or just that `role`, or just that `org`, copied exactly.
+
+  Leave out a segment whose data is missing. No certification name, no "Certified", no title or skill that is not in `resume.yaml`. Do not write "Recent graduate", "Job seeker", "Open to work" or "Looking for opportunities" as the headline or its main part. Source line: `Education` if the degree or school is used, `Job goals` if roles are, the story codes of the skills or job used.
+- **About, paragraph 1** (Source `Education, Job goals`; this is the pitch, so it stays first). Each sentence is its own line, and every line is exactly one of these two shapes:
+  - `<degree> student at <School> (<end date>).` for a current student, or `<degree> graduate of <School> (<end date>).` if already graduated. `<degree>` and `<School>` come from one `education` entry; `<end date>` is the part of its `dates` after the en dash, word for word (`Expected May 2027`, `May 2025`; the whole value if there is no dash). An end date that starts with `Expected` is always `student at`, never `graduate of`. Leave the line out if `dates` is empty.
+  - `Looking for <role> and <role> roles in <location>.` or `Looking for <role> roles.` Roles from `Job goals`, only re-cased: each role is written in `me/profile.md` under `Work they want`, and the location under `Location and work type`, or the program reports the line. Nothing else goes between "Looking for" and "roles", or after the location; leave out ` in <location>` unless they stated one.
+- **About, next paragraphs**: for each of the one to three most relevant roles or projects, a first line that is exactly `<role>, <org>` of one `experience` entry, or exactly the `name` of one `projects` entry (an experience entry whose `role` is empty cannot head a paragraph; it still has its own Experience block), then its bullets (3 at most each), then `Source:` with that story's code (the first line must belong to an entry that code belongs to). Optionally a last paragraph with one line `Skills: item, item`, each item copied from `resume.yaml` `skills` word for word and whole, and the `sources` of those lines.
 - First-person narrative ("I am passionate about...", "I believe...") is not allowed: it is a new claim. No phone, no email, no links.
 
 ### 3.3 Experience, Projects, Education, Skills
@@ -126,7 +134,7 @@ These are the only sentences you may write yourself. They only restate confirmed
 - **Experience**: one block per `experience` entry of `resume.yaml`, newest first. `Title` = `role` and `Company` = `org` exactly; `Location` and `Dates` as in the entry. Body: its bullets (usually 3 to 6; all that exist if the user asks).
 - **Projects**: one block per `projects` entry (course projects, competitions, volunteering). `Title` = the entry `name`.
 - **Education**: `School`, `Degree` (the whole confirmed degree string, nothing split or expanded), `Dates` from `resume.yaml`. Body: only the entry's `details` (GPA, coursework, honors) as bullets with `Source: Education` (add story codes if a detail came from a story). GPA only if the user confirmed it. No details: the `Source:` line alone.
-- **Skills**: each `• ` line is an item from `resume.yaml` `skills` word for word, or a software or tool name that appears word for word in a confirmed bullet. Group lines so each paragraph has one `Source:` line with the codes from `sources` of those items. Suggest the strongest 10 to 20 if they have that many; never invent or add a skill to reach a count; never more than 100. A skill with only a self-rating and no example ("fluent", "expert") is written exactly as the confirmed item says, nothing stronger.
+- **Skills**: each `• ` line is an item from `resume.yaml` `skills` word for word. A tool named only inside a sentence needs its own skill card first (`dig-cards.md`). Group lines so each paragraph has one `Source:` line with the codes from `sources` of those items. Suggest the strongest 10 to 20 if they have that many; never invent or add a skill to reach a count; never more than 100. A skill with only a self-rating and no example ("fluent", "expert") is written exactly as the confirmed item says, nothing stronger.
 - **Dropdowns** (employment type, month and year, school list, degree list, industry, "location type"): you cannot see them. Tell the user to pick the option that matches what they told you, and to type the option name they see if they want your help. Never invent an option name. **No screenshots of LinkedIn pages**: a page can show their photo, which you never open (red line 7). If they offer one, say so in one line and ask them to type what the box says.
 
 ### 3.4 Custom URL and Open to Work (explanations; the user decides)

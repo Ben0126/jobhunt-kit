@@ -183,9 +183,10 @@ test("簽證字眼：台灣市場不查（同一份 HTML）", async () => {
 
 test("簽證字眼（us）：profiles/*.md 也擋；台灣市場不讀 profiles", async () => {
   const us = cleanFolder(true);
+  write(us, "me/profile.md", "# Job goals\n\n## Work they want\n- Cashier\n"); // P8-fix: the roles in "Looking for ... roles" must be written here
   write(us, "profiles/linkedin.md", "# LinkedIn\n\n## About\nI am on F-1 OPT and need H-1B sponsorship.\nSource: S-001\n");
   // P4: handshake.md is held to the Handshake block format now, so the clean file uses a real Handshake block (it was "## About", a LinkedIn-only name).
-  write(us, "profiles/handshake.md", "# Handshake profile text (draft)\n\n## My Journey\n- Fill: paste\n\nCashier who handled complaints.\nSource: S-001\n");
+  write(us, "profiles/handshake.md", "# Handshake profile text (draft)\n\n## My Journey\n- Fill: paste\n\nLooking for cashier roles.\nSource: Job goals\n"); // P8: My Journey holds only the fixed Education / Job goals sentences
   const report = await runChecks(new Folder(us), { ids: [], general: false });
   expect(report.profiles.map((p) => p.file)).toEqual(["profiles/handshake.md", "profiles/linkedin.md"]);
   expect(report.profiles[0].problems).toEqual([]);

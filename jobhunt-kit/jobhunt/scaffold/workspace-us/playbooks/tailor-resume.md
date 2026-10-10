@@ -147,6 +147,8 @@ answered:                     # asked questions move here; do not delete
 application_answers: {}       # leave empty: this version has no per-company answer files
 ```
 
+**Tracker row (right after `targets/<id>.yaml` is written).** Not for `general`. If `data/applications.csv` has no row whose `job_id` is `<id>` or whose `resume_version` is `targets/<id>`, add one per `log-application.md` (3.3 and section 2): `job_id` `<id>`, `company` and `role` from the `jd.md` header, `status: todo`, `resume_version: targets/<id>`, `link` only if the user gave the URL, everything else empty. A row for the same company and title under another id: do not add a second row; set its empty `resume_version` instead. This posting counts as the row they mentioned, so this is the one exception to "only the row they talked about". Tell them in one line: "I added this job to your tracker as 'To apply'." If the file or the program is missing, skip this and say nothing about the tracker.
+
 **Selection rules**
 
 - `bullet_order` may list only bullet `id`s that exist in `resume.yaml` with `source: S-xxx` pointing to a story with `status: confirmed`. No source, or a draft source: leave it out and tell the user to confirm it first.

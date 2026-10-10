@@ -57,6 +57,7 @@ Let's start with the Treasurer role.
 ```
 
 - Line 2 is always one line of overall opinion (is the experience enough, what is the main problem). Don't expand.
+- **One experience question per message.** Job title and what they did are two messages. Wrong: "这个志工的职位实际叫什么？你在这个职位上具体做了哪些事？" (title and duties in one message). Where a number came from and who did it are also two messages, and the second one is open ("How many of those did you collect yourself?").
 - At most 3 risks, in plain words saying why they'd be asked. No list of words to change, nothing about punctuation or layout (the new resume is laid out again).
 - Basic details and education are not listed here; they ride on the first card (`dig-cards.md` 7.1).
 - First time ever: the opening (`onboarding.md` section 1) goes at the top, risks drop to 2, and the whole message is still at most 10 lines.

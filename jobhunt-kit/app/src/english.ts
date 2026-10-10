@@ -97,7 +97,7 @@ function shiftDecimal(num: string, k: number): string {
   return f ? `${i}.${f}` : i;
 }
 
-const MAGNITUDE = /(?<![0-9.,])([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\s?(thousand|million|billion|MM|M|bn|B)(?![A-Za-z0-9])/g;
+const MAGNITUDE = /(?<![0-9.,A-Za-z])([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\s?(thousand|million|billion|MM|M|bn|B)(?![A-Za-z0-9])/g;
 const MAG_SHIFT: Record<string, number> = { thousand: 3, million: 6, billion: 9, MM: 6, M: 6, bn: 9, B: 9 };
 
 /**
@@ -108,6 +108,7 @@ const MAG_SHIFT: Record<string, number> = { thousand: 3, million: 6, billion: 9,
 export function normEnglish(text: string): string {
   let t = String(text).replace(INVISIBLE, "").normalize("NFKC");
   t = t.replace(MONTH_YEAR, " ").replace(SLASH_YEAR, " ").replace(QUARTER, " ");
+  t = t.replace(/(?<![A-Za-z0-9])B2([BC])(?![A-Za-z0-9])/g, "B-to-$1"); // B2B / B2C are words, not the number 2
   t = t.replace(WORD_RUN, (run, offset: number, str: string) =>
     /^(?:hundred|thousand|million|billion)/i.test(run) && /[0-9]\s?$/.test(str.slice(0, offset)) ? run : wordsToDigits(run, str.slice(offset + run.length)), // "1.2 million" is the digits' own
   );
@@ -171,4 +172,6 @@ export const EN_PLACEHOLDERS = [
   ),
   // capitalised, so "updated the company name in the CRM" is not one
   /(?<![A-Za-z])(?:(?:Your|Company|Employer|School|University) Name(?: Here)?|Insert [A-Za-z ]{2,30} here)(?![A-Za-z])/g,
+  // a made-up email address (IANA reserves example.com / .org / .net); a plain link to example.com is not an email, so it is left alone
+  /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@example\.(?:com|org|net)(?![A-Za-z0-9-])/gi,
 ];

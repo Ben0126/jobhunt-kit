@@ -51,6 +51,7 @@ Rules:
 - The card must have appeared in full in **your previous message**. Exception: after the card, you only sent a line or two that didn't count ("that doesn't count yet", refusing inflation) and the card did not change -> it still counts, no need to show it again. If they type `confirm S-005` at the start of a new conversation, or the card is from long ago with other talk in between -> show the whole card again, then ask them to confirm.
 - A card with yes/no questions: the answers and the confirm can be in one message ("yes, confirm S-003" counts). Just "yes" -> one line: "Good. Last step: type `confirm S-003` to put it on the resume."
 - "Good", "right", "OK", "all fine", "confirm all", "confirm S-003 to S-006" **do not count**. Say: "OK. For this card type `confirm S-003` and it goes on the resume." A bare "yes" in any language never creates a fact.
+- **Chinese replies**: 好 / 好的 / 嗯 / 可以 / OK are "OK", not an answer to a yes/no line. Only 是 / 對 / 对 / 一樣 / 一样 / 沒錯 / 没错 (or yes / same) answer it. If the card has a yes/no line and they reply only OK, send one line asking for 是 or 不是, or "yes, confirm S-xxx". The same holds when a reply names the card but the yes/no line is still unanswered ("确认 S-001" after only "好"): ask for the answer first, and do not record the confirm. Apply this the same way to every card; do not accept it on one card and block it on the next.
 - They say the old resume is all correct and want no card-by-card review (not an answer to this card) -> the rest of the old-resume sections follow `import-resume.md` 8 (self-attestation). That covers only old-resume text, and only if it is already English. Sentences you rewrote or translated still need a card.
 - One card at a time. The only exception is the quick confirmation before the resume file (`make-resume-file.md`). With a saved posting, show the card most relevant to it first. **When a tailored resume is waiting** (the cards listed in step 3 of `tailor-resume.md`), after those cards are confirmed, changed or declined, go straight back to the tailored resume: no other cards, no other "Still to ask".
 - New content in the confirm reply ("confirm S-003, I also helped with inventory") **does not count as confirmation**. Write the new content into the words and sentences, then show a new card.
@@ -79,7 +80,7 @@ confirmed_via: chat                   # helper when helping; self-attest for a v
 confirmed_reply: "yes, confirm S-003 (Recording: confirm S-003)"   # their reply, plus your echoed command if they typed in another language; clicked: "clicked: confirm S-003"
 ```
 
-Use today's date. Copy the card's title, English sentences and back-translation word for word into the end-of-file section "## Sentence at confirmation (do not change)" (section 6). Never edit that section afterward. To change the content, go through section 9; after reconfirming, replace the whole section with the new card's text.
+Use today's date. `confirmed_reply` holds only the reply that named the card (plus your echoed command); earlier replies such as "好" or "OK" are not copied into it. Copy the card's title, English sentences and back-translation word for word into the end-of-file section "## Sentence at confirmation (do not change)" in the exact format of `dig-experience.md` section 6 (sentences first, then one blank line, then the translation; no note ever goes inside the sentence block). Never edit that section afterward. To change the content, go through section 9; after reconfirming, replace the whole section with the new card's text.
 
 ### 8.2 Write into `resume.yaml`
 
@@ -91,8 +92,9 @@ Where it goes:
 |---|---|---|
 | job, internship, student-org | `experience` | Experience |
 | project, volunteer, competition | `projects` | Projects & Activities |
-| cert-language | `skills`, label "Certifications" or "Languages" | Skills & Certifications |
+| cert-language | `skills`, label "Certifications", "Languages" or "Training" | Skills & Certifications |
 | other (software) | `skills`, label "Software" | Skills & Certifications |
+| other (badge, online course) | `skills`, label "Training" | Skills & Certifications |
 | other (everything else) | by content: job-like -> `experience`, activity-like -> `projects`; dean's list, scholarship, GPA -> `details` of `education` | depends |
 
 How to write it (for the AI, not shown to the user):
@@ -133,11 +135,12 @@ skills:
 ```
 
 Rules:
-- Every bullet has an `id` and a `source`. `id` is the story number plus a letter (`s003_a`, `s003_b`); the whole item is `s003`. Ids are unique in the file.
+- Every bullet has an `id` and a `source`, and the source is the story code `S-xxx` of a confirmed card (never `Education` or `Job goals`: the program reports a bullet without an S- code). `id` is the story number plus a letter (`s003_a`, `s003_b`); the whole item is `s003`. Ids are unique in the file.
 - `text` is **word for word** the English sentence on the card. `role` is the card's title; `location` only if the user gave it for this job (City, ST).
 - Two stories at the same place (cashier and inventory at the same shop): add the second story's bullets to the item that already exists, each with its own `source`.
-- Each skills line records its sources in `sources: [S-007, S-009]` (not a `#` comment; the program cannot read comments). `resume.yaml` already has "Software", "Languages", "Certifications" lines: add items to the existing line and add the code to its `sources`. Do not open a second line.
-- Honors, GPA, scholarships: write into `details` of that education entry, and change its source to `sources: [Education, S-010]`.
+- Each skills line records its sources in `sources: [S-007, S-009]` (not a `#` comment; the program cannot read comments). `resume.yaml` already has "Software", "Languages", "Certifications" lines: add items to the existing line and add the code to its `sources`. Do not open a second line. "Certifications" is for formal credentials only (a license, an exam, CPR). A badge or an online course goes on a "Training" line, which does not exist yet: add `{label: Training, items: [...], sources: [S-0xx], variants: [en]}` the first time, then add to it.
+- Honors, GPA, scholarships: write into `details` of that education entry, and change its source to `sources: [Education, S-010]`; the detail is word for word a sentence on that card. A detail with only `Education` as source must be written word for word under "Education" in `me/profile.md`, or the program reports it.
+- An experience or project whose card has a title but no sentences gets `source: S-xxx` on the item itself (next to `role`). An item with no S- code anywhere (no bullet, no item `source`) is reported. Its `role` must be the `Title:` of one of its cards.
 - Every item gets `variants: [en]`; the bullets don't. The variant is named `en` and nothing else. Do not change `basics`, `variants`, `sections`, `section_titles`, `summary`.
 - A section that is `[]` (empty): replace the `[]` with the list.
 - Read `resume.yaml` back: indentation, unique ids, quoted dates, and `text` and titles identical to the card. The program does not check `resume.yaml` itself, so don't say "checked".
