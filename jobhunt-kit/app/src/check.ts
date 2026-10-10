@@ -162,10 +162,12 @@ export type Confirmed = {
   dates?: string;
   sentences: string[];
   skills: string[];
+  /** the label of a `Label: items` skills line (Software, Languages ...) */
+  label?: string;
   /** the section is there but not in the exact format */
   bad?: true;
 };
-type Story = { status: string; title: string; org: string; dates: string; /** "Your words" and "Numbers" sections as text; null = neither section is there */ said: string | null; conf?: Confirmed | null } | null;
+type Story = { status: string; via: string; title: string; org: string; dates: string; /** "Your words" and "Numbers" sections as text; null = neither section is there */ said: string | null; conf?: Confirmed | null } | null;
 
 export function parseConfirmed(text: string): Confirmed | null {
   const lines = text.split(/\r?\n/);
@@ -203,6 +205,7 @@ export function parseConfirmed(text: string): Confirmed | null {
   if (meta && (!rest.length || out.title === "")) return bad();
   if (rest.length === 1 && !meta && first && !/^(title|org|dates|shown back)/i.test(first[1])) {
     out.skills.push(...splitList(first[2]));
+    out.label = norm(first[1]);
     return out.skills.length ? out : bad();
   }
   for (const l of rest) {
@@ -212,35 +215,97 @@ export function parseConfirmed(text: string): Confirmed | null {
   }
   return out.sentences.length ? out : bad();
 }
-/** The text under "## Your words" and "## Numbers ..." of a story file (what the user said, and the numbers recorded from it); null when the file has neither. */
-function saidOf(text: string): string | null {
+/** A clause where the user says they do not know / did not write the number (so a number in it is not one they said). */
+const NOT_SAID = /不知道|不清楚|不確定|不記得|don'?t know|do not know|not sure|don'?t remember|do not remember|made (?:that|it) up|friend wrote|朋友幫我寫|wasn'?t true|不對/i;
+/** A Numbers line the AI wrote to record that a number was dropped, not said. */
+const NUMBER_DROPPED = /dropped|not written|removed|discarded|don'?t know|do not know|unknown/i;
+const CLAUSE_END = /[。！？；;，、]|[.!?,](?=\s|$)|(?<=[㐀-鿿])\s+(?=[㐀-鿿])/u;
+/** The text under "## Your words" and "## Numbers ..." of a story file (what the user said, and the numbers recorded from it); null when the file has neither.
+ * Not counted as said: the "Old resume text (...)" paragraph (the old resume's words; the user only vouched for them when confirmed_via is
+ * self-attest), a Numbers line that says the number was dropped, and a clause where the user says they do not know the number. */
+function saidOf(text: string, selfAttest = false): string | null {
   const out: string[] = [];
   let on = false;
   let found = false;
+  let numbers = false;
+  let old = false;
   for (const raw of text.split(/\r?\n/)) {
     const h = /^##\s+(.*)$/.exec(raw.trim());
     if (h) {
       on = /^(your words|numbers)\b/i.test(h[1].trim());
+      numbers = /^numbers\b/i.test(h[1].trim());
+      old = false;
       found ||= on;
-    } else if (on) out.push(raw);
+      continue;
+    }
+    if (!on) continue;
+    const t = raw.trim();
+    if (!selfAttest) {
+      if (/^Old resume text\s*\(/i.test(t)) old = true;
+      else if (/^Their words\b/i.test(t)) old = false;
+      if (old) continue;
+    }
+    if (numbers && NUMBER_DROPPED.test(t)) continue;
+    out.push(...t.split(CLAUSE_END).filter((c) => !NOT_SAID.test(c)));
   }
   return found ? out.join("\n") : null;
 }
-/** Employer / project names compared as words: no case, no punctuation, no (bracketed location). */
-const normName = (s: unknown) =>
-  norm(String(s ?? ""))
-    .toLowerCase()
-    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+const nameKey = (s: unknown, dropBrackets: boolean) => {
+  let t = norm(String(s ?? "")).toLowerCase();
+  if (dropBrackets) t = t.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
+  return t.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+};
+/** Employer / project names compared as words: no case, no punctuation, no (bracketed location). The card's side only; see sameName. */
+const normName = (s: unknown) => nameKey(s, true);
+/** Resume name against the card's name: equal as words once the card's own (bracketed location) is dropped. A bracket the resume adds
+ * ("Bookstore (Amazon)") must already be in the card's name; it cannot bring in a new word. */
+function sameName(res: unknown, card: unknown): boolean {
+  if (!bracketsInCard(res, card)) return false;
+  return nameKey(res, true) === nameKey(card, true);
+}
+/** A project name against the card's org. Equal, or (only when the card has no `Org:` line and the file header's org stands in) the org plus
+ * words that are words of the card's own Title ("Volunteer, Food Drive" on a card titled Volunteer). Never a job-title word in the extras. */
+function projectNameOk(res: unknown, cardOrg: unknown, explicit: boolean, titles: unknown[]): boolean {
+  if (sameName(res, cardOrg)) return true;
+  if (explicit || !bracketsInCard(res, cardOrg)) return false;
+  const n = ` ${nameKey(res, true)} `;
+  const o = nameKey(cardOrg, true);
+  if (!o || !n.includes(` ${o} `)) return false;
+  const extras = n.replace(` ${o} `, " ").split(" ").filter(Boolean);
+  const own = new Set(titles.flatMap((t) => nameKey(t, true).split(" ")));
+  const text = extras.join(" ");
+  return extras.every((w) => own.has(w)) && !TITLE_WORDS.some((re) => new RegExp(re.source, re.flags).test(text));
+}
+function bracketsInCard(res: unknown, card: unknown): boolean {
+  const full = ` ${nameKey(card, false)} `;
+  for (const m of String(res ?? "").normalize("NFKC").matchAll(/\(([^)]*)\)|\[([^\]]*)\]/g)) {
+    const k = nameKey(m[1] ?? m[2], false);
+    if (k && !full.includes(` ${k} `)) return false;
+  }
+  return true;
+}
 /** Date ranges compared as written, with any dash or "to" as one dash and no spaces around it. */
 const normDates = (s: unknown) =>
   norm(String(s ?? ""))
     .toLowerCase()
     .replace(/\s*(?:[–—―−~～-]|\bto\b|至|到)\s*/g, "-")
     .trim();
-/** Job-title words a summary or headline may not use unless a confirmed card's `Title:` has them. Lead and Head are only read capitalised (the verb "lead", "head" in "head start"). */
-const TITLE_WORDS = [/(?<![A-Za-z])(?:manager|director|supervisor|chief|president|founder|owner|captain|leader|chair(?:man|woman|person)?)(?![A-Za-z])/gi, /(?<![A-Za-z])(?:Lead|Head)(?![A-Za-z])/g];
+/** Job-title words a summary or headline may not use unless a confirmed card's `Title:` has them (plural too: Managers; abbreviations: CEO, VP, Mgr).
+ * Lead and Head are read capitalised, or lowercase after team / shift / store ... or before "of" (the verb "lead", "head start" are not titles). */
+const TITLE_WORDS = [
+  /(?<![A-Za-z])(?:manager|director|supervisor|chief|president|founder|owner|captain|leader|chair(?:man|woman|person)?)s?(?![A-Za-z])/gi,
+  /(?<![A-Za-z])(?:CEO|COO|CFO|CTO|CMO|CIO|VP|SVP|EVP|AVP|GM|Mgr|co-?founder)s?(?![A-Za-z])/gi,
+  /(?<![A-Za-z])(?:Lead|Head)s?(?![A-Za-z])/g,
+  /(?<=(?<![A-Za-z])(?:team|shift|crew|project|floor|store|group|section|student|sales)[ -]+)(?:lead|head)(?![A-Za-z])/gi,
+  /(?<![A-Za-z])(?:lead|head)(?=\s+of(?![A-Za-z]))/gi,
+];
+/** Cyrillic / Greek letters that look like Latin ones, read as the Latin letter ("Mаnager" with a Cyrillic a is still Manager). */
+const HOMOGLYPHS: Record<string, string> = Object.fromEntries(
+  [..."аеорсхуіјѕһԁАВЕКМНОРСТХΑΒΕΗΙΚΜΝΟΡΤΧΥοντ"].map((c, i) => [c, [..."aeopcxyijshdABEKMHOPCTXABEHIKMNOPTXYovt"][i]]),
+);
+const deHomoglyph = (t: string) => t.replace(/[Ͱ-ϿЀ-ӿ]/g, (c) => HOMOGLYPHS[c] ?? c);
+/** Arabic-Indic and Devanagari digits as 0-9, so the number checks read them. */
+const asciiDigits = (t: string) => t.replace(/[٠-٩۰-۹०-९]/g, (c) => String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹०१२३४५६७८९".indexOf(c) % 10));
 /** Straight quotes and one kind of space, so a pasted sentence is compared by its words. */
 const normQ = (s: unknown) => norm(String(s ?? "")).replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 
@@ -323,6 +388,8 @@ class Context {
   /** market us: the words of the `Title:` lines of confirmed cards (lower case), and me/profile.md "Work they want" (the roles they look for). */
   titleWords = new Set<string>();
   wantWords = new Set<string>();
+  /** market us: employer, project, school, degree and skill strings of resume.yaml; a title word inside one of them ("Head Start") is not a claim */
+  maskNames: string[] = [];
   /** Workplaces and activities in resume.yaml (not schools): a paragraph sourced only by 學歷 may not talk about them. */
   workNames: string[] = [];
   constructor(readonly folder: Folder) {}
@@ -365,8 +432,16 @@ class Context {
       if (m) await this.story(m[1].toUpperCase());
     }
     if (this.market.market === "us") {
-      for (const s of this.stories.values()) if (s?.status === "confirmed" && s.conf?.title) for (const w of s.conf.title.toLowerCase().match(/[a-z]+/g) ?? []) this.titleWords.add(w);
-      for (const w of (mdSection(this.profileRaw, "Work they want") ?? "").toLowerCase().match(/[a-z]+/g) ?? []) this.wantWords.add(w);
+      for (const s of this.stories.values()) if (s?.status === "confirmed" && s.conf?.title) for (const w of s.conf.title.toLowerCase().match(/[a-z]+/g) ?? []) this.titleWords.add(w.replace(/s$/, ""));
+      for (const w of (mdSection(this.profileRaw, "Work they want") ?? "").toLowerCase().match(/[a-z]+/g) ?? []) this.wantWords.add(w.replace(/s$/, ""));
+      const keep = (x: unknown) => {
+        const v = norm(String(x ?? ""));
+        if ([...v].length >= 3) this.maskNames.push(v);
+      };
+      for (const sec of R.BULLET_SECTIONS) for (const it of asArray(this.resume[sec])) [it?.org, it?.name].forEach(keep);
+      for (const e of asArray(this.resume.education)) [e?.school, e?.degree].forEach(keep);
+      for (const l of asArray(this.resume.skills)) [l?.label, ...asArray(l?.items)].forEach(keep);
+      this.maskNames.sort((a, b) => b.length - a.length);
     }
     const schools = asArray(this.resume.education).map((e: any) => norm(String(e?.school ?? ""))).filter((x) => [...x].length >= 2);
     const confirmed = [
@@ -393,15 +468,16 @@ class Context {
         const fm: any = m ? Bun.YAML.parse(m[1]) : null;
         s = {
           status: String(fm?.status ?? "").trim(),
+          via: String(fm?.confirmed_via ?? "").trim().toLowerCase(),
           title: String(fm?.title ?? ""),
           org: String(fm?.org ?? ""),
           dates: String(fm?.dates ?? ""),
-          said: saidOf(t),
+          said: saidOf(t, String(fm?.confirmed_via ?? "").trim().toLowerCase() === "self-attest"),
           conf: parseConfirmed(t),
         };
       }
     } catch {
-      s = { status: "?", title: "", org: "", dates: "", said: null };
+      s = { status: "?", via: "", title: "", org: "", dates: "", said: null };
     }
     this.stories.set(code, s);
     return s;
@@ -427,7 +503,7 @@ class Context {
     const reported = new Set<string>();
     /** What the confirmed cards among `codes` say; `ok` = at least one card could be read (otherwise nothing to compare with). */
     const cards = async (codes: string[]) => {
-      const r = { sentences: new Set<string>(), titles: [] as string[], orgs: [] as string[], dates: [] as string[], skills: new Set<string>(), ok: false };
+      const r = { sentences: new Set<string>(), skills: new Set<string>(), labels: [] as string[], ok: false };
       for (const c of codes) {
         const s = await this.story(c);
         if (!s || s.status !== "confirmed") continue;
@@ -439,15 +515,24 @@ class Context {
         r.ok = true;
         s.conf.sentences.forEach((x) => r.sentences.add(normQ(x)));
         s.conf.skills.forEach((x) => r.skills.add(normQ(x)));
-        if (s.conf.title != null) r.titles.push(s.conf.title);
-        // the confirmation section's Org: / Dates: lines; a section without them falls back on the file header (the card the user saw carried the same org and dates)
-        const org = normName(s.conf.org ?? s.org);
-        const dates = normDates(s.conf.dates ?? s.dates);
-        if (org) r.orgs.push(s.conf.org ?? s.org);
-        if (dates) r.dates.push(s.conf.dates ?? s.dates);
+        if (s.conf.label) r.labels.push(s.conf.label);
       }
       return r;
     };
+    // The keys an experience / project / education entry may have: anything else could carry a title or employer the checks never see.
+    const ITEM_KEYS: Record<string, string[]> = {
+      experience: ["id", "org", "role", "dates", "location", "bullets", "source", "sources", "variants"],
+      projects: ["id", "name", "org", "role", "dates", "location", "bullets", "source", "sources", "variants"],
+      education: ["id", "school", "degree", "dates", "location", "details", "source", "sources", "variants"],
+    };
+    // one place: "Taipei", "Columbus, OH", "Remote"; at most one comma. (No card records a location, so this is only a shape check.)
+    const LOCATION = /^[\p{L}][\p{L} .'’-]{0,40}(?:,\s*[\p{L}][\p{L} .'’-]{0,40})?$/u;
+    for (const sec of ["education", ...R.BULLET_SECTIONS])
+      for (const item of asArray(this.resume[sec]))
+        if (item && typeof item === "object") {
+          for (const k of Object.keys(item)) if (!ITEM_KEYS[sec].includes(k)) out.push({ where, message: T.resumeItemKey(k), quote: excerpt(norm(String(item.role ?? item.name ?? item.org ?? item.school ?? ""))) });
+          if (norm(String(item.location ?? "")) && !LOCATION.test(norm(String(item.location)))) out.push({ where, message: T.resumeItemLocation, quote: excerpt(String(item.location)) });
+        }
     for (const sec of R.BULLET_SECTIONS)
       for (const item of asArray(this.resume[sec])) {
         const itemCodes = sOf(item);
@@ -466,25 +551,29 @@ class Context {
           out.push({ where, message: T.confirmedItemNoCard, quote: excerpt(norm(String(item?.role ?? item?.name ?? item?.org ?? ""))) });
           continue;
         }
-        const c = await cards([...all]);
-        if (!c.ok) continue;
-        const codes = [...all].join(", ");
-        if (norm(String(item?.role ?? ""))) {
-          if (!c.titles.length) out.push({ where, message: T.confirmedRoleNoTitle(codes), quote: excerpt(String(item.role)) });
-          else if (!c.titles.some((t) => normQ(t) === normQ(item.role)))
-            out.push({ where, message: T.confirmedRole(codes, c.titles.join(" / ")), quote: excerpt(String(item.role)) });
-        }
-        // the employer (experience) or the project name / org (projects), and the dates, are the ones a card recorded
-        for (const name of (sec === "projects" ? [item?.name, item?.org] : [item?.org]).map((x) => String(x ?? "")).filter((x) => norm(x))) {
-          const n = normName(name);
-          if (!c.orgs.length) out.push({ where, message: T.confirmedOrgNone(codes), quote: excerpt(name) });
-          // a project name may carry more words than the card's org ("Volunteer, International Student Welcome Week"); an employer may not
-          else if (!c.orgs.some((o) => normName(o) === n || (sec === "projects" && n && ` ${n} `.includes(` ${normName(o)} `))))
-            out.push({ where, message: T.confirmedOrg(codes, c.orgs.join(" / ")), quote: excerpt(name) });
-        }
-        if (norm(String(item?.dates ?? ""))) {
-          if (!c.dates.length) out.push({ where, message: T.confirmedDatesNone(codes), quote: excerpt(String(item.dates)) });
-          else if (!c.dates.some((d) => normDates(d) === normDates(item.dates))) out.push({ where, message: T.confirmedDates(codes, c.dates.join(" / ")), quote: excerpt(String(item.dates)) });
+        // Every card this entry rests on (named by the entry or by one of its bullets) has to agree with what the entry prints:
+        // one card's sentences cannot sit under another card's employer, dates or title.
+        const names = (sec === "projects" ? [item?.name, item?.org] : [item?.org]).map((x) => String(x ?? "")).filter((x) => norm(x));
+        for (const code of all) {
+          const s = await this.story(code);
+          if (!s || s.status !== "confirmed" || !s.conf || s.conf.bad) continue; // confirmedNoSection (above) says why it cannot be compared
+          const conf = s.conf;
+          if (norm(String(item?.role ?? ""))) {
+            if (conf.title == null) out.push({ where, message: T.confirmedRoleNoTitle(code), quote: excerpt(String(item.role)) });
+            else if (normQ(conf.title) !== normQ(item.role)) out.push({ where, message: T.confirmedRole(code, conf.title), quote: excerpt(String(item.role)) });
+          }
+          // the card's Org: line, else the file header's org (the card the user saw carried the same org and dates)
+          const cardOrg = conf.org ?? s.org;
+          for (const name of names) {
+            if (!normName(cardOrg)) out.push({ where, message: T.confirmedOrgNone(code), quote: excerpt(name) });
+            else if (!(sec === "projects" ? projectNameOk(name, cardOrg, conf.org !== undefined, [conf.title, s.title]) : sameName(name, cardOrg)))
+              out.push({ where, message: T.confirmedOrg(code, cardOrg), quote: excerpt(name) });
+          }
+          if (norm(String(item?.dates ?? ""))) {
+            const cardDates = conf.dates ?? s.dates;
+            if (!normDates(cardDates)) out.push({ where, message: T.confirmedDatesNone(code), quote: excerpt(String(item.dates)) });
+            else if (normDates(cardDates) !== normDates(item.dates)) out.push({ where, message: T.confirmedDates(code, cardDates), quote: excerpt(String(item.dates)) });
+          }
         }
       }
     for (const line of asArray(this.resume.skills)) {
@@ -498,16 +587,21 @@ class Context {
       const c = await cards(codes);
       if (!c.ok) continue;
       for (const it of asArray(line.items)) if (!c.skills.has(normQ(it))) out.push({ where, message: T.confirmedSkill(codes.join(", ")), quote: excerpt(String(it)) });
+      if (c.labels.length && norm(String(line.label ?? "")) && !c.labels.some((l) => normQ(l).toLowerCase() === normQ(line.label).toLowerCase()))
+        out.push({ where, message: T.confirmedSkillLabel(codes.join(", "), c.labels.join(" / ")), quote: excerpt(String(line.label)) });
     }
-    // The numbers in a confirmed card's sentences are numbers the user said: in the same card's "Your words" or "Numbers".
-    // (Only a consistency check: an AI that edits both the card and the resume to match is not caught here.)
+    // The numbers and years in a confirmed card's sentences are ones the user said: in the same card's "Your words" or "Numbers" (a year
+    // may also be in the card's dates). (Only a consistency check: an AI that edits both the card and the resume to match is not caught here.)
     for (const [code, s] of this.stories) {
       if (!s || s.status !== "confirmed" || !s.conf || s.conf.bad) continue;
-      const shown = [...s.conf.sentences, ...s.conf.skills].join("\n");
-      const said = s.said ?? "";
+      const shown = asciiDigits([...s.conf.sentences, ...s.conf.skills].join("\n"));
+      const said = asciiDigits(s.said ?? "");
       const have = new Set([...R.numbers(normEnglish(said)), ...vagueAmounts(said)]);
+      const years = new Set(`${said}\n${s.conf.dates ?? s.dates}`.match(YEAR4) ?? []);
       const extra = [...new Set([...R.numbers(normEnglish(shown)), ...vagueAmounts(shown)])].filter((n) => !have.has(n)).sort();
-      if (extra.length) out.push({ where, message: T.confirmedNumbers(code, extra.join(", ")), quote: excerpt(s.conf.sentences.find((x) => extra.some((n) => R.numbers(normEnglish(x)).has(n) || vagueAmounts(x).includes(n))) ?? shown) });
+      const extraYears = [...new Set(shown.match(YEAR4) ?? [])].filter((y) => !years.has(y) && !have.has(y) && !extra.includes(y)).sort();
+      const all = [...extra, ...extraYears];
+      if (all.length) out.push({ where, message: T.confirmedNumbers(code, all.join(", ")), quote: excerpt(s.conf.sentences.find((x) => all.some((n) => asciiDigits(x).includes(n))) ?? shown) });
     }
     // a summary in resume.yaml follows the same title-word rule as a target's summary
     for (const x of R.strings(this.resume.summary ?? "")) out.push(...this.titleWordProblems(x, where));
@@ -588,18 +682,35 @@ class Context {
   titleWordProblems(text: string, where: string): Problem[] {
     if (this.market.market !== "us") return [];
     const out: Problem[] = [];
+    const DET = "(?:the|her|his|their|my|our|its|your)";
+    const stem = (w: string) => w.toLowerCase().replace(/s$/, "");
     for (const line of String(text).split(/\r?\n/)) {
       if (!line.trim() || SOURCE_LINE.test(line)) continue;
-      const t = line.normalize("NFKC");
+      let t = deHomoglyph(line.replace(INVISIBLE, "").normalize("NFKC"));
+      // an employer, school or skill that resume.yaml already has (confirmed) may contain a title word: "Head Start", "Meta Ads Manager"
+      for (const n of this.maskNames) t = t.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (x) => " ".repeat(x.length));
       const seekAt = [...t.matchAll(/(?<![A-Za-z])(?:seeking|looking\s+for|interested\s+in)(?![A-Za-z])/gi)].map((x) => x.index!);
-      // the word is inside a "Seeking ... roles" clause: after the keyword, before the next "|" or full stop
-      const inSeeking = (at: number) => seekAt.some((s) => s < at && !/[|.;]/.test(t.slice(s, at)));
+      // the word is inside a "Seeking ... roles" clause: after the keyword, up to the next "|" , . ; or dash, or a word that starts another
+      // statement (after, as, having ...), and it is followed within three words by roles / positions / jobs
+      const inSeeking = (at: number, end: number) =>
+        seekAt.some((s) => s < at && !/[|.;,—–]|(?<![A-Za-z])(?:after|as|having|former|previously|while|who)(?![A-Za-z])/i.test(t.slice(s, at))) &&
+        /^[\s,/&-]*(?:[A-Za-z'’-]+[\s,/&-]+){0,3}(?:roles?|positions?|jobs?|opportunit(?:y|ies))(?![A-Za-z])/i.test(t.slice(end));
+      const seen = new Set<number>();
       for (const re of TITLE_WORDS)
         for (const m of t.matchAll(re)) {
-          const w = m[0].toLowerCase();
-          if (this.titleWords.has(w) || (inSeeking(m.index!) && this.wantWords.has(w))) continue;
-          if (/(?<![A-Za-z])(?:the|her|his|their|my|our|its|your)\s+(?:[A-Za-z-]+\s+)?$/i.test(t.slice(0, m.index!)) || /^['’]s(?![A-Za-z])/.test(t.slice(m.index! + m[0].length))) continue;
-          out.push({ where, message: this.T.titleWord(m[0]), quote: excerpt(line, m[0]) });
+          const at = m.index!;
+          const end = at + m[0].length;
+          if (seen.has(at)) continue;
+          seen.add(at);
+          const w = stem(m[0]);
+          if (this.titleWords.has(w) || (inSeeking(at, end) && this.wantWords.has(w))) continue;
+          // a person, not a title: "reported to the manager", "with her shift supervisor", "the manager's request". Not "served as the
+          // store manager", "promoted to her shift supervisor" (those claim the title).
+          const before = t.slice(0, at);
+          const ref = new RegExp(`(^|[.;:!?]\\s*|(?<![A-Za-z])(?:to|with|for|by|from|under|assisted|helped|supported|alongside))\\s*${DET}\\s+(?:[A-Za-z-]+\\s+)?$`, "i").exec(before);
+          if (ref && !/(?<![A-Za-z])(?:promoted|promotion|advanced|moved\s+up|elevated|appointed|named|rose)\s+(?:to|as)\s*$/i.test(before.slice(0, ref.index + ref[1].length))) continue;
+          if (/^['’]s(?![A-Za-z])/.test(t.slice(end))) continue;
+          out.push({ where, message: this.T.titleWord(m[0]), quote: excerpt(t, m[0]) });
         }
     }
     return out;
@@ -875,10 +986,15 @@ function expectedText(ctx: Context, target: any, tpl: Template): string[] | null
       for (const [k, v] of Object.entries(node)) if (!["id", "source", "sources", "variants", "kind"].includes(k)) add(v);
   };
   add(doc.basics);
+  // market us: an entry prints only the fields the template has (resume.yaml with any other key is an error of its own); a stray key
+  // such as `title` or `location` text cannot widen what the file may say
+  const us = ctx.market.market === "us";
+  const PRINTED = ["org", "role", "name", "school", "degree", "dates", "location", "details", "bullets"];
+  const printed = (items: any[]) => (us ? asArray(items).map((it) => (it && typeof it === "object" ? Object.fromEntries(Object.entries(it).filter(([k]) => PRINTED.includes(k))) : it)) : items);
   for (const s of doc.sections) {
     add(s.title);
     add(s.text);
-    add(s.items);
+    add(printed(s.items));
     for (const l of s.lines || []) {
       add(l.label);
       for (const x of l.items) {
@@ -888,7 +1004,8 @@ function expectedText(ctx: Context, target: any, tpl: Template): string[] | null
     }
   }
   // English version: school and company names come from the target's en_names (make-resume-file.md 第 5 步)
-  if (target.en_names && typeof target.en_names === "object") add(Object.values(target.en_names));
+  // (a US folder has no en_names: the resume data is already English)
+  if (!us && target.en_names && typeof target.en_names === "object") add(Object.values(target.en_names));
   out.push(...tpl.words.map(norm));
   return [...new Set(out)].sort((a, b) => b.length - a.length);
 }

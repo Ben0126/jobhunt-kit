@@ -109,7 +109,11 @@ export function normEnglish(text: string): string {
   let t = String(text).replace(INVISIBLE, "").normalize("NFKC");
   t = t.replace(MONTH_YEAR, " ").replace(SLASH_YEAR, " ").replace(QUARTER, " ");
   t = t.replace(/(?<![A-Za-z0-9])B2([BC])(?![A-Za-z0-9])/g, "B-to-$1"); // B2B / B2C are words, not the number 2
-  t = t.replace(WORD_RUN, (run, offset: number, str: string) =>
+  // a dozen = 12, half a dozen = 6, two dozen = 24 (before the number words, so "two dozen" is not read as 2)
+  t = t.replace(/(?<![A-Za-z])half\s+(?:a\s+)?dozen(?![A-Za-z])/gi, "6");
+  t = t.replace(/(?<![A-Za-z0-9])([2-9]|two|three|four|five|six|seven|eight|nine)\s+dozen(?![A-Za-z])/gi, (_, n: string) => String(12 * (UNITS[n.toLowerCase()] ?? Number(n))));
+  t = t.replace(/(?<![A-Za-z])(?:(?:a|one)\s+)?dozen(?![A-Za-z])/gi, "12");
+  t = t.replace(WORD_RUN,(run, offset: number, str: string) =>
     /^(?:hundred|thousand|million|billion)/i.test(run) && /[0-9]\s?$/.test(str.slice(0, offset)) ? run : wordsToDigits(run, str.slice(offset + run.length)), // "1.2 million" is the digits' own
   );
   t = t.replace(/([0-9])-percent(?![A-Za-z])/gi, "$1 percent");

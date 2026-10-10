@@ -72,6 +72,8 @@ const S001 =
   head("S-001", "Bookstore sales associate", "Northfield College Bookstore", "Jan 2024 – May 2026", "I rang up sales at the register, around 30 customers per shift, and I trained 2 new student hires") +
   `## Sentence at confirmation (do not change)\n\nTitle: Sales Associate\n1. Rang up sales at the register, with about 30 customers per shift.\n2. Trained 2 new student hires on the register.\n\nShown back in Chinese:\n1. 在收銀台結帳。\n2. 訓練 2 位新進學生員工。\n- a note added later: they asked for \"led a team\", refused\n`;
 const S003 = head("S-003", "Food drive", "Northfield Food Drive", "Nov 2024") + `## Sentence at confirmation (do not change)\n\n1. Helped collect cans as one of the volunteers.\n\nShown back: their words are English, so no translation needed.\n`;
+// P8fix2 (M1): every card a bullet names must be the same job; S-006 is a second card of the bookstore job, for the legitimate two-source bullet
+const S006 = head("S-006", "Bookstore sales associate (more)", "Northfield College Bookstore", "Jan 2024 – May 2026") + `## Sentence at confirmation (do not change)\n\nTitle: Sales Associate\n1. Restocked shelves before each shift.\n`;
 const S004 = head("S-004", "Software", "") + `## Sentence at confirmation (do not change)\n\nSoftware: Google Sheets, Excel (basic)\n\nShown back: their words are English, so no translation needed.\n`;
 const S005 = head("S-005", "Languages", "") + `## Sentence at confirmation (do not change)\n\nLanguages: Portuguese (native), English (fluent)\n`;
 
@@ -87,6 +89,7 @@ function usFolder(opts: { resume?: string; s001?: string } = {}): string {
   for (const f of ["S-001", "S-002", "S-003", "S-004"]) rmSync(join(dir, "me/stories", `${f}.md`), { force: true });
   write(dir, "me/stories/S-001.md", opts.s001 ?? S001);
   write(dir, "me/stories/S-003.md", S003);
+  write(dir, "me/stories/S-006.md", S006);
   write(dir, "me/stories/S-004.md", S004);
   write(dir, "me/stories/S-005.md", S005);
   write(dir, "me/profile.md", PROFILE);
@@ -293,7 +296,7 @@ test("P8fix-2：重點掛多個來源、或來源不是 S- 代號，也要和確
   const fake = "Managed the restaurant and its staff.";
   const swap = (to: string) => RESUME.replace(`text: ${bullet}\n        source: S-001`, to);
   // legitimate: a sentence of any of the cards it names
-  await rdOk(usFolder({ resume: swap(`text: ${bullet}\n        source: S-003, S-001`) }));
+  await rdOk(usFolder({ resume: swap(`text: ${bullet}\n        source: S-006, S-001`) }));
   // an invented sentence with two sources (K04h)
   expect(has(await rd(usFolder({ resume: swap(`text: ${fake}\n        source: S-003, S-001`) })), "Sentence at confirmation")).toBe(true);
   expect(has(await rd(usFolder({ resume: swap(`text: ${fake}\n        sources: [S-001, S-003]`) })), "Sentence at confirmation")).toBe(true);

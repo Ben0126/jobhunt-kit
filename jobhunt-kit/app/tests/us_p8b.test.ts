@@ -134,7 +134,8 @@ test("1b: a card that records no org or dates cannot back an employer or dates i
 
 test("1b: same employer written the way the card has it still passes (case, a bracketed location, dash style, a longer project name)", async () => {
   await rdOk(usFolder({ s001: { ...S001, org: "northfield college bookstore (Columbus)", dates: "Jan 2024 - May 2026" } }));
-  await rdOk(usFolder({ resume: edit(RESUME, "name: Northfield Food Drive", 'name: "Volunteer, Northfield Food Drive"') }));
+  // (fixture data: the extra word has to be a word of the card's own Title, so the card is titled Volunteer; see the P8fix2 tests below)
+  await rdOk(usFolder({ s003: { ...S003, conf: "Title: Volunteer\n" + S003.conf }, resume: edit(RESUME, "name: Northfield Food Drive", 'name: "Volunteer, Northfield Food Drive"') }));
   // an employer is not allowed the extra words a project name is
   expect(has(await rd(usFolder({ resume: edit(RESUME, "org: Northfield College Bookstore", "org: Northfield College Bookstore Inc") })), "is not the")).toBe(true);
 });
@@ -257,4 +258,207 @@ test("1e: a skills line whose only source is Education / Job goals → error; em
   expect(has(await rd(usFolder({ resume: noSource })), "not tied to any S- card")).toBe(true);
   const empty = edit(RESUME, "  - {label: Languages, items: [Portuguese (native), English (fluent)], sources: [S-005], variants: [en]}", "  - {label: Languages, items: [], sources: [], variants: [en]}");
   await rdOk(usFolder({ resume: empty }));
+});
+
+// ================================================================ P8 fix round 2, second pass (review M1-M8)
+// Each test below was written against the bypass a reviewer actually ran; the controls next to them are the legitimate spellings.
+
+const S006: Card = { title: "Marketing club treasurer", org: "Northfield Marketing Club", dates: "Aug 2024 – May 2025", said: "I collected the dues", conf: "Title: Treasurer\n1. Collected dues." };
+const CLUB_ITEM = `  - id: s006
+    org: Northfield Marketing Club
+    role: Treasurer
+    dates: "Aug 2024 – May 2025"
+    variants: [en]
+    bullets:
+      - id: s006_a
+        text: Collected dues.
+        source: S-006
+`;
+const RESUME2 = edit(RESUME, "projects:\n", CLUB_ITEM + "projects:\n");
+const two = (o: Parameters<typeof usFolder>[0] = {}) => usFolder({ resume: RESUME2, ...o, extra: { "me/stories/S-006.md": story("S-006", S006), ...(o.extra ?? {}) } });
+
+test("M1 control: two jobs, each on its own card, pass", async () => {
+  await rdOk(two());
+});
+
+test("M1: an entry that names two cards must agree with EACH card (org, dates, title), whether the second card is on the entry or on a bullet", async () => {
+  // item-level second source: the bookstore entry also names the club card → the club's org / dates / title do not match
+  const msgs = await rd(two({ resume: edit(RESUME2, "    role: Sales Associate\n", "    role: Sales Associate\n    sources: [S-001, S-006]\n") }));
+  expect(has(msgs, "is not the \"Northfield Marketing Club\" confirmed on the card of S-006") || has(msgs, "card of S-006")).toBe(true);
+  expect(has(msgs, "is not the title \"Treasurer\"")).toBe(true);
+  expect(has(msgs, "dates in resume.yaml are not the \"Aug 2024 – May 2025\"")).toBe(true);
+  // the employer, dates and title all rewritten to the club's: now the bookstore card (S-001) disagrees
+  const swapped = edit(edit(edit(RESUME2, "    org: Northfield College Bookstore\n", "    org: Northfield Marketing Club\n"), 'dates: "Jan 2024 – May 2026"', 'dates: "Aug 2024 – May 2025"'), "role: Sales Associate", "role: Treasurer");
+  expect(has(await rd(two({ resume: edit(swapped, "    role: Treasurer\n", "    role: Treasurer\n    sources: [S-001, S-006]\n") })), "card of S-001")).toBe(true);
+  // a bullet moved under another job: its card is the club's
+  const moved = edit(RESUME2, "      - id: s001_b\n", "      - id: s001_x\n        text: Collected dues.\n        source: S-006\n      - id: s001_b\n");
+  expect(has(await rd(two({ resume: moved })), "card of S-006")).toBe(true);
+  // a card with no Title under an entry that prints a role: the card without the title is named
+  const noTitle = edit(RESUME2, "    role: Sales Associate\n", "    role: Sales Associate\n    sources: [S-001, S-003]\n");
+  expect(has(await rd(two({ resume: noTitle })), "the \"Sentence at confirmation\" of S-003 has no Title")).toBe(true);
+});
+
+test("M2/M3: a project name or employer cannot be padded (a title in front, extra words, a bracket the card never had); the card's own bracket may be left out or kept", async () => {
+  const proj = (name: string) => edit(RESUME, "name: Northfield Food Drive", `name: ${JSON.stringify(name)}`);
+  for (const name of ["Store Manager, Northfield Food Drive", "Northfield Food Drive (Owner and Founder)", "7-Eleven Northfield Food Drive"])
+    expect([name, has(await rd(usFolder({ resume: proj(name) })), "is not the \"Northfield Food Drive\"")]).toEqual([name, true]);
+  for (const org of ["Northfield College Bookstore (Amazon)", "Northfield College Bookstore [Barnes & Noble corporate]"])
+    expect([org, has(await rd(usFolder({ resume: edit(RESUME, "org: Northfield College Bookstore", `org: ${JSON.stringify(org)}`) })), "is not the \"Northfield College Bookstore\"")]).toEqual([org, true]);
+  // with an explicit Org: line the name must be exactly the card's, even a word from the Title is too much
+  const explicit: Card = { ...S003, conf: "Title: Volunteer\nOrg: Northfield Food Drive\n" + S003.conf };
+  expect(has(await rd(usFolder({ s003: explicit, resume: proj("Volunteer, Northfield Food Drive") })), "is not the \"Northfield Food Drive\"")).toBe(true);
+  // a job-title word as the "extra" word is refused even when the card's Title has it
+  const mgr: Card = { ...S003, conf: "Title: Manager\n" + S003.conf };
+  expect(has(await rd(usFolder({ s003: mgr, resume: proj("Manager, Northfield Food Drive") })), "is not the \"Northfield Food Drive\"")).toBe(true);
+  // controls: the card's bracketed location kept or dropped; the exact name; the Title's word on the header-org fallback
+  const bracketed: Card = { ...S001, org: "Northfield College Bookstore (Columbus)" };
+  await rdOk(usFolder({ s001: bracketed }));
+  await rdOk(usFolder({ s001: bracketed, resume: edit(RESUME, "org: Northfield College Bookstore", "org: Northfield College Bookstore (Columbus)") }));
+});
+
+// ---- M4 / M5: title words
+
+test("M4: plural, lowercase team lead / head of, abbreviations, and 'the' after served as / promoted to are still title claims", async () => {
+  const bad = [
+    "Bookstore Managers alumna.",
+    "Former Supervisors of the year.",
+    "Bookstore Team Leads alumna.",
+    "Worked as a team lead at the bookstore.",
+    "Worked as a team-lead at the bookstore.",
+    "Worked as head of sales for the club.",
+    "Former CEO of a student startup.",
+    "VP of the marketing club.",
+    "Assistant Mgr at the bookstore.",
+    "A cofounder of a student club.",
+    "Served as the store manager.",
+    "Promoted to her shift supervisor role.",
+    "Mаnager of the bookstore.", // a Cyrillic a
+  ];
+  for (const s of bad) expect([s, has(await summaryMessages(s), "job title")]).toEqual([s, true]);
+  const fine = [
+    "Reported to the manager.",
+    "Worked with the shift supervisor on schedules.",
+    "Ready to lead outreach.",
+    "Generated qualified sales leads for the club.",
+    "Built leadership skills at the bookstore.",
+    "Seeking Operations Manager roles.",
+    "Trained 2 new student hires, at the manager's request.",
+  ];
+  for (const s of fine) expect([s, await summaryMessages(s)]).toEqual([s, []]);
+});
+
+test("M4: a title word inside an employer, school or skill that resume.yaml already has is not a claim ('Head Start', 'Meta Ads Manager')", async () => {
+  const org = "Northfield Head Start Center";
+  const resume = edit(RESUME, "org: Northfield College Bookstore", `org: ${org}`);
+  const s001 = { ...S001, org };
+  expect(await summaryMessages(`Marketing graduate who worked at ${org}.`, { s001, resume })).toEqual([]);
+  expect(has(await summaryMessages("Marketing graduate, Head of the club.", { s001, resume }), "job title \"Head\"")).toBe(true);
+  const skills = edit(edit(RESUME, "items: [Google Sheets, Excel (basic)]", "items: [Meta Ads Manager]"), "sources: [S-004]", "sources: [S-004]");
+  const extra = { "me/stories/S-004.md": story("S-004", { ...S004, conf: "Software: Meta Ads Manager" }) };
+  expect(await summaryMessages("Marketing graduate skilled in Meta Ads Manager.", { resume: skills, extra })).toEqual([]);
+});
+
+test("M5: a 'Seeking ... roles' clause ends at a comma or 'after / as / having'; the role must be followed by roles / positions / jobs", async () => {
+  expect(has(await summaryMessages("Seeking sales roles, after working as Store Manager at the bookstore."), "job title \"Manager\"")).toBe(true);
+  expect(has(await summaryMessages("Seeking sales roles as a Manager."), "job title \"Manager\"")).toBe(true);
+  expect(has(await summaryMessages("Seeking Operations Manager."), "job title \"Manager\"")).toBe(true);
+  expect(await summaryMessages("Seeking Operations Manager or Director positions.")).toEqual([expect.stringContaining("job title \"Director\"")]);
+  expect(await summaryMessages("Seeking Operations Manager roles.")).toEqual([]);
+});
+
+// ---- M6: numbers
+
+const withWords = (card: Card, words: string) => story("S-001", card).replace(/## Your words[\s\S]*?(?=## Sentence for the resume)/, `## Your words\n\n${words}\n\n`);
+const hires = (n: string): Card => ({ ...S001, said: "I helped customers at the register, usually around 30 customers a shift, and I trained 2 new student hires", conf: S001.conf.replace("2 new student hires", `${n} new student hires`) });
+
+test("M6a: 'a dozen' is 12 (half a dozen 6, two dozen 24) on both sides", async () => {
+  expect(has(await rd(usFolder({ s001: hires("a dozen") })), "contain the number 12")).toBe(true);
+  expect(has(await rd(usFolder({ s001: hires("half a dozen") })), "contain the number 6")).toBe(true);
+  expect(has(await rd(usFolder({ s001: hires("two dozen") })), "contain the number 24")).toBe(true);
+  // the user did say it
+  const said = { ...hires("a dozen"), said: "I helped customers, around 30 customers a shift, and I trained a dozen new student hires" };
+  await rdOk(usFolder({ s001: said, resume: edit(RESUME, "Trained 2 new student hires", "Trained a dozen new student hires") }));
+});
+
+test("M6b: a year in a confirmed sentence has to be in the user's words, the Numbers section or the card's dates", async () => {
+  const since = { ...hires("2"), conf: S001.conf.replace("on the register.", "on the register since 2019.") };
+  expect(has(await rd(usFolder({ s001: since })), "contain the number 2019")).toBe(true);
+  const resume = edit(RESUME, "Trained 2 new student hires on the register.", "Trained 2 new student hires on the register since 2019.");
+  await rdOk(usFolder({ resume, s001: { ...since, said: since.said + ", since 2019" } }));
+  // the card's own dates (2024) vouch for a 2024 in a sentence
+  await rdOk(usFolder({ resume: edit(RESUME, "Trained 2 new student hires on the register.", "Trained 2 new student hires on the register in 2024."), s001: { ...hires("2"), conf: S001.conf.replace("on the register.", "on the register in 2024.") } }));
+});
+
+test("M6c: what the old resume said and the user denied is not 'said'; with self-attest it is", async () => {
+  const sentence = (via: string) =>
+    withWords(S001, "Old resume text (old-resume.docx, word for word; NOT their words, they corrected it):\n\n> Increased event attendance by 50%\n\nTheir words (added in conversation):\n\n> I trained 2 new student hires, around 30 customers a shift.\n> 50%那個我不知道 是我朋友幫我寫的")
+      .replace("confirmed_via: chat", `confirmed_via: ${via}`)
+      .replace("2. Trained 2 new student hires on the register.", "2. Trained 2 new student hires on the register.\n3. Increased event attendance by 50%.");
+  const run = async (via: string, numbers: string) => {
+    const dir = usFolder();
+    write(dir, "me/stories/S-001.md", sentence(via).replace("- none", numbers));
+    return rd(dir);
+  };
+  expect(has(await run("chat", "- 50% dropped: \"我不知道\" (a friend wrote it)"), "contain the number 50%")).toBe(true);
+  expect(has(await run("chat", "- none"), "contain the number 50%")).toBe(true);
+  expect(has(await run("self-attest", "- none"), "contain the number 50%")).toBe(false);
+  // a hedge in its own clause does not take the other numbers with it
+  await rdOk(usFolder({ s001: { ...S001, said: "我一個班次大概30個客人，我不知道確切的數字，還有我教過2個新同事" } }));
+});
+
+test("M6: Arabic-Indic digits are read as digits", async () => {
+  expect(has(await rd(usFolder({ s001: hires("١٢") })), "contain the number 12")).toBe(true);
+});
+
+// ---- M7: what the printed resume file may say
+
+async function resumeFileMessages(o: { resume?: string; target?: string; swap?: [string, string][] }): Promise<string[]> {
+  const dir = usFolder({ resume: o.resume, extra: { "targets/t1.yaml": o.target ?? TARGET("Marketing graduate.") } });
+  const tpl = readFileSync(join(import.meta.dir, "..", "..", "jobhunt", "scaffold", "workspace-us", "templates", "resume-us.html"), "utf-8");
+  const body = `<main class="page" id="page">
+  <header class="top"><h1 class="name">Ana Ribeiro</h1><ul class="contact"><li>ana.ribeiro@gmail.com</li></ul></header>
+  <section class="block"><h2>Summary</h2><p class="summary">Marketing graduate.</p></section>
+  <section class="block"><h2>Education</h2><div class="entry"><div class="entry-head"><div class="entry-title">Northfield College<span class="role">B.B.A. Marketing</span></div><div class="entry-date">May 2026</div></div></div></section>
+  <section class="block"><h2>Experience</h2><div class="entry"><div class="entry-head"><div class="entry-title">Northfield College Bookstore<span class="role">Sales Associate</span></div><div class="entry-date">Jan 2024 – May 2026</div></div>
+  <ul><li>Helped customers at the register, usually about 30 customers a shift.</li><li>Trained 2 new student hires on the register.</li></ul></div></section>
+  <section class="block"><h2>Projects &amp; Activities</h2><div class="entry"><div class="entry-head"><div class="entry-title">Northfield Food Drive</div><div class="entry-date">Nov 2024</div></div><ul><li>Helped collect cans as one of the volunteers.</li></ul></div></section>
+  <section class="block"><h2>Skills &amp; Certifications</h2><ul class="skills"><li><span class="label">Software:</span> Google Sheets, Excel (basic)</li><li><span class="label">Languages:</span> Portuguese (native), English (fluent)</li></ul></section>
+</main>`;
+  let html = tpl.replace("<title>{{Full Name}} Resume</title>", "<title>Ana Ribeiro Resume</title>").replace(/<main class="page" id="page">[\s\S]*?<\/main>/, () => body);
+  for (const [a, b] of o.swap ?? []) {
+    expect(html.includes(a), a).toBe(true);
+    html = html.replace(a, b);
+  }
+  write(dir, "resumes/t1.html", html);
+  const report = await runChecks(new Folder(dir), { ids: ["t1"], general: false });
+  return report.items[0].problems.filter((p) => p.where.includes("Resume file") || p.where.includes("履歷檔")).map((p) => p.message);
+}
+
+test("M7 control: the plain printed resume file passes", async () => {
+  expect(await resumeFileMessages({})).toEqual([]);
+});
+
+test("M7: the printed file may not carry a title, employer or place through an extra key or en_names; resume.yaml items with unknown keys are errors", async () => {
+  const roleSwap: [string, string][] = [['Bookstore<span class="role">Sales Associate</span>', 'Bookstore<span class="role">Store Manager</span>']];
+  // a `title` key whose value is then printed
+  const withTitle = edit(RESUME, "    role: Sales Associate\n", "    role: Sales Associate\n    title: Store Manager\n");
+  expect((await resumeFileMessages({ resume: withTitle, swap: roleSwap })).length).toBeGreaterThan(0);
+  expect(has(await rd(usFolder({ resume: withTitle })), "a field the program does not know: \"title\"")).toBe(true);
+  // en_names in the target (a Taiwan-kit field) no longer widens what the file may print
+  const target = TARGET("Marketing graduate.").replace("skills_order: []", "skills_order: []\nen_names: {s001: Store Manager}");
+  expect((await resumeFileMessages({ target, swap: roleSwap })).length).toBeGreaterThan(0);
+  const orgSwap: [string, string][] = [['<div class="entry-title">Northfield College Bookstore<span', '<div class="entry-title">Amazon<span']];
+  expect((await resumeFileMessages({ target: TARGET("Marketing graduate.").replace("skills_order: []", "skills_order: []\nen_names: {s001: Amazon}"), swap: orgSwap })).length).toBeGreaterThan(0);
+  // a location that is an organization (two commas) is refused, a plain place is fine
+  expect(has(await rd(usFolder({ resume: edit(RESUME, "    role: Sales Associate\n", '    role: Sales Associate\n    location: "Amazon HQ, Seattle, WA"\n') })), "not a plain place")).toBe(true);
+  await rdOk(usFolder({ resume: edit(RESUME, "    role: Sales Associate\n", '    role: Sales Associate\n    location: "Columbus, OH"\n') }));
+});
+
+// ---- M8: the label of a skills line
+
+test("M8: the label of a skills line is the card's label", async () => {
+  expect(has(await rd(usFolder({ resume: edit(RESUME, "{label: Software,", "{label: Salesforce Certified Administrator,") })), "label \"Software\"")).toBe(true);
+  expect(has(await rd(usFolder({ resume: edit(RESUME, "{label: Software,", "{label: Certified,") })), "label")).toBe(true);
+  await rdOk(usFolder({ resume: edit(RESUME, "{label: Software,", "{label: software,") }));
+  expect(parseConfirmed("## Sentence at confirmation (do not change)\n\nSoftware: Excel, Word\n")).toMatchObject({ label: "Software", skills: ["Excel", "Word"] });
 });
