@@ -43,6 +43,8 @@ export function assetName(market: Market, platform: string = process.platform, a
 
 export const downloadUrl = (asset: string) => `https://github.com/${REPO}/releases/latest/download/${asset}`;
 export const notesUrl = (tag: string) => `https://github.com/${REPO}/releases/tag/${tag}`;
+/** The Chinese notes of a release (release-notes/<tag>.zh.md at that tag): what the Taiwan (zh-TW) page links to. */
+export const notesZhUrl = (tag: string) => `https://github.com/${REPO}/blob/${tag}/release-notes/${tag}.zh.md`;
 
 /** `update_check: false` (also no / off) in jobhunt.yaml turns the reminder off. Anything else, or nothing, leaves it on. */
 export function updateCheckEnabled(cfg: unknown): boolean {
@@ -51,7 +53,7 @@ export function updateCheckEnabled(cfg: unknown): boolean {
   return !(typeof v === "string" && /^(false|no|off)$/i.test(v.trim()));
 }
 
-export type UpdateNotice = { version: string; notesUrl: string; downloadUrl: string; zipName: string; programName: string };
+export type UpdateNotice = { version: string; notesUrl: string; notesZhUrl: string; downloadUrl: string; zipName: string; programName: string };
 
 export type UpdateOptions = {
   folder: Folder;
@@ -123,7 +125,7 @@ export function createUpdateChecker(o: UpdateOptions): UpdateChecker {
     } else memo = seen;
 
     if (!seen.latest || !isNewer(seen.latest, version)) return null;
-    return { version: seen.latest, notesUrl: notesUrl(seen.latest), downloadUrl: downloadUrl(zip), zipName: zip, programName: program };
+    return { version: seen.latest, notesUrl: notesUrl(seen.latest), notesZhUrl: notesZhUrl(seen.latest), downloadUrl: downloadUrl(zip), zipName: zip, programName: program };
   }
 
   return {

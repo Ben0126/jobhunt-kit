@@ -1,13 +1,13 @@
 // "A newer version exists" reminder (src/update.ts, GET /api/update, ui/app.js banner, --version, build.ts).
 // Nothing here may touch the network: every check gets an injected fetch and clock.
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Folder } from "../src/folder.ts";
 import { startServer } from "../src/server.ts";
 import {
-  assetName, CHECK_EVERY_MS, createUpdateChecker, downloadUrl, isNewer, LATEST_RELEASE_API, parseVersion, programName, updateCheckEnabled,
+  assetName, CHECK_EVERY_MS, createUpdateChecker, downloadUrl, isNewer, LATEST_RELEASE_API, notesUrl, notesZhUrl, parseVersion, programName, updateCheckEnabled,
 } from "../src/update.ts";
 import { cleanup, copyFixture } from "./helpers.ts";
 
@@ -96,6 +96,7 @@ test("有新版：只打一次 GitHub 的 latest 網址（沒有查詢參數）�
   expect(n).toEqual({
     version: "v0.8",
     notesUrl: "https://github.com/Ben0126/jobhunt-kit/releases/tag/v0.8",
+    notesZhUrl: "https://github.com/Ben0126/jobhunt-kit/blob/v0.8/release-notes/v0.8.zh.md",
     downloadUrl: "https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-windows.zip",
     zipName: "job-hunt-windows.zip",
     programName: "jobhunt.exe",
@@ -229,6 +230,7 @@ test("GET /api/update：有新版就回網址和檔名；沒有就只回 availab
     available: true,
     version: "v0.8",
     notesUrl: "https://github.com/Ben0126/jobhunt-kit/releases/tag/v0.8",
+    notesZhUrl: "https://github.com/Ben0126/jobhunt-kit/blob/v0.8/release-notes/v0.8.zh.md",
     downloadUrl: "https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-windows.zip",
     zipName: "job-hunt-windows.zip",
     programName: "jobhunt.exe",
@@ -281,6 +283,16 @@ function uiText() {
   const block = js.slice(js.indexOf("// <ui-text>"), js.indexOf("// </ui-text>"));
   return new Function(`${block}\nreturn TEXT;`)() as Record<"zh-TW" | "en", any>;
 }
+
+test("橫幅的「看這個版本改了什麼」：台灣版介面連到中文說明檔，英文介面連到發布頁", () => {
+  expect(notesUrl("v0.8")).toBe("https://github.com/Ben0126/jobhunt-kit/releases/tag/v0.8");
+  expect(notesZhUrl("v0.10.1")).toBe("https://github.com/Ben0126/jobhunt-kit/blob/v0.10.1/release-notes/v0.10.1.zh.md");
+  const js = readFileSync(join(APP, "ui", "app.js"), "utf-8");
+  const show = js.slice(js.indexOf("function showUpdate"), js.indexOf("async function checkUpdate"));
+  // zh-TW page: the Chinese notes (falls back to the release page if the field is missing); English page: the release page
+  expect(show).toMatch(/LANG === "zh-TW" && u\.notesZhUrl \? u\.notesZhUrl : u\.notesUrl/);
+  expect(show).toContain("link(notes, T.updateNotes)");
+});
 
 test("橫幅的字：中英文都有，講清楚下載哪個檔、只換哪個程式、絕對不要整包蓋過去", () => {
   const { "zh-TW": zh, en } = uiText();
@@ -392,18 +404,55 @@ test("橫幅的 Windows 步驟：用「類型是應用程式」說明哪個檔�
   expect(js).toMatch(/Type column says "Application"|type is "Application"/i);
 });
 
-test("release.yml 的發布說明：有「這次改了什麼」和「已經在用舊版」兩段（中英文），並警告不要整包蓋過去", () => {
+// Spec change (owner: the repo and the Releases page are English-first, Chinese by link): the notes body is English; the
+// Chinese notes live in release-notes/<tag>.zh.md and README.zh-TW.md, linked from the first line. The old test pinned the
+// Chinese body headings inside the heredoc, which no longer exist there by design. The warnings are still pinned.
+test("release.yml 的發布說明：英文為主；第一行連到中文說明；有「What changed」和「Already using an older version」，並警告不要整包蓋過去", () => {
   const y = readFileSync(join(APP, "..", "..", ".github", "workflows", "release.yml"), "utf-8");
   const notes = y.slice(y.indexOf("cat > notes.md"), y.indexOf("cat notes.md"));
-  for (const s of ["## 這次改了什麼", "## 已經在用舊版？", "## What changed", "## Already using an older version?"]) expect(notes).toContain(s);
-  expect(notes).toContain("不要把整個 zip");
+  for (const s of ["## What changed", "## Already using an older version?", "## Which file to download", "## Requirements", "## The program is not code-signed"]) expect(notes).toContain(s);
   expect(notes).toMatch(/Do not unzip the whole zip over/i);
   expect(notes).not.toMatch(/`/); // unquoted heredoc: a backtick would run as a command
-  // what changed in each version lives in release-notes/<tag>.{zh,en}.md (a variable's contents are not re-run as commands)
-  expect(notes).toContain("${NOTES_ZH}");
+  // first line: link for Chinese readers (this tag's Chinese notes + README.zh-TW.md)
+  const first = notes.split("\n").find((l) => l.trim() && !l.includes("cat > notes.md"))!;
+  expect(first).toContain("https://github.com/${REPO}/blob/${TAG}/release-notes/${TAG}.zh.md");
+  expect(first).toContain("README.zh-TW.md");
+  expect(first).toContain("繁體中文");
+  // the Chinese body is not in the heredoc any more, and the Chinese notes are not inlined
+  expect(notes).not.toContain("${NOTES_ZH}");
+  expect(notes).not.toContain("## 這次改了什麼");
+  // what changed lives in release-notes/<tag>.{zh,en}.md (a variable's contents are not re-run as commands); both stay required
   expect(notes).toContain("${NOTES_EN}");
   expect(y).toContain('test -s "$f"');
+  expect(y).toContain('"release-notes/$TAG.zh.md" "release-notes/$TAG.en.md"');
+  // both kits are still offered, with English wording for the Taiwan files
+  for (const f of ["job-hunt-windows.zip", "job-hunt-mac-apple.zip", "job-hunt-mac-intel.zip", "job-hunt-us-windows.zip", "job-hunt-us-mac-apple.zip", "job-hunt-us-mac-intel.zip"]) expect(notes).toContain(f);
+  expect(notes).toContain("Taiwan edition (Chinese)");
   const rn = join(APP, "..", "..", "release-notes");
   expect(readFileSync(join(rn, "v0.8.zh.md"), "utf-8")).toContain("每天最多問 GitHub 一次");
   expect(readFileSync(join(rn, "v0.8.en.md"), "utf-8")).toMatch(/at most once a day/);
+});
+
+test("README.zh-TW.md 有固定的「已經在用舊版」更新說明（中文發布說明連過去）；README.md 英文為主並連到中文版", () => {
+  const root = join(APP, "..", "..");
+  const zh = readFileSync(join(root, "README.zh-TW.md"), "utf-8");
+  expect(zh).toContain("## 已經在用舊版？");
+  expect(zh).toContain("千萬不要把整個 zip");
+  expect(zh).toContain("README.md");
+  const en = readFileSync(join(root, "README.md"), "utf-8");
+  expect(en.split("\n").slice(0, 12).join("\n")).toContain("README.zh-TW.md");
+  expect(en).not.toMatch(/^#+ .*[一-鿿]/m); // English headings only (the Chinese file name 開始使用.md may appear in running text)
+});
+
+
+// 未來版本的中文發布說明會被單獨打開（發布頁第一行、台灣版介面提醒），檔內沒有「下面」那一段，
+// 所以更新步驟必須連到 README.zh-TW.md 的固定段落。已發布的 v0.6/v0.7/v0.8 不動。
+test("未發布版本的 release-notes/*.zh.md 不能寫「照下面…已經在用舊版」，提到舊版就要連到 README.zh-TW.md 的更新段落", () => {
+  const rn = join(APP, "..", "..", "release-notes");
+  const released = new Set(["v0.6.zh.md", "v0.7.zh.md", "v0.8.zh.md"]);
+  for (const f of readdirSync(rn).filter((n) => n.endsWith(".zh.md") && !released.has(n))) {
+    const t = readFileSync(join(rn, f), "utf-8");
+    expect(t, f).not.toMatch(/下面「已經在用舊版/);
+    if (t.includes("舊版")) expect(t, f).toContain("README.zh-TW.md#已經在用舊版怎麼更新");
+  }
 });

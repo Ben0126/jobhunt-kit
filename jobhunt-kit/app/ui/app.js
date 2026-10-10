@@ -385,11 +385,13 @@ function loaded() {
 function showUpdate(u) {
   if ($("update-banner")) return;
   const link = (href, text) => h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
+  // Taiwan page: the Chinese notes of this version (falls back to the release page); English page: the release page
+  const notes = LANG === "zh-TW" && u.notesZhUrl ? u.notesZhUrl : u.notesUrl;
   const banner = h(
     "section",
     { id: "update-banner", class: "update-banner", role: "status" },
     h("h2", {}, T.updateTitle(u.version)),
-    h("p", {}, link(u.notesUrl, T.updateNotes)),
+    h("p", {}, link(notes, T.updateNotes)),
     h("p", {}, link(u.downloadUrl, T.updateDownload(u.zipName))),
     h("p", { class: "how" }, T.updateHow),
     h("ol", {}, T.updateSteps(u.programName).map((s) => h("li", {}, s))),

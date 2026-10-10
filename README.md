@@ -1,24 +1,23 @@
-# jobhunt-kit：求職小幫手
+# jobhunt-kit
 
-給找行政、人資、業務、助理這類工作的新鮮人。用你自己的 Claude，把真實經歷整理成有份量的履歷、教你填 104、陪你準備面試。**它不會幫你編經歷。**
+[中文說明 (Traditional Chinese) → README.zh-TW.md](README.zh-TW.md)
 
-覺得自己「沒什麼經歷」？打工、社團、專題、志工、實習都算。你用聊天的方式說，它一段一段幫你整理成一頁履歷，每一句都要你親自確認才會寫進去。
+A job-search helper for students and new grads that runs on your own Claude. You chat, and it turns your real experience into a one-page resume, writes text for your profiles, checks job postings, and helps you prepare for interviews. **It never makes up experience.** Every sentence goes on your resume only after you confirm it.
 
-## 下載
+Feel like you "have no experience"? Part-time jobs, campus jobs, clubs, class projects, volunteering and internships all count. You tell it about them in plain chat, one piece at a time.
 
-到這裡下載最新版：**<https://github.com/Ben0126/jobhunt-kit/releases/latest>**
+There are two editions:
 
-頁面是英文的沒關係。往下捲到「Assets」，點下面表格裡你要的那個檔名，瀏覽器就會開始下載（不用註冊或登入 GitHub）。
+- **US edition (English):** for students and new grads looking for jobs in the United States, including international students on F-1 OPT or CPT. It is written for non-engineering roles such as HR, operations, marketing, sales, finance and administration.
+- **Taiwan edition (Chinese):** for fresh grads in Taiwan looking for admin, HR, sales and assistant roles. Everything in it is in Traditional Chinese. See [README.zh-TW.md](README.zh-TW.md).
 
-| 你的電腦 | 下載這個 |
-| --- | --- |
-| Windows | `job-hunt-windows.zip` |
-| Mac（Apple 晶片，M1 以後） | `job-hunt-mac-apple.zip` |
-| Mac（Intel 處理器） | `job-hunt-mac-intel.zip` |
+## Download
 
-不知道自己的 Mac 是哪一種：按左上角蘋果選單 →「關於這台 Mac」。有「晶片」這一行、寫 Apple（例如 Apple M1、M2、M3、M4）就選 Apple；沒有「晶片」，而是「處理器」那一行寫 Intel，就選 Intel。
+Get the latest version here: **<https://github.com/Ben0126/jobhunt-kit/releases/latest>**
 
-**US edition (English), for job searches in the United States.** Same Releases page, different files:
+Scroll down to "Assets" and click the file you need. You do not need to sign in to GitHub.
+
+### US edition
 
 | Your computer | Download this |
 | --- | --- |
@@ -26,98 +25,112 @@
 | Mac (Apple silicon, M1 or later) | [`job-hunt-us-mac-apple.zip`](https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-us-mac-apple.zip) |
 | Mac (Intel processor) | [`job-hunt-us-mac-intel.zip`](https://github.com/Ben0126/jobhunt-kit/releases/latest/download/job-hunt-us-mac-intel.zip) |
 
-Unzip it and open `START-HERE.md` inside the `job-hunt-us` folder.
+Not sure which Mac you have: Apple menu, then "About This Mac". "Chip: Apple M..." means Apple silicon. "Processor: Intel" means Intel.
 
-## 需要什麼
+### Taiwan edition (Chinese)
 
-- 一台 Windows 或 Mac 電腦。
-- Claude 付費方案（Pro 或以上）。免費方案不能用下面說的 Code 分頁。不確定自己是哪一種方案，在 Claude 的「設定」（Settings）裡看得到。
-- Claude 桌面版：到 <https://claude.ai/download> 下載，安裝後登入。裡面的「Code」分頁可以讓 Claude 讀寫你電腦裡的某一個資料夾，這個工具就是靠它運作。
+| Your computer | Download this |
+| --- | --- |
+| Windows | `job-hunt-windows.zip` |
+| Mac (Apple silicon) | `job-hunt-mac-apple.zip` |
+| Mac (Intel) | `job-hunt-mac-intel.zip` |
 
-不用另外安裝其他程式。
+Setup instructions for this edition are in [README.zh-TW.md](README.zh-TW.md).
 
-## 怎麼開始
+## Using the US edition
 
-1. **解壓縮**：Windows 在檔案上按右鍵 →「全部解壓縮」→「解壓縮」；Mac 直接點兩下。打開解出來的資料夾，如果裡面還有一個叫 job-hunt 的資料夾，要用裡面這個。判斷方法：點進去看得到「開始使用.md」的，就是對的那一個。把它放在好找的地方（例如「文件」），之後不要再搬動它。
-2. **打開 Claude 桌面版**，點上方的「Code」分頁。
-3. **選資料夾**：選裡面看得到「開始使用.md」的那個資料夾。
-4. **信任資料夾**：如果跳出「要不要信任這個資料夾」，選信任（Trust／Yes）。這是讓 Claude 可以讀寫這個資料夾裡的檔案。
-5. **輸入「開始」**，送出。AI 會自己讀資料夾裡的規則，接著跟你聊。
+### What you need
 
-之後每次回來：同樣在 Code 分頁選同一個資料夾，開新對話說「繼續」。
+- A Windows or Mac computer.
+- A paid Claude plan (Pro or above). The free plan cannot use the Code tab described below.
+- The Claude desktop app, from <https://claude.ai/download>. Its "Code" tab lets Claude read and write one folder on your computer, and this kit works through that tab.
+- Chrome, Edge or Safari, to save your resume as a PDF.
 
-更詳細的說明（存成 PDF、放大頭照、卡住了怎麼辦）都在資料夾裡的 **「開始使用.md」**（用「記事本」就能打開）。
+Nothing else to install.
 
-畫面上的按鈕名稱可能和這裡寫的不一樣，找意思相近的按就可以。
+### Get started
 
-## 它會做什麼
+1. **Unzip** the file. On Windows, right-click it, choose "Extract All", then "Extract". On a Mac, double-click it. If you get a folder inside a folder, use the inner `job-hunt-us` folder, the one that contains `START-HERE.md`. Put it somewhere easy to find, for example Documents, and do not move it afterwards.
+2. Open the **Claude desktop app** and click the **Code** tab.
+3. **Pick the folder** you just unzipped. If Claude asks whether you trust it, choose Trust (or Yes).
+4. Type **start** and send it. The AI reads the rules in the folder by itself and then talks to you.
 
-- **整理你的經歷**：一段一段問你做了什麼、做得怎樣，整理成一張「確認卡」。你按「確認」才算數。
-- **直接讀舊履歷**：可以複製文字貼上，Word 檔也能放進資料夾裡的 inbox 讓它讀。放之前，先把生日、身分證、地址那幾行刪掉。
-- **看職缺適不適合**：貼上想投的職缺，它告訴你適不適合，再幫你改一份針對這個職缺的履歷。
-- **做成履歷檔**：中文履歷有兩種樣式可以選（也能做英文版），用瀏覽器存成 PDF（這一版沒有 Word 檔）。
-- **104 怎麼填**：每一欄寫什麼、字數多少，一欄一欄給你複製。
-- **面試準備**：依你的經歷和職缺，陪你練可能被問的問題。
-- **進度看板**：資料夾裡的 jobhunt 程式會在瀏覽器開一個小頁面，看每家公司投到哪一步、該追蹤哪一家。
+Next time: pick the same folder in the Code tab, start a new conversation and say "continue".
 
-## 它不做什麼
+`START-HERE.md` inside the folder has the full steps (saving a PDF, what to do when you are stuck). Button names on your screen may differ a little from this page; look for the one with a similar meaning.
 
-- **不編經歷。** 履歷上的每一句、每個數字，都要是你真的做過、親自確認過的。
-- **不幫你投遞，也不登入 104。** 登入、按送出、寄信都要你自己來。AI 要求做這些事時，請拒絕它。
+### What it does
 
-## 你的資料
+- **Digs out your experience.** It asks what you did, one question at a time, and turns each experience into a confirmation card. A card shows the English resume sentence and a word-for-word translation back into your own language, so you can see exactly what you are claiming. You can chat in your own language; everything on the resume and profiles is in English.
+- **Reads your old resume.** Paste the text, or put a Word file in the folder's `inbox`. Delete your date of birth, ID numbers and street address first.
+- **Checks job postings.** Paste a posting and it tells you whether it fits, what is missing, and whether it has work-authorization blockers such as "no sponsorship now or in the future".
+- **Makes the resume file.** A one-page US Letter resume from your confirmed experience, opened in your browser so you can save it as a PDF.
+- **Writes your LinkedIn and Handshake text.** Headline, About, Experience and more, as blocks you copy and paste yourself.
+- **Interview practice.** "Tell me about yourself", common questions, the sponsorship question, and mock interviews.
+- **Application tracker.** A local page (the `jobhunt` program in the folder) shows where each application stands and what to follow up on.
 
-資料存在你電腦的資料夾，不會傳到 jobhunt 的任何伺服器；但 AI 讀到的內容會送到你使用的 AI 服務處理。
+### What it does not do
 
-所以不要把身分證字號、銀行帳號、密碼打給 AI，也不要放進這個資料夾。
+- It does not make up experience. Every sentence and number must be something you did and confirmed.
+- It does not apply for you, log in to LinkedIn or Handshake, or send emails. You do those yourself. If the AI offers to, refuse.
+- It is not legal advice. For visa and work-authorization questions, ask your school's international student office (the DSO).
 
-## 第一次打開程式會被擋怎麼辦
+### Your data
 
-資料夾裡的 jobhunt 程式（打開進度看板用的）沒有付費簽章，所以第一次打開時，電腦會跳出警告。這是正常的。
+Your files stay in a folder on your computer and are never sent to a jobhunt server. But whatever the AI reads is sent to the AI service you use. So do not type your Social Security number, passport number, I-20 or SEVIS number, bank account numbers or passwords to the AI, and do not put them in the folder.
 
-**Windows**：跳出「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。
+### The first time you open the program
 
-**Mac（macOS 15 以後）**：Mac 的畫面可能和下面寫的不太一樣。卡住的話，在程式上按右鍵 →「打開」，或把畫面截圖（不要截到個人資料）傳給邀請你的人。
+The `jobhunt` program in the folder opens the tracker and resume checker in your browser. It is optional. It is not code-signed (that costs money), so Windows and macOS show a warning the first time. This is expected.
 
-1. 點兩下程式，跳出警告時按「完成」。
-2. 打開「系統設定」→「隱私權與安全性」，往下捲，找到 jobhunt 那一行，按「強制打開」。
-3. 輸入你登入電腦的密碼，再點兩下程式，跳出警告時按「強制打開」。之後點兩下就能直接用。
+- **Windows:** when it says "Windows protected your PC", click "More info", then "Run anyway".
+- **Mac:** the screens differ by macOS version. `START-HERE.md` has the steps. On older Macs, right-click the program, choose "Open", then "Open" again.
 
-**較舊的 Mac**：在程式上按右鍵 →「打開」，跳出警告再按「打開」。
+You can skip the program and use only the chat. The resume still works.
 
-不打開這個程式也沒關係，只用 Claude 聊天一樣能做履歷。
+### Already using an older version?
 
-## 回報問題
+Replace only the program file. Do not unzip the new zip over your folder.
 
-遇到問題或有建議：到 [GitHub Issues](https://github.com/Ben0126/jobhunt-kit/issues) 留言（需要 GitHub 帳號），或直接告訴邀請你試用的人。
+1. Close the program's text window.
+2. Download the zip for your computer and unzip it into a different folder, for example your Desktop.
+3. Copy only the program file (`jobhunt.exe` on Windows, `jobhunt-mac-arm64` or `jobhunt-mac-x64` on a Mac) into the folder you use now, and choose Replace.
+4. Open the program again.
 
-回報時請說：用 Windows 還是 Mac、做到哪一步、畫面上寫了什麼（截圖更好，但不要截到個人資料）。
+The `resume.yaml` and `data/applications.csv` inside a new zip are blank templates. Unzipping over your folder would replace your confirmed experience and your application progress.
 
-## English
+When a newer version exists, the local page also shows a reminder at the top (see "For developers" below for how to turn it off).
 
-- **What it is:** a job-search helper for Taiwanese fresh grads looking for admin, HR, sales and assistant roles. It runs on your own Claude (Pro plan or above) through the Code tab of the Claude desktop app.
-- **What it does:** turns your real experience into a solid resume (each item confirmed by you), reads old resumes including Word files, checks fit against a job post, explains how to fill in 104 (Taiwan's main job site), helps you prepare for interviews, and tracks applications.
-- **What it won't do:** invent experience, log in to 104, or submit applications for you.
-- **Get started:** download the zip for your computer from [Releases](https://github.com/Ben0126/jobhunt-kit/releases/latest), unzip it, open the folder that contains `開始使用.md` in the Claude desktop Code tab, and type 「開始」. Details are in `開始使用.md` inside the folder.
-- **Privacy:** your files stay in a folder on your computer and are never sent to any jobhunt server, but whatever the AI reads is sent to the AI service you use.
+## Report a problem
 
-## 給開發者
+Open an issue at [GitHub Issues](https://github.com/Ben0126/jobhunt-kit/issues) (needs a GitHub account). Say whether you use Windows or Mac, which step you were on, and what the screen said. A screenshot helps, but cover your personal details.
 
-這個 repo 的程式都在 `jobhunt-kit/` 子資料夾裡：
+## For developers
 
-- `jobhunt-kit/jobhunt/scaffold/workspace-general/`：給使用者的資料夾（`AGENTS.md` 是給 AI 的規則，`開始使用.md` 是使用者說明）。
-- `jobhunt-kit/app/`：本機程式（Bun，單一執行檔），負責程式檢查、進度看板、讀 Word 舊履歷。說明見 [`jobhunt-kit/app/README.md`](jobhunt-kit/app/README.md)。
-- 早期給工程師用的 Python CLI、每日職缺和網頁版，說明見 [`jobhunt-kit/README.md`](jobhunt-kit/README.md)（[中文版](jobhunt-kit/README.zh-TW.md)）。
-- 規格：[`jobhunt-kit/docs/plan-v1-local-app.zh-TW.md`](jobhunt-kit/docs/plan-v1-local-app.zh-TW.md) 第 10 節。
+Everything lives under `jobhunt-kit/`:
 
-跑測試：
+- `jobhunt-kit/jobhunt/scaffold/workspace-us/`: the US edition folder users get (`AGENTS.md` is the rule file for the AI, `START-HERE.md` is the user guide).
+- `jobhunt-kit/jobhunt/scaffold/workspace-general/`: the Taiwan edition folder (`AGENTS.md`, `開始使用.md`).
+- `jobhunt-kit/app/`: the local program (Bun, one executable). It runs the checks, the tracker page and the Word resume reader. See [`jobhunt-kit/app/README.md`](jobhunt-kit/app/README.md).
+- An earlier Python CLI and web app for engineers: [`jobhunt-kit/README.md`](jobhunt-kit/README.md).
+
+Run the tests:
 
 ```sh
-cd jobhunt-kit/app && bun test                          # 本機程式（Bun 1.4.2，不需要 bun install）
-cd jobhunt-kit && pip install -e ".[dev]" && pytest     # Python CLI（Python 3.10 以上）
+cd jobhunt-kit/app && bun test                          # local program (Bun 1.4.2, no bun install needed)
+cd jobhunt-kit && pip install -e ".[dev]" && pytest     # Python CLI (Python 3.10 or later)
 ```
 
-GitHub Actions 有兩份：
+On Windows, set `PYTHONUTF8=1` before running pytest.
 
-- `.github/workflows/app.yml`：在 Windows、Apple 晶片 Mac、Intel Mac 上測試、打包，並實際打開打包好的程式跑一遍基本流程。
-- `.github/workflows/release.yml`：推 `v0.6`、`v0.6.1` 這種格式的 tag 時，把台灣版和美國版的使用者資料夾各和程式包成 zip（共六個），解開再測一次，然後放到 GitHub Release。
+### Versions and releases
+
+- The version number is built into the program: `jobhunt --version` prints it (a dev build prints `dev`).
+- The local page checks GitHub at most once a day for a newer release (the version number only; nothing about you is sent). If there is one, it shows a reminder at the top. To turn that off, set `update_check: false` in `jobhunt.yaml`. A dev build never checks.
+- Before tagging a release, write what changed in `release-notes/<tag>.en.md` and `release-notes/<tag>.zh.md`, for example `v0.9.en.md` and `v0.9.zh.md`, and commit them. The release workflow stops if either file is missing. In the `.zh.md` file, point Chinese readers to [README.zh-TW.md#已經在用舊版怎麼更新](README.zh-TW.md#已經在用舊版怎麼更新) for the update steps instead of repeating them.
+- The Releases page is English first. Its first line links to the Chinese notes for that version and to [README.zh-TW.md](README.zh-TW.md).
+
+GitHub Actions:
+
+- `.github/workflows/app.yml`: tests and builds on Windows, Apple-silicon Mac and Intel Mac, then runs the built program through a basic flow.
+- `.github/workflows/release.yml`: when a tag like `v0.6` or `v0.6.1` is pushed, packages each edition's folder with the program into a zip (six zips in all), unzips and tests them again, and publishes them as a GitHub Release.

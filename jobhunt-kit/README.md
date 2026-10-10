@@ -7,6 +7,8 @@ lays out the PDF, freezes exactly what you sent, and reminds you to follow up.
 
 [繁體中文說明](README.zh-TW.md)
 
+> This is the documentation for the earlier Python command-line tool and web app, written for engineers. Looking for the job-search kit for students and new grads (US and Taiwan editions, downloadable zips)? See the [main README](../README.md).
+
 ## No coding? Open the web app
 
 **https://ben0126.github.io/jobhunt-kit/** — no sign-up, no install, no API key. Daily internship and new-grad
