@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": [
+      "Edit(./AGENTS.md)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./GEMINI.md)",
+      "Edit(./opening-prompt.txt)",
+      "Edit(./START-HERE.md)",
+      "Edit(./jobhunt.yaml)",
+      "Edit(./playbooks/**)",
+      "Edit(./templates/**)",
+      "Edit(./.claude/**)",
+      "Edit(./submitted/**)",
+      "Edit(./jobhunt.exe)",
+      "Edit(./jobhunt-mac-arm64)",
+      "Edit(./jobhunt-mac-x64)"
+    ],
+    "allow": [
+      "Edit(./profiles/**)",
+      "Edit(./me/work-auth.md)",
+      "PowerShell(Start-Process *.html)",
+      "PowerShell(Invoke-Item *.html)",
+      "Bash(open *.html)",
+      "PowerShell(.\\jobhunt.exe check)",
+      "PowerShell(.\\jobhunt.exe check *)",
+      "PowerShell(./jobhunt.exe check)",
+      "PowerShell(./jobhunt.exe check *)",
+      "Bash(./jobhunt.exe check)",
+      "Bash(./jobhunt.exe check *)",
+      "Bash(./jobhunt-mac-arm64 check)",
+      "Bash(./jobhunt-mac-arm64 check *)",
+      "Bash(./jobhunt-mac-x64 check)",
+      "Bash(./jobhunt-mac-x64 check *)",
+      "PowerShell(.\\jobhunt.exe read *)",
+      "PowerShell(./jobhunt.exe read *)",
+      "Bash(./jobhunt.exe read *)",
+      "Bash(./jobhunt-mac-arm64 read *)",
+      "Bash(./jobhunt-mac-x64 read *)"
+    ]
+  }
+}

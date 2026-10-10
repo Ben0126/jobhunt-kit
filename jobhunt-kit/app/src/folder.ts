@@ -10,6 +10,7 @@ const READ_RULES: RegExp[] = [
   /^targets\/[^/]+$/,
   /^resumes\/[^/]+$/,
   /^104\/[^/]+$/,
+  /^profiles\/[^/]+\.md$/i, // US kit: LinkedIn / Handshake text (checked for visa words and ID numbers)
   /^jobs\/[^/]+\/[^/]+$/,
   /^checks\/[^/]+$/,
   /^me\/stories\/[^/]+\.md$/,
@@ -28,7 +29,7 @@ const ARCHIVE_SOURCE = /^resumes\/[^/]+\.html$/;
 const ARCHIVE_RULES: RegExp[] = [/^submitted\/\d{4}-\d{2}-\d{2}_[^/]+\.html$/];
 
 /** Folders whose file names the app may list (names only; contents still go through READ_RULES). */
-const LIST_RULES: RegExp[] = [/^targets$/, /^resumes$/, /^104$/, /^jobs$/, /^jobs\/[^/]+$/, /^checks$/, /^submitted$/, /^me\/stories$/];
+const LIST_RULES: RegExp[] = [/^targets$/, /^resumes$/, /^104$/, /^profiles$/, /^jobs$/, /^jobs\/[^/]+$/, /^checks$/, /^submitted$/, /^me\/stories$/];
 
 export class FolderError extends Error {}
 

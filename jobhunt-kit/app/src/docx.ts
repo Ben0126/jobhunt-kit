@@ -7,6 +7,7 @@ import { basename, extname, isAbsolute, resolve, sep } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import * as R from "../../web/js/core/rules.js";
 import { looksLikeJobhuntFolder } from "./folder.ts";
+import { replaceExtraIds } from "./ids.ts";
 
 // ---------------------------------------------------------------- limits
 
@@ -458,6 +459,7 @@ export function maskIdNumbers(text: string): { text: string; count: number } {
     return ID_MASK;
   };
   t = t.replace(ID_NEW, mask).replace(ID_OLD, mask);
+  t = replaceExtraIds(t, mask); // SSN, SEVIS, A-number, China ID (src/ids.ts)
   // Anything rules.js still sees (other look-alike characters, e.g. ①) is masked on that line, normalized; the other
   // lines keep their full-width punctuation.
   if (R.idNumbers(t).length) {

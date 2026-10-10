@@ -1,0 +1,24 @@
+# jobhunt.yaml: settings for this job-search folder. The AI may read it, never change it.
+
+language: en           # interface and tracker status words in English
+market: us             # job market: tw Taiwan, us United States
+paper: letter          # paper: a4 or letter
+kit_format: folder-v0  # this folder was made from the folder-format v0 kit (lets later versions recognise it and move data)
+
+resume:
+  source: resume.yaml
+  paper: letter        # for the existing Python tools; keep equal to paper above
+  voice:
+    # Words that are always filler on a resume. The checker already bans its built-in list (proven, passionate,
+    # synergy, leverage, robust and so on), so those are not repeated here. Words that can be backed by an event
+    # (detail-oriented, reliable) are left out on purpose: the AI checks those by hand.
+    extra_words:
+      - results-driven
+      - team player
+      - self-starter
+      - go-getter
+      - hardworking
+      - dynamic
+      - fast-paced
+      - passion for
+      - excellent communication skills

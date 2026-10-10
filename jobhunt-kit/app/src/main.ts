@@ -35,7 +35,7 @@ async function main(): Promise<number> {
   const unknown = argv.filter((a, i) => a.startsWith("-") && !/^--(?:dir|folder)(?:=.*)?$/.test(a) && a !== "--no-open" && !/^-psn_/.test(a) && !/^--(dir|folder)$/.test(argv[i - 1] ?? ""));
   if (command || unknown.length) {
     console.log(`不認得「${command ?? unknown.join(" ")}」。`);
-    console.log("用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」。");
+    console.log("用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104；只查個人檔案（美國版）：check --profiles）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」。");
     return 2;
   }
   if (!dir) {

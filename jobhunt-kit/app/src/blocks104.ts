@@ -25,11 +25,17 @@ const LIMITS: [RegExp, number][] = [
 
 const META_KEYS = new Set(["上限", "字數", "怎麼填", "沒寫的段落", "為什麼留空", "備註", "注意", "提醒", "說明"]);
 const META_LINE = /^\s*[-*]\s*([^：:\s]{1,8})\s*[：:]\s*(.*)$/;
-export const SOURCE_LINE = /^\s*來源\s*[：:]\s*(.*)$/;
+// The English profile files (profiles/linkedin.md, handshake.md): "- Fill: paste", keys spelled exactly (case-sensitive).
+const META_KEYS_EN = new Set(["Fill", "Limit", "Length", "Title", "Company", "Location", "Dates", "School", "Degree", "GPA", "Suggested"]);
+const META_LINE_EN = /^\s*[-*]\s*([A-Za-z]{1,12})\s*:\s*(.*)$/;
+// "來源：S-003" or "Source: S-003" (any market): both are the source line, never copied, never checked as text.
+export const SOURCE_LINE = /^\s*(?:來源|Source)\s*[：:]\s*(.*)$/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const SUBTITLE = /^\s*【[^】]*】\s*$/; // 【我是誰】: a pasted sub-heading, sourced by the paragraph under it
 
-export function parse104(text: string): RawBlock[] {
+export function parse104(text: string, english = false): RawBlock[] {
+  const keys = english ? META_KEYS_EN : META_KEYS;
+  const metaLine = english ? META_LINE_EN : META_LINE;
   const lines = text.replace(/^﻿/, "").split(/\r?\n/);
   const blocks: RawBlock[] = [];
   let h2: RawBlock | null = null;
@@ -56,8 +62,8 @@ export function parse104(text: string): RawBlock[] {
       continue;
     }
     if (!cur) continue; // file header (更新日期、用到的經歷…)
-    const mm = inMeta ? META_LINE.exec(line) : null;
-    if (mm && META_KEYS.has(mm[1])) {
+    const mm = inMeta ? metaLine.exec(line) : null;
+    if (mm && keys.has(mm[1])) {
       cur.meta[mm[1]] = mm[2].trim();
       continue;
     }
@@ -72,7 +78,7 @@ export function parse104(text: string): RawBlock[] {
 }
 
 /** Paragraphs (split at blank lines) with the sources under them; `unsourced` = first line with no source after it. */
-export function paragraphs(body: string[]): Paragraph[] {
+export function paragraphs(body: string[], english = false): Paragraph[] {
   const out: Paragraph[] = [];
   let cur: string[] = [];
   const done = () => {
@@ -83,7 +89,7 @@ export function paragraphs(body: string[]): Paragraph[] {
     for (const l of cur) {
       const s = SOURCE_LINE.exec(l);
       if (s) {
-        sources = [...(sources ?? []), ...splitSources(s[1])];
+        sources = [...(sources ?? []), ...splitSources(s[1], english)];
         pending = null;
       } else if (!SUBTITLE.test(l) && pending == null) pending = l.trim();
     }
@@ -100,7 +106,14 @@ export function paragraphs(body: string[]): Paragraph[] {
   return out.filter((p) => !(p.lines.every((l) => SUBTITLE.test(l))));
 }
 
-export function splitSources(s: string): string[] {
+/** `english` (the US kit): sources are split at commas only, so "Job goals" stays one source; "S-001 S-002" still splits. */
+export function splitSources(s: string, english = false): string[] {
+  if (english)
+    return s
+      .split(/[,;，、/／]+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .flatMap((x) => (/^S-[0-9]+(?:\s+S-[0-9]+)+$/i.test(x) ? x.split(/\s+/) : [x]));
   return s
     .split(/[、,，/／;；\s]+/)
     .map((x) => x.trim())

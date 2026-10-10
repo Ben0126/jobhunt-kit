@@ -1,0 +1,81 @@
+# resume.yaml: the single source of every fact on the resume (a file for the AI; do not show it to the user).
+#
+# Rules (details in AGENTS.md, "How an experience becomes confirmed"):
+# - Only put in what the user explicitly confirmed ("confirm S-xxx"), or an old resume the user vouched for (confirmed_via: self-attest). Drafts (status: draft) never go in.
+# - Every bullet needs source: S-xxx, pointing to the confirmed story in me/stories/.
+# - Education and skills also need a source: education uses source: Education; each skills line uses sources: [S-xxx] (not a # comment, the program cannot read comments).
+# - Numbers only as the user said them, in digits. Quote dates and anything starting with 0, e.g. "Jun 2024 – Aug 2025".
+#   Dates are English: "May 2024", "Jun 2024 – Aug 2025", "Expected May 2027", "Present". If the user gave no month, write the year only (e.g. "2025"); if unknown, leave an empty string. Never work it out.
+# - Every item is English and carries variants: [en]. Each sentence is the English sentence the user confirmed on a card (see AGENTS.md). The variant is named en; the program only recognises that name.
+# - A story with status: deleted must not keep any bullet here.
+# - id is lowercase English letters, digits and underscores, unique across the file, e.g. campus_store, s003_a.
+# The "# Example:" lines below only show the format. They are not facts. Do not copy them.
+
+basics:
+  name: ""                      # Example: Jordan Ellis
+  email: ""
+  phone: ""                     # in quotes, e.g. "(555) 555-0100"
+  location: ""                  # City, State only, e.g. Columbus, OH. No street address
+  links: []                     # only if they have a portfolio or LinkedIn, e.g. - {label: LinkedIn, url: linkedin.com/in/jordan-ellis}
+  # Never put in: date of birth, photo, marital status, nationality, visa or work-authorization status, SSN or any ID number (AGENTS.md red line 6)
+
+# One variant: en = English resume (US Letter, one page; over one page is a strong warning, not a block).
+# base_variant in targets/<id>.yaml must be en.
+variants:
+  en: {title: English, major: 1}
+
+sections: [summary, education, experience, projects, skills]
+
+section_titles:
+  summary: Summary
+  education: Education
+  experience: Experience
+  projects: Projects & Activities
+  skills: Skills & Certifications
+
+# Summary: leave empty here. Each resume's summary lives in targets/<id>.yaml, and counts only after the user confirmed it.
+summary:
+  en: ""
+
+# Education: the highest 2 to 3, newest first.
+education: []
+# Example:
+#  - school: Northfield State University     # official English name, as the user said it
+#    degree: B.A. in Business Administration   # do not expand the major, do not add a degree name the user did not say
+#    dates: "Aug 2023 – Expected May 2027"
+#    details: []                              # GPA, coursework, honors only if the user said them and confirmed them
+#    source: Education                        # with details from a story: sources: [Education, S-010]
+#    variants: [en]
+
+# Experience: jobs, internships, student-org officer roles, on-campus jobs.
+experience: []
+# Example:
+#  - id: campus_store
+#    org: Northfield State University Bookstore
+#    role: Sales Associate
+#    location: Columbus, OH
+#    dates: "Sep 2024 – May 2025"
+#    variants: [en]
+#    bullets:
+#      - id: campus_store_cashier
+#        text: <the sentence on the confirmation card>
+#        source: S-001
+
+# Projects & Activities: course projects, competitions, volunteering, service learning.
+projects: []
+# Example:
+#  - id: food_drive
+#    name: Campus Food Drive
+#    dates: "2025"
+#    variants: [en]
+#    bullets:
+#      - id: food_drive_sorting
+#        text: <the sentence on the confirmation card>
+#        source: S-004
+
+# Skills & Certifications: one category per line. items holds only what the user said and confirmed.
+skills:
+  - {label: Software, items: [], sources: [], variants: [en]}         # Example: items: [Microsoft Word, Excel (pivot tables)], sources: [S-006]
+  - {label: Languages, items: [], sources: [], variants: [en]}        # Example: items: [Spanish (native), English (fluent)], sources: [S-003]
+  - {label: Certifications, items: [], sources: [], variants: [en]}   # Example: items: [CPR certified], sources: [S-007]
+# A line whose items is empty is not printed when the resume file is made.

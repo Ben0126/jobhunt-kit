@@ -164,8 +164,9 @@ export function templateWords(html: string): string[] {
 }
 
 /** Markup the resume templates never use and that can print text a checker doesn't see (or load things).
- * `allowedScripts`: the templates' own scripts (squashed). Plain-Chinese descriptions, one per kind. */
-export function oddMarkup(html: string, allowedScripts: Set<string>): string[] {
+ * `allowedScripts`: the templates' own scripts (squashed). `allowPhoto`: the Chinese templates may show photo.jpg;
+ * the US kit has no photo, so there every <img> is an error. Plain-Chinese descriptions, one per kind. */
+export function oddMarkup(html: string, allowedScripts: Set<string>, allowPhoto = true): string[] {
   const out = new Set<string>();
   if (/<!--->?|--!>/.test(html)) out.add("註解的寫法不正常（<!--> 或 --!>），瀏覽器和檢查程式看到的內容會不一樣");
   const src = stripComments(html);
@@ -176,7 +177,8 @@ export function oddMarkup(html: string, allowedScripts: Set<string>): string[] {
     const tag = m[2].toLowerCase();
     const attrs = m[3] || "";
     if (FOREIGN.has(tag)) out.add(`有範本沒有的 <${tag}>`);
-    if (tag === "img" && attr(attrs, "src").trim() !== "photo.jpg") out.add("有範本沒有的圖片（範本只有大頭照 photo.jpg）");
+    if (tag === "img" && !allowPhoto) out.add("有範本沒有的圖片（美國版履歷不放任何圖片，也不放照片）");
+    else if (tag === "img" && attr(attrs, "src").trim() !== "photo.jpg") out.add("有範本沒有的圖片（範本只有大頭照 photo.jpg）");
     if (tag === "meta" && /\shttp-equiv\s*=/i.test(` ${attrs}`)) out.add("有範本沒有的 <meta http-equiv>");
     if (/\sstyle\s*=\s*["'][^"']*(?:url\(|(?<![-\w])content\s*:)/i.test(` ${attrs}`)) out.add("樣式裡放了圖片或文字");
     if (tag === "script" && /\ssrc\s*=/i.test(` ${attrs}`)) out.add("有範本沒有的程式（<script src>）");
