@@ -373,11 +373,25 @@ test("P8fix-8：About 的職稱行要是 Source 列出的那筆經歷的職稱",
 
 test("P8fix-9：還沒畢業（Expected）不能寫成 graduate；日期的破折號前後沒空格也認得", async () => {
   const dir = usFolder({ resume: RESUME.replace('dates: "May 2026"', 'dates: "Aug 2023–Expected Dec 2026"') });
-  const open = (kind: string) => linkedin({ opening: `B.B.A. Marketing ${kind} Northfield College (Expected Dec 2026). Looking for sales roles.` });
+  // the headline must say "student" too (F1); this test is about the About opening
+  const open = (kind: string) => linkedin({ headline: "Seeking sales roles | B.B.A. Marketing student, Northfield College | Google Sheets, Excel (basic)", opening: `B.B.A. Marketing ${kind} Northfield College (Expected Dec 2026). Looking for sales roles.` });
   expect(await li(dir, open("student at"))).toEqual([]);
   expect(has(await li(dir, open("graduate of")), "fixed sentence frame")).toBe(true);
   const done = usFolder({ resume: RESUME.replace('dates: "May 2026"', 'dates: "Aug 2022–May 2026"') });
   expect(await li(done, linkedin({ opening: "B.B.A. Marketing graduate of Northfield College (May 2026). Looking for sales roles." }))).toEqual([]);
+});
+
+test("F1：還沒畢業（Expected）的 Headline 學歷段要寫 student，不能看起來像已拿到學位", async () => {
+  const dir = usFolder({ resume: RESUME.replace('dates: "May 2026"', 'dates: "Aug 2023 – Expected Dec 2026"') });
+  const opening = "B.B.A. Marketing student at Northfield College (Expected Dec 2026). Looking for sales roles.";
+  const hl = (edu: string) => li(dir, linkedin({ opening, headline: `Seeking sales roles | ${edu} | Google Sheets, Excel (basic)` }));
+  expect(has(await hl("B.B.A. Marketing, Northfield College"), "headline part")).toBe(true);
+  expect(await hl("B.B.A. Marketing student, Northfield College")).toEqual([]);
+  // already graduated: the plain degree is right, "student" is not
+  const done = usFolder({ resume: RESUME.replace('dates: "May 2026"', 'dates: "Aug 2022 – May 2026"') });
+  const hlDone = (edu: string) => li(done, linkedin({ headline: `Seeking sales roles | ${edu} | Google Sheets, Excel (basic)` }));
+  expect(await hlDone("B.B.A. Marketing, Northfield College")).toEqual([]);
+  expect(has(await hlDone("B.B.A. Marketing student, Northfield College"), "headline part")).toBe(true);
 });
 
 // ---------------------------------------------------------------- english.ts

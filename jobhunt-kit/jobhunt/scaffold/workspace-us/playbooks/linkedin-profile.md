@@ -46,7 +46,7 @@ Draft text for you to paste yourself. Lines starting with "- " and "Source:" are
 - Length: about 110 characters
 - Fill: paste
 
-Seeking administrative assistant roles | B.A. in Business Administration, Northfield State University | Microsoft Word, Excel (pivot tables)
+Seeking administrative assistant roles | B.A. in Business Administration student, Northfield State University | Microsoft Word, Excel (pivot tables)
 Source: Education, Job goals, S-006
 
 ## About
@@ -118,7 +118,7 @@ Source: S-006
 These are the only sentences you may write yourself. They only restate confirmed data; no adjective, no claim.
 
 - **Headline** (one line, segments separated by ` | `). The first segment is always `Seeking <role> roles` (or `Seeking <role> and <role> roles`): one or two roles from `Job goals`, only re-cased, never reworded: each role must be written in `me/profile.md` under `Work they want` (a line marked "Inferred" does not count), or the program reports the headline. Every later segment is exactly one of these three shapes, and nothing else:
-  1. `<degree>, <School>`, both copied from one `resume.yaml` `education` entry.
+  1. `<degree>, <School>`, both copied from one `resume.yaml` `education` entry, if they already graduated. If that entry's `dates` contains `Expected`, write `<degree> student, <School>` instead: a headline is read on its own, and a bare degree reads as already earned.
   2. Skill items copied from `resume.yaml` `skills` word for word, whole (with their brackets), separated by `, `, up to 3: `Microsoft Word, Excel (pivot tables)`.
   3. `<role>, <org>` of one `experience` entry, or just that `role`, or just that `org`, copied exactly.
 

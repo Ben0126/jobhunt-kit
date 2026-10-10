@@ -234,8 +234,9 @@ export function profileFacts(resume: any, profileMd = "", splitSources: (s: stri
     const degree = norm(e?.degree);
     const school = norm(e?.school);
     if (!degree || !school) continue;
-    f.eduPairs.add(`${degree}, ${school}`);
     const dates = norm(e?.dates);
+    // a headline is read on its own: a degree still ahead must say "student" or it reads as already earned
+    f.eduPairs.add(/\bexpected\b/i.test(dates) ? `${degree} student, ${school}` : `${degree}, ${school}`);
     const ends = new Set([dates, norm(dates.split(/\s*[–—]\s*|\s-\s/).pop())]);
     for (const end of ends)
       // a date that is still ahead ("Expected Dec 2026") is a student, never a graduate

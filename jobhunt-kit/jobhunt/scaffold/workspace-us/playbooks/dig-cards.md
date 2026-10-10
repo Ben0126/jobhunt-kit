@@ -10,7 +10,7 @@ Show **one** card at a time. Keep it short: only what the user must judge. No ST
 
 ### 7.1 The card (aim for 14 lines at most, as AGENTS.md says)
 
-A heading of two lines, then four parts in this order, as AGENTS.md "Cross-language confirmation card" requires: (1) their words, (2) the English resume sentences, canonical, (3) a literal back-translation of the English into their language, (4) the numbers. The two heading lines show what the resume will print for this item: the title (with its back-translation), the organization and the dates. Example for a user writing in Spanish (the back-translation is in Spanish):
+A heading of two lines, then four parts in this order, as AGENTS.md "Cross-language confirmation card" requires: (1) their words, (2) the English resume sentences, canonical, (3) a literal back-translation of the English into their language, (4) the numbers. The two heading lines show what the resume will print for this item: the title (with its back-translation), the organization and the dates. If they were promoted at this employer, part 1 quotes their words for both the start and the promotion month, and the `Dates:` line starts at the promotion (`dig-experience.md`, `dates`). Example for a user writing in Spanish (the back-translation is in Spanish):
 
 ```text
 Card S-003: Campus bookstore cashier   Goes under: Experience
@@ -49,7 +49,7 @@ Rules:
 
 ### 7.2 What counts as confirming
 
-- **Only** a reply that names this card and means confirm: `confirm S-003`, "S-003 confirm", "confirm 3". In another language, if they clearly name the card and the action ("confirmo S-003"), echo it in the message where you save: "Recording: confirm S-003". The echo counts. If unclear, ask them to type or click `confirm S-003`.
+- **Only** a reply that names this card and means confirm: `confirm S-003`, "S-003 confirm", "confirm 3". In another language, if they clearly name the card and the action ("confirmo S-003"), echo it as the **first line** of the message where you save: "Recording: confirm S-003". Do this every time, not only in the file. The echo counts. If unclear, ask them to type or click `confirm S-003`.
 - The card must have appeared in full in **your previous message**. Exception: after the card, you only sent a line or two that didn't count ("that doesn't count yet", refusing inflation) and the card did not change -> it still counts, no need to show it again. If they type `confirm S-005` at the start of a new conversation, or the card is from long ago with other talk in between -> show the whole card again, then ask them to confirm.
 - A card with yes/no questions: the answers and the confirm can be in one message ("yes, confirm S-003" counts). Just "yes" -> one line: "Good. Last step: type `confirm S-003` to put it on the resume."
 - "Good", "right", "OK", "all fine", "confirm all", "confirm S-003 to S-006" **do not count**. Say: "OK. For this card type `confirm S-003` and it goes on the resume." A bare "yes" in any language never creates a fact.
