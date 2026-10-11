@@ -33,6 +33,12 @@ const TEXT = {
     updateWarn: "千萬不要把整個 zip 直接解壓縮、蓋過你現在用的求職資料夾。新 zip 裡的履歷資料和投遞進度表是空白的，會蓋掉你確認過的經歷和投遞進度。",
     updateOffHint: "程式每天最多問 GitHub 一次有沒有新版本，不會傳你的資料。要關掉：用記事本打開求職資料夾裡的 jobhunt.yaml，在最後加一行 update_check: false，存檔。",
     updateLater: "先不要",
+    updateNow: "一鍵更新",
+    updateDownloading: "正在下載新版本（大約 30–40 MB，可能要一兩分鐘）。先不要關掉程式。",
+    updateConfirm: "確定更新",
+    updateApplying: "正在更新，先不要關掉程式。",
+    updateDone: (v) => `更新好了：現在是 ${v}。程式已經自己關掉了。請再點兩下程式打開新版本，然後關掉這個分頁。`,
+    updateManual: "自己手動更新的方法（一鍵更新不成功時才用）",
     unknownStatus: (code) => `看不懂的狀態「${code}」`,
     noStatus: "還沒填狀態",
     folderLabel: (name) => `資料夾：${name}`,
@@ -164,6 +170,12 @@ const TEXT = {
     updateWarn: "Never unzip the whole file over your job-search folder. The resume and the application tracker inside the new zip are blank, and they would replace your confirmed experience and your application progress.",
     updateOffHint: "The program asks GitHub at most once a day whether a newer version exists, and sends none of your information. To turn this off: open the settings file named jobhunt in your job-search folder (the one that is not an application) with Notepad or TextEdit, add this line at the very end, and save: update_check: false",
     updateLater: "Not now",
+    updateNow: "Update now",
+    updateDownloading: "Downloading the new version (about 30–40 MB; it can take a minute or two). Please keep the program open.",
+    updateConfirm: "Update",
+    updateApplying: "Updating. Please keep the program open.",
+    updateDone: (v) => `Update finished: you now have ${v}. The program has closed itself. Double-click the program to open the new version, then close this tab.`,
+    updateManual: "How to update by hand (only if the one-click update does not work)",
     unknownStatus: (code) => `Unknown status "${code}"`,
     noStatus: "No status yet",
     folderLabel: (name) => `Folder: ${name}`,
@@ -387,21 +399,73 @@ function showUpdate(u) {
   const link = (href, text) => h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
   // Taiwan page: the Chinese notes of this version (falls back to the release page); English page: the release page
   const notes = LANG === "zh-TW" && u.notesZhUrl ? u.notesZhUrl : u.notesUrl;
+  const status = h("div", { class: "update-status", "aria-live": "polite" });
+  const nowBtn = h("button", { type: "button", class: "primary", onclick: () => startUpdate(nowBtn, status) }, T.updateNow);
   const banner = h(
     "section",
     { id: "update-banner", class: "update-banner", role: "status" },
     h("h2", {}, T.updateTitle(u.version)),
     h("p", {}, link(notes, T.updateNotes)),
-    h("p", {}, link(u.downloadUrl, T.updateDownload(u.zipName))),
-    h("p", { class: "how" }, T.updateHow),
-    h("ol", {}, T.updateSteps(u.programName).map((s) => h("li", {}, s))),
-    u.programName === "jobhunt.exe" ? h("p", { class: "hint" }, T.updateWinNote) : null,
-    /^jobhunt-mac/.test(u.programName) ? h("p", { class: "hint" }, T.updateMacNote) : null,
-    h("p", { class: "warn" }, T.updateWarn),
+    h("div", { class: "actions" }, nowBtn, h("button", { type: "button", onclick: () => banner.remove() }, T.updateLater)),
+    status,
+    h(
+      "details",
+      { class: "manual" },
+      h("summary", {}, T.updateManual),
+      h("p", {}, link(u.downloadUrl, T.updateDownload(u.zipName))),
+      h("p", { class: "how" }, T.updateHow),
+      h("ol", {}, T.updateSteps(u.programName).map((s) => h("li", {}, s))),
+      u.programName === "jobhunt.exe" ? h("p", { class: "hint" }, T.updateWinNote) : null,
+      /^jobhunt-mac/.test(u.programName) ? h("p", { class: "hint" }, T.updateMacNote) : null,
+      h("p", { class: "warn" }, T.updateWarn),
+    ),
     h("p", { class: "hint" }, T.updateOffHint),
-    h("div", { class: "actions" }, h("button", { type: "button", onclick: () => banner.remove() }, T.updateLater)),
   );
   $("notice").before(banner);
+}
+/** One-click update, step 1: the program downloads the new version and lists what it would replace (writes nothing). */
+async function startUpdate(nowBtn, status) {
+  nowBtn.disabled = true;
+  status.replaceChildren(h("p", {}, T.updateDownloading));
+  let plan;
+  try {
+    plan = await api("POST", "/api/update/prepare", {});
+  } catch (e) {
+    status.replaceChildren(h("p", { class: "warn" }, e.message));
+    nowBtn.disabled = false;
+    return;
+  }
+  const t = plan.text || {};
+  const confirm = h("button", { type: "button", class: "primary", onclick: () => applyUpdate(plan.to, confirm, nowBtn, status) }, T.updateConfirm);
+  // through h(): it drops the null parts (replaceChildren would print them as the word "null")
+  status.replaceChildren(
+    h(
+      "div",
+      {},
+      h("h3", {}, t.title),
+      plan.files.length
+        ? h("details", {}, h("summary", {}, t.willReplace), h("ul", {}, plan.files.map((f) => h("li", {}, f.path + (f.isNew ? t.newFile : "")))))
+        : null,
+      t.settings ? h("p", {}, t.settings) : null,
+      t.nothing ? h("p", {}, t.nothing) : null,
+      h("p", {}, t.keep),
+      h("p", { class: "hint" }, t.backup),
+      t.nothing ? null : h("div", { class: "actions" }, confirm),
+    ),
+  );
+}
+/** Step 2, only after the user saw the list: replace exactly those files. The program then closes itself. */
+async function applyUpdate(to, confirm, nowBtn, status) {
+  confirm.disabled = true;
+  status.append(h("p", {}, T.updateApplying));
+  try {
+    const r = await api("POST", "/api/update/apply", { to });
+    status.replaceChildren(h("p", { class: "done" }, T.updateDone(r.to)));
+    nowBtn.remove();
+  } catch (e) {
+    status.append(h("p", { class: "warn" }, e.message));
+    nowBtn.disabled = false; // the list was used up: start again from "Update now"
+  }
 }
 async function checkUpdate() {
   try {

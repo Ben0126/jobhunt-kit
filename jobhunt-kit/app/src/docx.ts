@@ -33,12 +33,14 @@ export class DocxError extends Error {
 
 // ---------------------------------------------------------------- ZIP (central directory + raw deflate)
 
-type ZipEntry = { name: string; method: number; flags: number; crc: number; packed: number; size: number; offset: number };
+export type ZipLimits = { entries: number; entry: number; ratio: number; ratioFloor: number };
+export type ZipEntry = { name: string; method: number; flags: number; crc: number; packed: number; size: number; offset: number };
 
 const u16 = (b: Uint8Array, i: number) => b[i] | (b[i + 1] << 8);
 const u32 = (b: Uint8Array, i: number) => (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16)) + b[i + 3] * 0x1000000;
 
-export function zipEntries(b: Uint8Array): ZipEntry[] {
+/** The ZIP's central directory. `limits` defaults to the .docx limits; the one-click updater passes its own. */
+export function zipEntries(b: Uint8Array, limits: ZipLimits = LIMITS): ZipEntry[] {
   // End of central directory: last 22 bytes + up to 64 KB of comment.
   let eocd = -1;
   for (let i = b.length - 22; i >= Math.max(0, b.length - 22 - 0xffff); i--) {
@@ -52,7 +54,7 @@ export function zipEntries(b: Uint8Array): ZipEntry[] {
   const cdSize = u32(b, eocd + 12);
   const cdOffset = u32(b, eocd + 16);
   if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw new DocxError("corrupt", "zip64 not supported");
-  if (count > LIMITS.entries) throw new DocxError("too-big", `${count} entries`);
+  if (count > limits.entries) throw new DocxError("too-big", `${count} entries`);
   if (cdOffset + cdSize > eocd) throw new DocxError("corrupt", "central directory out of range");
 
   const out: ZipEntry[] = [];
@@ -81,10 +83,10 @@ export function zipEntries(b: Uint8Array): ZipEntry[] {
 }
 
 /** Unpacks one entry, never more than the limits allow (declared sizes are checked first, the real output too). */
-export function unzipEntry(b: Uint8Array, e: ZipEntry, budget: { left: number }): Uint8Array {
+export function unzipEntry(b: Uint8Array, e: ZipEntry, budget: { left: number }, limits: ZipLimits = LIMITS): Uint8Array {
   if (e.flags & 0x1) throw new DocxError("encrypted", `${e.name} is encrypted`);
-  if (e.size > LIMITS.entry || e.size > budget.left) throw new DocxError("too-big", `${e.name}: ${e.size} bytes`);
-  if (e.size > LIMITS.ratioFloor && e.size > e.packed * LIMITS.ratio) throw new DocxError("too-big", `${e.name}: ratio ${Math.round(e.size / Math.max(1, e.packed))}`);
+  if (e.size > limits.entry || e.size > budget.left) throw new DocxError("too-big", `${e.name}: ${e.size} bytes`);
+  if (e.size > limits.ratioFloor && e.size > e.packed * limits.ratio) throw new DocxError("too-big", `${e.name}: ratio ${Math.round(e.size / Math.max(1, e.packed))}`);
   const h = e.offset;
   if (h + 30 > b.length || u32(b, h) !== 0x04034b50) throw new DocxError("corrupt", `${e.name}: bad local header`);
   const start = h + 30 + u16(b, h + 26) + u16(b, h + 28);
@@ -97,7 +99,7 @@ export function unzipEntry(b: Uint8Array, e: ZipEntry, budget: { left: number })
   } else if (e.method === 8) {
     try {
       // One byte over the declared size: a part that lies about its size fails here instead of filling memory.
-      data = inflateRawSync(packed, { maxOutputLength: Math.min(LIMITS.entry, budget.left, e.size + 1) || 1 });
+      data = inflateRawSync(packed, { maxOutputLength: Math.min(limits.entry, budget.left, e.size + 1) || 1 });
     } catch (err: any) {
       if (err?.code === "ERR_BUFFER_TOO_LARGE" || /larger than/i.test(String(err?.message))) throw new DocxError("too-big", `${e.name}: inflates past its declared size`);
       throw new DocxError("corrupt", `${e.name}: ${err?.message ?? err}`);

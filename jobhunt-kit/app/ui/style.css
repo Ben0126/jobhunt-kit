@@ -241,3 +241,9 @@ button.done { background: #e3f1ea; border-color: #b4d8cc; color: #1d5b3f; }
 .update-banner ol { margin: 4px 0; padding-left: 24px; }
 .update-banner .warn { font-weight: 700; color: var(--danger); }
 .update-banner .actions { margin-top: 8px; }
+.update-banner .actions button + button { margin-left: 8px; }
+.update-banner h3 { margin: 12px 0 4px; font-size: 15px; }
+.update-banner ul { margin: 4px 0; padding-left: 24px; }
+.update-banner details { margin: 8px 0; }
+.update-banner summary { cursor: pointer; }
+.update-banner .done { font-weight: 700; }

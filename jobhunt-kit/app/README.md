@@ -37,6 +37,19 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 橫幅給的下載連結是這個使用者自己的那一個：`assetName(市場, 系統, 晶片)` 回 `job-hunt[-us]-{windows,mac-apple,mac-intel}.zip`，`programName()` 回要換的程式檔。第二階段（一鍵更新）會用同樣兩個函式，設計草稿在 `../docs/plan-update.zh-TW.md`。
 - 測試一律注入假的 `fetch` 和時鐘，不碰網路（`tests/update.test.ts`）。
 
+## 一鍵更新（`src/selfupdate.ts`）
+
+橫幅上的「一鍵更新」按鈕，和命令列 `jobhunt update`（只列清單）／`update --yes`（真的換）／`update --undo`（退回上一版）。
+
+- 先下載這個使用者的 zip（`assetName()`），**整包不解壓**：只取出寫死清單上的檔——程式檔（只有這台電腦用的那一個）、`AGENTS.md`／`CLAUDE.md`／`GEMINI.md`、使用說明（台灣 `開始使用.md`、`開場句.txt`；美國 `START-HERE.md`、`opening-prompt.txt`）、`playbooks/`、`templates/`、`.claude/`（`settings.local.json` 除外）。zip 裡空白的 `resume.yaml`、`data/applications.csv` 和其他使用者資料夾一律跳過。
+- `jobhunt.yaml` 不整檔換：只補上新版多出來、使用者檔案裡沒有的頂層設定（連同上方註解），原本每一行都保留。
+- 下載後核對 GitHub 給的 SHA256（API 的 `digest`）、檔案大小、zip 裡每個檔的 CRC；zip 裡要有程式和 `AGENTS.md`，市場要和資料夾一樣，否則整個放棄。
+- 先列清單（沒變的檔不列），使用者按「確定更新」才動手。動手前把要換掉的舊檔複製到 `.jobhunt/backup/`（只留最近一次，含舊程式，約 85 MB）。任何一步失敗就從備份還原；換完要跑新程式的 `--version`，等於新版本號才算成功，不然也還原。
+- Windows：正在跑的 `jobhunt.exe` 不能覆蓋，所以先改名成 `jobhunt.exe.old`，下次啟動時刪掉（`cleanupAfterUpdate`）。Mac：直接換掉並 `chmod 755`（**還沒在真的 Mac 上測過**）。
+- 從介面更新完，程式會自己關掉（不然再點兩下會打開還在跑的舊程式），請使用者再點兩下打開新版。
+- `JOBHUNT_UPDATE_SERVER=http://127.0.0.1:<port>`：端對端測試用的本機假 GitHub（只接受 127.0.0.1），提醒和一鍵更新都會改問它。
+- 測試：`tests/selfupdate.test.ts`（換檔、還原、退回、防路徑穿越）、`tests/selfupdate_ui.test.ts`（介面 API、命令列）。
+
 ## 測試資料夾
 
 `tests/fixture/` 是模擬使用者的求職資料夾（虛構資料）。測試一律先複製到暫存資料夾再用。

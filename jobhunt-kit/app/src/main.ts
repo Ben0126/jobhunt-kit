@@ -1,10 +1,12 @@
-// 入口：沒有參數 → 打開介面；`check` → 命令列檢查；`read <檔案>` → 印出 Word 舊履歷的文字（給 AI 讀，不存檔）。
+// 入口：沒有參數 → 打開介面；`check` → 命令列檢查；`read <檔案>` → 印出 Word 舊履歷的文字（給 AI 讀，不存檔）；
+// `update` → 一鍵更新（先列清單，`--yes` 才換檔，`--undo` 退回上一版）。
 // 開發時：bun src/main.ts --dir <求職資料夾> [--no-open]
 import { dirname } from "node:path";
 import { cliTextFor } from "./cli.text.ts";
-import { dirFlagRefused, looksLikeJobhuntFolder, resolveDataDir } from "./folder.ts";
+import { dirFlagRefused, isCompiledBinary, looksLikeJobhuntFolder, resolveDataDir } from "./folder.ts";
 import { launch } from "./launch.ts";
 import { type Language, readMarketSync, unrecognisedLanguage } from "./market.ts";
+import { cleanupAfterUpdate } from "./selfupdate.ts";
 import { VERSION } from "./version.ts";
 
 const argv = process.argv.slice(2);
@@ -34,10 +36,16 @@ async function main(): Promise<number> {
   }
   const dir = resolveDataDir(argv);
   const T = cliTextFor(langOf(dir));
+  // A Windows update leaves the old program renamed aside (jobhunt.exe.old) until it stops running.
+  if (isCompiledBinary()) cleanupAfterUpdate(dirname(process.execPath));
 
   if (command === "check") {
     const { runCheck } = await import("./check.ts");
     return runCheck(argv, dir);
+  }
+  if (command === "update") {
+    const { runUpdate } = await import("./selfupdate.ts");
+    return runUpdate(argv, dir, { version: VERSION });
   }
   if (command === "read") {
     const { runRead } = await import("./docx.ts");

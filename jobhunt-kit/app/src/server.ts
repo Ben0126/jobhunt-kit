@@ -12,6 +12,8 @@ import { readMarket } from "./market.ts";
 import { serverText } from "./server.text.ts";
 import { stripComments } from "./htmltext.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
+import { applyUpdate, failureText, planView, prepareUpdate, testServerFromEnv, UpdateFailure, type Prepared } from "./selfupdate.ts";
+import { updateTextFor } from "./selfupdate.text.ts";
 import { VERSION } from "./version.ts";
 
 export const APP_ID = "jobhunt";
@@ -237,9 +239,27 @@ function text(body: string, status: number): Response {
 
 export type Running = { port: number; token: string; url: string; stop: () => void };
 
-export function startServer(opts: { folder: Folder; apps?: Applications; token?: string; port?: number; update?: UpdateChecker }): Running {
+/** One-click update (selfupdate.ts); tests pass their own. */
+export type SelfUpdate = { prepare: () => Promise<Prepared>; apply: (p: Prepared) => void };
+
+export function startServer(opts: {
+  folder: Folder;
+  apps?: Applications;
+  token?: string;
+  port?: number;
+  update?: UpdateChecker;
+  selfUpdate?: SelfUpdate;
+  /** Called shortly after an update was applied: the app closes, so the next double-click starts the new program. */
+  onUpdated?: () => void;
+}): Running {
   const folder = opts.folder;
   const updater = opts.update ?? createUpdateChecker({ folder });
+  const selfUpdate: SelfUpdate = opts.selfUpdate ?? {
+    prepare: () => prepareUpdate({ dir: folder.root, version: VERSION, server: testServerFromEnv() }),
+    apply: (p) => applyUpdate(folder.root, p),
+  };
+  let prepared: Prepared | null = null;
+  let updating = false;
   const apps = opts.apps ?? new Applications(folder);
   const token = opts.token ?? newToken();
   // The preview cookie is a random value of its own, not the API token: cookies on 127.0.0.1 are sent to every
@@ -350,6 +370,43 @@ export function startServer(opts: { folder: Folder; apps?: Applications; token?:
           // The "newer version" reminder: the page asks after it has loaded. Never part of check/read output.
           const u = await updater.get();
           return json(u ? { available: true, ...u } : { available: false });
+        }
+        case "POST /api/update/prepare":
+        case "POST /api/update/apply": {
+          // One-click update: "prepare" downloads and lists what would change (writes nothing); "apply" replaces
+          // exactly that list, then the app closes so the next double-click runs the new program.
+          const UT = updateTextFor(M.language);
+          if (updating) return json({ error: UT.busy }, 409);
+          updating = true;
+          try {
+            if (route === "POST /api/update/prepare") {
+              prepared = null;
+              prepared = await selfUpdate.prepare();
+              const v = planView(prepared);
+              // The page shows these lines as they are (same wording as `jobhunt update` on the command line).
+              const text = {
+                title: UT.previewTitle(v.from, v.to),
+                willReplace: UT.willReplace(v.files.length),
+                newFile: UT.newFile,
+                settings: v.settingsAdded.length ? UT.settingsAdded(v.settingsAdded) : null,
+                keep: UT.keep(M.market),
+                backup: UT.backupNote,
+                nothing: v.files.length || v.settingsAdded.length ? null : UT.nothingChanged(v.to),
+              };
+              return json({ ...v, text });
+            }
+            if (!prepared || typeof body.to !== "string" || body.to !== prepared.to) return json({ error: UT.noPreview }, 409);
+            const p = prepared;
+            prepared = null;
+            selfUpdate.apply(p);
+            if (opts.onUpdated) setTimeout(opts.onUpdated, 800);
+            return json({ ok: true, to: p.to });
+          } catch (e) {
+            if (e instanceof UpdateFailure) return json({ error: failureText(e, UT), code: e.code }, 409);
+            throw e;
+          } finally {
+            updating = false;
+          }
         }
         case "GET /api/check":
           // Read-only: the checks/<id>.md files are written by the command-line check only (the AI may be

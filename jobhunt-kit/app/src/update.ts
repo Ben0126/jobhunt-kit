@@ -1,4 +1,4 @@
-// "A newer version exists" reminder (phase 1: only tells the user; phase 2, a one-click update, is not built yet).
+// "A newer version exists" reminder. The one-click update the banner offers is in selfupdate.ts.
 // One GET to GitHub's public "latest release" address, at most once per 24 hours, with a fixed User-Agent and nothing
 // about the user. Every failure is silent. Off when jobhunt.yaml says `update_check: false`. A dev build never checks.
 // The last check is remembered in .jobhunt/update.json (the app's own bookkeeping, like app.lock; not in any
@@ -11,6 +11,13 @@ import { VERSION } from "./version.ts";
 
 export const REPO = "Ben0126/jobhunt-kit";
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
+/** JOBHUNT_UPDATE_SERVER, accepted only when it points at this computer: a local stand-in for GitHub in end-to-end
+ * tests of the built program (reminder and one-click update). Anything else is ignored. */
+export function testServerFromEnv(env: Record<string, string | undefined> = process.env): string | null {
+  const s = env.JOBHUNT_UPDATE_SERVER;
+  return s && /^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(s) ? s : null;
+}
+export const apiUrl = (server: string | null) => (server ? `${server}/repos/${REPO}/releases/latest` : LATEST_RELEASE_API);
 export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 export const CHECK_TIMEOUT_MS = 3000;
 
@@ -62,6 +69,8 @@ export type UpdateOptions = {
   now?: () => number;
   platform?: string;
   arch?: string;
+  /** Tests: the local stand-in for GitHub (default: JOBHUNT_UPDATE_SERVER, see testServerFromEnv). */
+  server?: string | null;
 };
 
 export type UpdateChecker = { get: () => Promise<UpdateNotice | null> };
@@ -108,7 +117,7 @@ export function createUpdateChecker(o: UpdateOptions): UpdateChecker {
     if (!seen || t - seen.at >= CHECK_EVERY_MS || t < seen.at) {
       let latest = seen?.latest ?? null; // a failed check keeps what we knew
       try {
-        const r = await doFetch(LATEST_RELEASE_API, {
+        const r = await doFetch(apiUrl(o.server === undefined ? testServerFromEnv() : o.server), {
           headers: { "User-Agent": `jobhunt-kit/${version}`, Accept: "application/vnd.github+json" },
           signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
         });

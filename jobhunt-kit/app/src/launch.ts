@@ -75,7 +75,10 @@ export async function launch(dir: string, opts: { open: boolean; print?: (s: str
     return { kind: "already-running", url };
   }
 
-  const running = startServer({ folder });
+  // After a one-click update the app closes itself: a second double-click would otherwise find this (old) program
+  // still answering and open its page again instead of starting the new one.
+  let quitAfterUpdate = () => {};
+  const running = startServer({ folder, onUpdated: () => quitAfterUpdate() });
   mkdirSync(dirname(lockPath), { recursive: true });
   const lock: Lock = { port: running.port, token: running.token, pid: process.pid, started: new Date().toISOString() };
   writeFileSync(lockPath, JSON.stringify(lock));
@@ -89,6 +92,12 @@ export async function launch(dir: string, opts: { open: boolean; print?: (s: str
       if (cur && cur.token === running.token) unlinkSync(lockPath);
     } catch {}
     running.stop();
+  };
+
+  quitAfterUpdate = () => {
+    stop();
+    print(T.closedAfterUpdate);
+    setTimeout(() => process.exit(0), 200);
   };
 
   if (opts.open) {

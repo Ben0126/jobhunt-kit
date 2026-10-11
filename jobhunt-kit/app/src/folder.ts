@@ -52,11 +52,12 @@ export function resolveDataDir(argv: string[], execPath = process.execPath): str
 }
 
 /** In the compiled program `check` and `read` run without a permission prompt (the kit's .claude/settings.json allows
- * them with any arguments), so they only ever work on the folder the program sits in: --dir/--folder pointing anywhere
+ * them with any arguments), so they only ever work on the folder the program sits in (`update` too: it replaces the
+ * program it runs from): --dir/--folder pointing anywhere
  * else would let them read Word files or write checks/ in another folder unasked. Development (bun src/main.ts) and
  * opening the UI keep the flag. */
 export function dirFlagRefused(command: string | undefined, argv: string[], execPath = process.execPath): boolean {
-  return (command === "check" || command === "read") && isCompiledBinary(execPath) && argv.some((a) => /^--(?:dir|folder)(?:=|$)/.test(a));
+  return (command === "check" || command === "read" || command === "update") && isCompiledBinary(execPath) && argv.some((a) => /^--(?:dir|folder)(?:=|$)/.test(a));
 }
 
 export function looksLikeJobhuntFolder(dir: string): boolean {

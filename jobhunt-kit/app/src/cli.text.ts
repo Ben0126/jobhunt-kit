@@ -5,9 +5,10 @@ import type { Language } from "./market.ts";
 
 const ZH = {
   pressEnter: "按 Enter 關閉這個視窗。",
+  closedAfterUpdate: "更新好了，程式已經關掉。再點兩下程式，就會打開新版本。",
   dirRefused: (command: string) => `「${command}」不接受 --dir／--folder：只處理程式所在的這個求職資料夾。請在求職資料夾裡執行，不要加 --dir。`,
   unknownCommand: (what: string) => `不認得「${what}」。`,
-  usage: (_us: boolean) => "用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104；只查個人檔案（美國版）：check --profiles）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」。",
+  usage: (_us: boolean) => "用法：直接點兩下打開介面；檢查用「jobhunt check」（只查一份：check 職缺代號；只查 104 總履歷：check --104；只查個人檔案（美國版）：check --profiles）；讀 Word 舊履歷用「jobhunt read inbox\\舊履歷.docx」；更新到新版用「jobhunt update」。",
   devNeedsDir: "開發模式要用 --dir 指定求職資料夾，例如：bun src/main.ts --dir ../jobhunt/scaffold/workspace-general",
   notFolder1: "這個資料夾看起來不是求職資料夾，所以沒有打開介面。",
   programAt: (dir: string) => `程式現在在：${dir}`,
@@ -22,10 +23,11 @@ export type CliText = typeof ZH;
 
 const EN: CliText = {
   pressEnter: "Press Enter to close this window.",
+  closedAfterUpdate: "The update is finished and the program has closed. Double-click the program to open the new version.",
   dirRefused: (command) => `"${command}" does not take --dir or --folder: it only works on the job-search folder the program is in. Run it inside your job-search folder and leave out --dir.`,
   unknownCommand: (what) => `Unknown command or option "${what}".`,
   usage: (us) =>
-    `Usage: double-click to open the app. To check your files use "jobhunt check" (one job only: check <job id>; ${us ? "" : "only the 104 master resume: check --104; "}only profile files: check --profiles). To read an old Word resume use "jobhunt read inbox\\old-resume.docx".`,
+    `Usage: double-click to open the app. To check your files use "jobhunt check" (one job only: check <job id>; ${us ? "" : "only the 104 master resume: check --104; "}only profile files: check --profiles). To read an old Word resume use "jobhunt read inbox\\old-resume.docx". To update to a new version use "jobhunt update".`,
   devNeedsDir: "Developer mode needs --dir to point at a job-search folder, for example: bun src/main.ts --dir ../jobhunt/scaffold/workspace-us",
   notFolder1: "This folder does not look like a job-search folder, so the app was not opened.",
   programAt: (dir) => `The program is now in: ${dir}`,
