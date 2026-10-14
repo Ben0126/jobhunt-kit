@@ -65,6 +65,29 @@ test("新增：公司、職稱必填；職缺網址可不填，但要是網址�
   expect(readCsv(dir)).toBe(before);
 });
 
+test("新增：可以一次帶入來源、聯絡人、狀態、日期、下一步、備註；狀態和日期要對；待投遞不存投遞日期", async () => {
+  const { apps, dir } = setup("2026-10-08");
+  const v = (await apps.board()).version;
+  const base = { company: "台灣大哥大", role: "門市人員", version: v };
+  await expect(apps.add({ ...base, status: "亂寫" })).rejects.toThrow("狀態不對");
+  await expect(apps.add({ ...base, next_action_date: "2026-02-30" })).rejects.toThrow("日期格式不對");
+  await expect(apps.add({ ...base, applied_date: "明天", status: "applied" })).rejects.toThrow("日期格式不對");
+  let b = await apps.add({
+    ...base, source: "104", contact: "人資王小姐", notes: "朋友推薦", next_action: "10/31 前投遞", next_action_date: "2026-10-31",
+    status: "applied", applied_date: "2026-10-07",
+  });
+  b = await apps.add({ company: "統一超商", role: "儲備幹部", status: "applied", applied_date: "", version: b.version });
+  b = await apps.add({ company: "全家", role: "店員", status: "todo", applied_date: "2026-10-01", version: b.version });
+  const [a1, a2, a3] = rowsOf(dir).slice(-3);
+  expect(a1).toMatchObject({
+    source: "104", contact: "人資王小姐", notes: "朋友推薦", next_action: "10/31 前投遞", next_action_date: "2026-10-31",
+    status: "applied", applied_date: "2026-10-07", last_update: "2026-10-08",
+  });
+  expect(a2).toMatchObject({ status: "applied", applied_date: "2026-10-08" }); // 已投遞沒填日期 → 今天
+  expect(a3).toMatchObject({ status: "todo", applied_date: "" }); // 待投遞不存投遞日期
+  expect(b.rows.at(-1)!.source).toBe("");
+});
+
 test("新增中文職缺：代號用 日期-流水號，看過所有資料夾和進度表，不撞號", async () => {
   const { apps, dir } = setup("2026-10-08");
   // 261008-01（jobs/targets/checks/resumes）和 261008-02（進度表）都用過了

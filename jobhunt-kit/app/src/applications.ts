@@ -17,7 +17,7 @@ export const KIT_HEADER = [
 export const STATUSES: StatusDef[] = STATUSES_ZH;
 const STATUS_CODES = new Set(STATUSES.map((s) => s.code));
 
-export const EDITABLE = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "notes", "link"] as const;
+export const EDITABLE = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link"] as const;
 type Editable = (typeof EDITABLE)[number];
 const DATE_FIELDS = new Set(["applied_date", "next_action_date"]);
 
@@ -225,7 +225,12 @@ export class Applications {
     return id;
   }
 
-  async add(input: { company?: unknown; role?: unknown; link?: unknown; version?: unknown }): Promise<Board> {
+  /** A new row. Only company and role are required; the rest are what log-application.md describes for the same columns. */
+  async add(input: {
+    company?: unknown; role?: unknown; link?: unknown; version?: unknown;
+    status?: unknown; applied_date?: unknown; next_action?: unknown; next_action_date?: unknown;
+    contact?: unknown; source?: unknown; notes?: unknown;
+  }): Promise<Board> {
     return this.serial(async () => {
       const T = await this.tx();
       const company = cleanLine(input.company);
@@ -234,6 +239,14 @@ export class Applications {
       if (!company) throw new UserError(T.needCompany);
       if (!role) throw new UserError(T.needRole);
       if (link && !/^https?:\/\/\S+$/i.test(link)) throw new UserError(T.badLink);
+      const status = cleanLine(input.status) || "todo";
+      if (!STATUS_CODES.has(status)) throw new UserError(T.badStatus);
+      let appliedDate = cleanLine(input.applied_date);
+      const nextDate = cleanLine(input.next_action_date);
+      if ((appliedDate && !isValidDate(appliedDate)) || (nextDate && !isValidDate(nextDate))) throw new UserError(T.badDate);
+      // A date applied only means something once the job is no longer "to apply"; "applied" with no date gets today.
+      if (status === "todo") appliedDate = "";
+      else if (status === "applied" && !appliedDate) appliedDate = this.today();
       const { doc, version } = await this.load();
       this.checkVersion(version, input.version, T);
       const ci = doc.header.indexOf("company"), ri = doc.header.indexOf("role");
@@ -245,8 +258,14 @@ export class Applications {
         job_id: jobId,
         company,
         role,
-        status: "todo",
+        status,
+        applied_date: appliedDate,
         last_update: this.today(),
+        next_action: cleanLine(input.next_action),
+        next_action_date: nextDate,
+        contact: cleanLine(input.contact),
+        source: cleanLine(input.source),
+        notes: cleanLine(input.notes),
         link,
         resume_version: this.folder.exists(`targets/${jobId}.yaml`) ? `targets/${jobId}` : "",
       };

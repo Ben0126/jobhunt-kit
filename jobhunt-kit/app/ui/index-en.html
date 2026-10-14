@@ -31,6 +31,19 @@
       <label>Company <span class="req">Required</span><input name="company" autocomplete="off" required></label>
       <label>Job title <span class="req">Required</span><input name="role" autocomplete="off" required></label>
       <label>Job link <span class="opt">Optional</span><input name="link" type="text" inputmode="url" autocomplete="off" placeholder="Paste the link to the job posting"></label>
+      <details class="more">
+        <summary>More details (optional)</summary>
+        <div class="grid3">
+          <label>Where you found it<input name="source" list="source-list" autocomplete="off" placeholder="For example: Handshake, LinkedIn, career fair"></label>
+          <label>Status<select name="status" id="add-status"></select></label>
+          <label id="add-applied-wrap" hidden>Date applied<input name="applied_date" type="date"></label>
+          <label>Next step<input name="next_action" autocomplete="off" placeholder="For example: Apply by 10/31"></label>
+          <label>Next step date<input name="next_action_date" type="date"></label>
+          <label>Contact<input name="contact" autocomplete="off" placeholder="For example: Ms. Rivera, recruiter (no phone or email)"></label>
+          <label class="wide3">Notes<input name="notes" autocomplete="off"></label>
+        </div>
+        <datalist id="source-list"><option value="Handshake"><option value="LinkedIn"><option value="Company site"><option value="Career fair"><option value="Referral"><option value="Indeed"></datalist>
+      </details>
       <div class="actions">
         <button type="submit" class="primary">Add</button>
         <button type="button" id="add-cancel">Cancel</button>
@@ -90,6 +103,8 @@
       <label>Date applied<input name="applied_date" type="date"></label>
       <label class="wide">Next step<input name="next_action" autocomplete="off" placeholder="For example: Interview 10/15 at 2 pm"></label>
       <label>Next step date<input name="next_action_date" type="date"></label>
+      <label>Contact<input name="contact" autocomplete="off" placeholder="For example: Ms. Rivera, recruiter (no phone or email)"></label>
+      <label>Where you found it<input name="source" list="source-list" autocomplete="off"></label>
       <label class="wide">Notes<input name="notes" autocomplete="off"></label>
       <label class="wide">Job link<input name="link" type="text" inputmode="url" autocomplete="off" placeholder="Paste the link to the job posting"></label>
     </div>

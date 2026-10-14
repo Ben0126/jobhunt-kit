@@ -585,6 +585,8 @@ function card(row, flagged) {
       ),
     );
   if (row.applied_date) meta.push(h("div", { class: "meta" }, T.appliedOn(shortDate(row.applied_date))));
+  const who = [row.source, row.contact].filter(Boolean).join(" · ");
+  if (who) meta.push(h("div", { class: "meta" }, who));
   if (row.notes) meta.push(h("div", { class: "meta" }, row.notes));
   const link = safeLink(row.link);
   return h(
@@ -673,7 +675,18 @@ async function save(row, changes) {
 }
 
 // ---- 新增
+// the status menu of the add form: same statuses as the board; a date applied only matters once it is not "to apply"
+function fillAddStatus() {
+  const sel = $("add-status");
+  if (!sel || !board) return;
+  const keep = sel.value || "todo";
+  sel.replaceChildren(...board.statuses.map((s) => h("option", { value: s.code, selected: s.code === keep }, s.label)));
+  $("add-applied-wrap").hidden = sel.value === "todo";
+}
+$("add-status").addEventListener("change", () => ($("add-applied-wrap").hidden = $("add-status").value === "todo"));
+$("add-form").addEventListener("reset", () => setTimeout(fillAddStatus));
 $("add-open").addEventListener("click", () => {
+  fillAddStatus();
   $("add-form").hidden = false;
   $("add-form").elements.company.focus();
 });
@@ -687,8 +700,10 @@ $("add-form").addEventListener("submit", async (e) => {
   try {
     const b = await api("POST", "/api/applications/add", {
       company: f.company.value, role: f.role.value, link: fixLink(f.link.value), version: board && board.version,
+      source: f.source.value, status: f.status.value, applied_date: f.applied_date.value,
+      next_action: f.next_action.value, next_action_date: f.next_action_date.value, contact: f.contact.value, notes: f.notes.value,
     });
-    notice(T.added(f.company.value.trim(), f.role.value.trim(), board ? label("todo") : T.todoName));
+    notice(T.added(f.company.value.trim(), f.role.value.trim(), board ? label(f.status.value || "todo") : T.todoName));
     e.target.reset();
     e.target.hidden = true;
     render(b);
@@ -700,7 +715,7 @@ $("add-form").addEventListener("submit", async (e) => {
 
 // ---- 修改視窗
 let editing = null;
-const FIELDS = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "notes", "link"];
+const FIELDS = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link"];
 
 function openEdit(row) {
   editing = row;

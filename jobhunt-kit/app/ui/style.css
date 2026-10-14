@@ -78,6 +78,10 @@ label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-
   display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 12px; align-items: end;
   padding: 16px; margin-bottom: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
 }
+.add-form .more { grid-column: 1 / -1; }
+.add-form .more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.add-form .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.add-form .wide3 { grid-column: 1 / -1; }
 .actions { display: flex; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
 
