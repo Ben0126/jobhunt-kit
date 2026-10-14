@@ -1,12 +1,15 @@
-// The job list (US kit): open internships and new-grad positions read from public sources, sorted into three tracks
-// (cs, ece, business), with what each employer has filed for H-1B shown next to it and a note when a posting disappears.
+// The job list (US kit): open internships and new-grad positions read from public sources, sorted into fields (software,
+// health, finance, education, design, marketing, ... see fields.ts: every major, not just engineering), with what each
+// employer has filed for H-1B shown next to it and a note when a posting disappears.
 // Ported from the owner's own tracker (D:\job-hunt: jobtracker/fetch_jobs.py, boards.py, liveness.py), but:
 //  - runs on this computer when the person asks (or, if switched on, when the page opens and the list is a day old);
 //    nothing is sent anywhere, every request is a plain GET of a public address;
-//  - the owner's own robotics / ML grouping is NOT the default: tracks are cs, ece and business, and the person can add
+//  - the owner's own robotics / ML grouping is NOT the default: fields cover every major, and the person can add fields,
 //    keywords or whole companies in jobhunt.yaml (`feed:`);
-//  - sources: SimplifyJobs' Summer internships and New-Grad lists, and company career pages on Greenhouse, Lever, Ashby,
-//    SmartRecruiters and Workable (each company's own public posting API). zapply is not used: its list is CC BY-NC-SA.
+//  - sources: SimplifyJobs' Summer internships and New-Grad lists (technology-heavy), and company career pages on
+//    Greenhouse, Lever, Ashby, SmartRecruiters, Workable and Workday (each company's own public posting API; the built-in
+//    companies are spread over tech, finance, health, retail, consumer goods, energy, media). zapply is not used: its list
+//    is CC BY-NC-SA.
 //
 // Closed postings: Simplify has an `active` flag; a company page that stops listing a posting means it closed (the company
 // page counts only when it was fetched fine this time, and a page that suddenly loses more than half of its postings is
@@ -15,12 +18,12 @@
 // What is kept is written to .jobhunt/feed.json (the app's own bookkeeping, like update.json).
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { fieldLabel, fieldOf, fieldOrder } from "./fields.ts";
 import { ensureIndex, lookup, type Fetcher, type H1BFacts } from "./h1b.ts";
 import { feedServerFromEnv, viaTestServer } from "./testserver.ts";
 
 export type Kind = "internship" | "newgrad";
-export type Track = "cs" | "ece" | "business" | "other";
-export type Ats = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workable";
+export type Ats = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workable" | "workday";
 export type BoardSpec = { name: string; ats: Ats; board: string };
 
 export type Listing = {
@@ -31,7 +34,7 @@ export type Listing = {
   posted: string; // YYYY-MM-DD ("" when the source has no date)
   link: string;
   kind: Kind;
-  track: Track;
+  category: string; // the source's own category ("Software", "Hardware"...), "" for company pages; the field is worked out when asked
   degrees: string;
   sponsor: "yes" | "no" | ""; // what the posting says (Simplify's field); NOT what the employer has filed
   citizen: boolean; // the posting asks for US citizenship (or a clearance)
@@ -58,11 +61,11 @@ export const emptyCache = (): FeedCache => ({ version: 1, fetchedAt: "", sources
 
 export type FeedConfig = {
   autoRefresh: boolean;
-  tracks: Track[];
+  fields: string[]; // fields to show; empty = every field
   kinds: Kind[];
   terms: string[]; // internship terms to keep ("Summer 2027")
   boards: BoardSpec[];
-  keywords: Record<"cs" | "ece" | "business", string[]>;
+  keywords: Record<string, string[]>; // the person's own words by field id (a new id is a new field)
   hideCitizenship: boolean;
   h1b: boolean;
   internshipsUrl: string;
@@ -70,6 +73,11 @@ export type FeedConfig = {
 };
 
 const RAW = "https://raw.githubusercontent.com/SimplifyJobs";
+
+/** The summer people are applying for: from September on it is next year's, before that this year's. */
+export function defaultSummer(now: Date): number {
+  return now.getUTCMonth() >= 8 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
+}
 export const DEFAULT_BOARDS: BoardSpec[] = [
   ...(
     [
@@ -87,17 +95,30 @@ export const DEFAULT_BOARDS: BoardSpec[] = [
       ["Harvey", "harvey"], ["Sierra", "sierra"], ["Replit", "replit"], ["Decagon", "decagon"], ["Hex", "hex"], ["Mercor", "mercor"],
     ] as const
   ).map(([name, board]) => ({ name, ats: "ashby" as Ats, board })),
+  // Workday career sites (tenant.wdN/site): finance, health, retail, consumer goods, energy, media, consulting
+  ...(
+    [
+      ["3M", "3m.wd1/Search"], ["Abbott", "abbott.wd5/abbottcareers"], ["Adobe", "adobe.wd5/external_experienced"], ["Bank of America", "ghr.wd1/lateral-us"],
+      ["Capital One", "capitalone.wd12/Capital_One"], ["Chevron", "chevron.wd5/jobs"], ["Citi", "citi.wd5/2"], ["CVS Health", "cvshealth.wd1/cvs_health_careers"],
+      ["Disney", "disney.wd5/disneycareer"], ["General Motors", "generalmotors.wd5/Careers_GM"], ["Home Depot", "homedepot.wd5/CareerDepot"],
+      ["Humana", "humana.wd5/Humana_External_Career_Site"], ["Johnson & Johnson", "jj.wd5/JJ"], ["Lowe's", "lowes.wd5/LWS_External_CS"],
+      ["Mastercard", "mastercard.wd1/CorporateCareers"], ["Medtronic", "medtronic.wd1/MedtronicCareers"], ["Nike", "nike.wd1/nke"],
+      ["Pfizer", "pfizer.wd1/PfizerCareers"], ["Procter & Gamble", "pg.wd5/1000"], ["PNC", "pnc.wd5/External"], ["PwC", "pwc.wd3/Global_Experienced_Careers"],
+      ["Salesforce", "salesforce.wd12/External_Career_Site"], ["State Street", "statestreet.wd1/Global"], ["Stryker", "stryker.wd1/StrykerCareers"],
+      ["Target", "target.wd5/targetcareers"], ["Truist", "truist.wd1/Careers"], ["U.S. Bank", "usbank.wd1/US_Bank_Careers"], ["Wells Fargo", "wf.wd1/WellsFargoJobs"],
+    ] as const
+  ).map(([name, board]) => ({ name, ats: "workday" as Ats, board })),
 ];
 
-const ATS = new Set<string>(["greenhouse", "lever", "ashby", "smartrecruiters", "workable"]);
-const TRACKS = new Set<string>(["cs", "ece", "business", "other"]);
+const ATS = new Set<string>(["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday"]);
 
 const strList = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
 
 /** The `feed:` section of jobhunt.yaml with every missing or odd value replaced by its default. */
-export function feedConfig(yaml: unknown): FeedConfig {
+export function feedConfig(yaml: unknown, now: Date = new Date()): FeedConfig {
   const f: any = yaml && typeof yaml === "object" && (yaml as any).feed && typeof (yaml as any).feed === "object" ? (yaml as any).feed : {};
-  const tracks = strList(f.tracks).filter((t): t is Track => TRACKS.has(t));
+  // `tracks` is the old name of `fields`
+  const fields = strList(f.fields ?? f.tracks).map((x) => x.toLowerCase().replace(/[^a-z0-9_-]+/g, "-")).filter(Boolean);
   const kinds = strList(f.kinds).filter((k): k is Kind => k === "internship" || k === "newgrad");
   const skip = new Set(strList(f.skip_companies).map((s) => s.toLowerCase()));
   const extra: BoardSpec[] = [];
@@ -105,22 +126,29 @@ export function feedConfig(yaml: unknown): FeedConfig {
     const name = String(c?.name ?? "").trim();
     const ats = String(c?.ats ?? "").trim().toLowerCase();
     const board = String(c?.board ?? "").trim();
-    // a board token goes into a URL: letters, digits, dot, dash, underscore only
-    if (name && ATS.has(ats) && /^[A-Za-z0-9._-]{1,80}$/.test(board)) extra.push({ name, ats: ats as Ats, board });
+    // a board token goes into a URL: letters, digits, dot, dash, underscore only (a Workday one is "tenant.wdN/site")
+    const okBoard = ats === "workday" ? /^[A-Za-z0-9-]{1,60}\.wd\d{1,3}\/[A-Za-z0-9._-]{1,80}$/.test(board) : /^[A-Za-z0-9._-]{1,80}$/.test(board);
+    if (name && ATS.has(ats) && okBoard) extra.push({ name, ats: ats as Ats, board });
   }
   const boards = [...DEFAULT_BOARDS, ...extra].filter((b) => !skip.has(b.name.toLowerCase()));
-  const kw = (k: string) => strList(f.keywords?.[k]);
+  const keywords: Record<string, string[]> = {};
+  if (f.keywords && typeof f.keywords === "object" && !Array.isArray(f.keywords))
+    for (const [k, v] of Object.entries(f.keywords)) {
+      const id = k.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+      if (id && strList(v).length) keywords[id] = strList(v);
+    }
+  const summer = defaultSummer(now);
   const url = (v: unknown, dflt: string) => (typeof v === "string" && /^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\//.test(v.trim()) ? v.trim() : dflt);
   return {
     autoRefresh: f.auto_refresh !== false,
-    tracks: tracks.length ? tracks : ["cs", "ece", "business"],
+    fields,
     kinds: kinds.length ? kinds : ["internship", "newgrad"],
-    terms: strList(f.terms).length ? strList(f.terms) : ["Summer 2027"],
+    terms: strList(f.terms).length ? strList(f.terms) : [`Summer ${summer}`],
     boards,
-    keywords: { cs: kw("cs"), ece: kw("ece"), business: kw("business") },
+    keywords,
     hideCitizenship: f.hide_citizenship_required !== false,
     h1b: f.h1b !== false,
-    internshipsUrl: url(f.internships_url, `${RAW}/Summer2027-Internships/dev/.github/scripts/listings.json`),
+    internshipsUrl: url(f.internships_url, `${RAW}/Summer${summer}-Internships/dev/.github/scripts/listings.json`),
     newGradUrl: url(f.new_grad_url, `${RAW}/New-Grad-Positions/dev/.github/scripts/listings.json`),
   };
 }
@@ -189,44 +217,13 @@ export function phdOnly(title: string, degrees: string[] = []): boolean {
   return t.includes("phd") && !LOWER_DEGREE.test(t);
 }
 
-// ---------------------------------------------------------------- tracks
-
-const ECE = /embedded|firmware|\bfpga\b|\basic\b|\brtl\b|verification|silicon|semiconductor|hardware|electrical|electronics?|circuit|analog|\brf\b|wireless|signal processing|\bdsp\b|\bpcb\b|power (?:electronics|systems?)|mechatronic|robot|controls? engineer|\bvlsi\b|physical design|test engineer|validation engineer|\bsoc\b|photonic|sensor|chip|memory|device engineer|process engineer|manufacturing engineer/i;
-const BUSINESS = /analyst|business|marketing|finance|financial|accounting|audit|sales|operations|strategy|consult|\bhr\b|human resources|people\b|recruit|talent|customer success|customer support|account (?:manager|executive)|supply chain|procurement|product manag|program manag|project manag|product operations|growth|partnership|investment|banking|private equity|risk|compliance|legal|communications|brand|content|merchandis|real estate|\bmba\b|trading|quantitative|actuar/i;
-const SWE_STRONG = /software|developer|\bswe\b|machine learning|\bml\b|data scien|data engineer|full.?stack|back.?end|front.?end|devops|\bsre\b|cloud|\bai\b/i;
-const CS = /software|developer|\bswe\b|engineer|data|machine learning|\bml\b|\bai\b|artificial intelligence|back.?end|front.?end|full.?stack|devops|security|cloud|platform|infrastructure|research|computer|algorithm|\bsre\b|\bios\b|android|mobile|web\b|game|graphics|compiler|database/i;
-const BY_CATEGORY: Record<string, Track> = {
-  Hardware: "ece", "Hardware Engineering": "ece", Software: "cs", "Software Engineering": "cs", "AI/ML/Data": "cs",
-  "Data Science, AI & Machine Learning": "cs", Product: "business", "Product Management": "business", Quant: "business", "Quantitative Finance": "business",
-};
-
-function wordsRe(list: string[]): RegExp | null {
-  const parts = list.map((w) => w.trim()).filter(Boolean).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  return parts.length ? new RegExp(parts.join("|"), "i") : null;
-}
-
-/** The track of a posting: the person's own keywords first, then the title (hardware words, then business words, then
- * software words), then the source's category when it has one. "other" is what nothing above recognised. */
-export function trackOf(title: string, category: string, cfg: Pick<FeedConfig, "keywords">): Track {
-  for (const t of ["ece", "business", "cs"] as const) {
-    const re = wordsRe(cfg.keywords[t]);
-    if (re && re.test(title)) return t;
-  }
-  if (ECE.test(title)) return "ece";
-  const sw = SWE_STRONG.test(title);
-  // "Machine Learning Engineer Intern, User Growth" is software work with a business word in it
-  if (BUSINESS.test(title) && !sw) return "business";
-  if (sw || CS.test(title)) return category === "Hardware" ? "ece" : "cs";
-  return BY_CATEGORY[category] ?? "other";
-}
-
-const INTERN = /\bintern(?:s|ship|ships)?\b|\bco-?op\b/i;
-const NEWGRAD = /new\s*grad|university grad|recent grad|graduate (?:program|engineer|developer|analyst|associate|scientist|software)|early career|early talent|entry[- ]level|\bclass of 20\d\d\b|rotational program/i;
+const INTERN = /\bintern(?:s|ship|ships)?\b|\bco-?op\b|summer (?:analyst|associate)/i;
+const NEWGRAD = /new\s*grad|university grad|recent grad|graduate (?:program|engineer|developer|analyst|associate|scientist|software|nurse|trainee)|early career|early talent|entry[- ]level|campus|\bclass of 20\d\d\b|rotational|analyst program|associate program|leadership development/i;
 
 // ---------------------------------------------------------------- reading the sources
 
 export type HttpResult = { status: number; body?: any; etag?: string };
-export type Http = (url: string, opt?: { etag?: string }) => Promise<HttpResult>;
+export type Http = (url: string, opt?: { etag?: string; post?: unknown }) => Promise<HttpResult>;
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36";
 
@@ -235,7 +232,12 @@ export const defaultHttp: Http = async (url0, opt) => {
   const url = fake ? viaTestServer(fake, url0) : url0;
   for (let attempt = 0; attempt < 4; attempt++) {
     const r = await fetch(url, {
-      headers: { "User-Agent": UA, Accept: "application/json", ...(opt?.etag ? { "If-None-Match": opt.etag } : {}) },
+      method: opt?.post === undefined ? "GET" : "POST",
+      headers: {
+        "User-Agent": UA, Accept: "application/json", ...(opt?.etag ? { "If-None-Match": opt.etag } : {}),
+        ...(opt?.post === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: opt?.post === undefined ? undefined : JSON.stringify(opt.post),
       signal: AbortSignal.timeout(90_000),
     });
     if ((r.status === 429 || r.status === 503) && attempt < 3) {
@@ -281,7 +283,7 @@ export function readSimplify(raw: any, kind: Kind, source: string, cfg: FeedConf
     if (!locs.length) continue;
     out.push({
       id: String(x.id), company: tidy(x.company_name), title, locations: clip(locs), posted: date(x.date_posted),
-      link: String(x.url || `https://simplify.jobs/p/${x.id}`), kind: k, track: trackOf(title, String(x.category ?? ""), cfg),
+      link: String(x.url || `https://simplify.jobs/p/${x.id}`), kind: k, category: String(x.category ?? ""),
       degrees: degrees.join("/"), sponsor: x.sponsorship === "Offers Sponsorship" ? "yes" : x.sponsorship === "Does Not Offer Sponsorship" ? "no" : "",
       citizen: x.sponsorship === "U.S. Citizenship is Required", source,
     });
@@ -334,10 +336,47 @@ async function boardRows(b: BoardSpec, http: Http): Promise<RawBoardRow[]> {
     }
     throw new Error("more than 30 pages: the result would be cut off");
   }
+  if (b.ats === "workday") return workdayRows(b, http);
   const d = await get(`https://apply.workable.com/api/v1/widget/accounts/${b.board}`);
   return d.jobs.map((j: any) => ({
     id: String(j.shortcode), title: tidy(j.title), locs: [[j.city, j.state, j.country].filter(Boolean).join(", ")], posted: date(j.published_on), link: j.url || "",
   }));
+}
+
+// Workday's search is a loose full-text one ("intern" also finds "International"), so a few words are searched, a few pages each,
+// and the title decides afterwards.
+const WORKDAY_SEARCHES: [string, number][] = [["internship", 6], ["new graduate", 4], ["university", 3]];
+const POSTED = /posted (today|yesterday|(\d+)\+? days? ago)/i;
+
+async function workdayRows(b: BoardSpec, http: Http): Promise<RawBoardRow[]> {
+  const [host, site] = b.board.split("/");
+  const tenant = host.split(".")[0];
+  const url = `https://${host}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
+  const out: RawBoardRow[] = [];
+  const seen = new Set<string>();
+  for (const [search, pages] of WORKDAY_SEARCHES) {
+    for (let page = 0; page < pages; page++) {
+      const d: any = (await http(url, { post: { appliedFacets: {}, limit: 20, offset: page * 20, searchText: search } })).body;
+      const list: any[] = d?.jobPostings ?? [];
+      for (const j of list) {
+        const path = String(j.externalPath ?? "");
+        const req = String((j.bulletFields ?? [])[0] ?? path.split("_").pop() ?? "");
+        if (!req || seen.has(req)) continue;
+        seen.add(req);
+        const m = POSTED.exec(String(j.postedOn ?? ""));
+        const days = m ? (/today/i.test(m[1]) ? 0 : /yesterday/i.test(m[1]) ? 1 : Number(m[2])) : null;
+        const posted = days == null ? "" : new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+        // /job/<main place>/<title>_<requisition>: "Waltham-Office-POST" style codes are not places, so only a real one counts
+        const place = path.split("/")[2] ?? "";
+        out.push({
+          id: `${tenant}-${req}`, title: tidy(j.title), locs: [tidy(j.locationsText), place.replace(/-/g, " ")].filter(Boolean), posted,
+          link: `https://${host}.myworkdayjobs.com/en-US/${site}${path}`,
+        });
+      }
+      if (list.length < 20 || (page + 1) * 20 >= (d?.total ?? 0)) break;
+    }
+  }
+  return out;
 }
 
 /** A company page -> the entry-level US postings on it (interns for the wanted terms; new grads). */
@@ -346,7 +385,8 @@ export async function readBoard(b: BoardSpec, http: Http, cfg: FeedConfig): Prom
   const out: Draft[] = [];
   const seen = new Set<string>();
   for (const r of rows) {
-    const id = `b-${b.ats}-${b.board}-${r.id.replace(/[^A-Za-z0-9_.-]+/g, "-")}`;
+    const safe = r.id.replace(/[^A-Za-z0-9_.-]+/g, "-");
+    const id = b.ats === "workday" ? `b-workday-${safe}` : `b-${b.ats}-${b.board}-${safe}`; // (a Workday board is "tenant.wdN/site": its rows carry the tenant)
     if (seen.has(id) || !r.title) continue;
     const intern = r.intern || INTERN.test(r.title);
     const grad = !intern && NEWGRAD.test(r.title);
@@ -360,7 +400,7 @@ export async function readBoard(b: BoardSpec, http: Http, cfg: FeedConfig): Prom
     seen.add(id);
     out.push({
       id, company: b.name, title: r.title, locations: clip(r.locs.filter(Boolean)), posted: r.posted, link: r.link, kind: intern ? "internship" : "newgrad",
-      track: trackOf(r.title, "", cfg), degrees: "", sponsor: "", citizen: /clearance|citizen|ts\/sci|\bsecret\b/i.test(r.title), source: `board:${b.ats}:${b.board}`,
+      category: "", degrees: "", sponsor: "", citizen: /clearance|citizen|ts\/sci|\bsecret\b/i.test(r.title), source: `board:${b.ats}:${b.board}`,
     });
   }
   return out;
@@ -528,7 +568,7 @@ export function writeCache(path: string, c: FeedCache): void {
 }
 
 export type Query = {
-  tracks?: string[];
+  fields?: string[];
   kinds?: string[];
   q?: string;
   newOnly?: boolean;
@@ -537,18 +577,19 @@ export type Query = {
   limit?: number;
 };
 
-export type Row = Listing & { isNew: boolean; h1b: H1BFacts | null };
+export type Row = Listing & { field: string; fieldShort: string; isNew: boolean; h1b: H1BFacts | null };
 
 const NEW_DAYS = 3;
 
 /** What the page lists, newest first. Closed postings and ones that ask for US citizenship are left out unless asked for. */
-export function queryFeed(c: FeedCache, q: Query, cfg: FeedConfig, today: string) {
+export function queryFeed(c: FeedCache, q: Query, cfg: FeedConfig, today: string, lang: "en" | "zh-TW" = "en") {
   const text = (q.q ?? "").toLowerCase().trim();
-  const tracks = new Set(q.tracks?.length ? q.tracks : cfg.tracks);
+  const shown = q.fields?.length ? q.fields : cfg.fields;
+  const fieldSet = shown.length ? new Set(shown) : null; // null: every field
   const kinds = new Set(q.kinds?.length ? q.kinds : cfg.kinds);
   const todayMs = Date.parse(today);
   const rows: Row[] = [];
-  const counts: Record<string, number> = { cs: 0, ece: 0, business: 0, other: 0 };
+  const counts: Record<string, number> = {};
   let closed = 0;
   let citizen = 0;
   for (const l of c.listings) {
@@ -562,13 +603,14 @@ export function queryFeed(c: FeedCache, q: Query, cfg: FeedConfig, today: string
       continue;
     }
     if (text && !`${l.company} ${l.title} ${l.locations}`.toLowerCase().includes(text)) continue;
-    counts[l.track] = (counts[l.track] ?? 0) + 1;
-    if (!tracks.has(l.track)) continue;
+    const field = fieldOf(l.title, l.category, cfg.keywords);
+    counts[field] = (counts[field] ?? 0) + 1;
+    if (fieldSet && !fieldSet.has(field)) continue;
     const isNew = !l.baseline && (todayMs - Date.parse(l.firstSeen)) / 86400000 < NEW_DAYS;
     if (q.newOnly && !isNew) continue;
     const h1b = c.h1b.byCompany[l.company] ?? null;
     if (q.h1bRecent && !(h1b && h1b.filed > 0 && h1b.lastYear >= Number(today.slice(0, 4)) - 2)) continue;
-    rows.push({ ...l, isNew, h1b });
+    rows.push({ ...l, field, fieldShort: fieldLabel(field, lang, true), isNew, h1b });
   }
   rows.sort((a, b) => Number(b.isNew) - Number(a.isNew) || (b.posted || "").localeCompare(a.posted || "") || a.company.localeCompare(b.company));
   const limit = Math.min(Math.max(q.limit ?? 200, 1), 500);
@@ -576,6 +618,7 @@ export function queryFeed(c: FeedCache, q: Query, cfg: FeedConfig, today: string
     total: rows.length,
     rows: rows.slice(0, limit),
     counts,
+    fields: fieldOrder([...Object.keys(counts), ...cfg.fields]).map((id) => ({ id, label: fieldLabel(id, lang), count: counts[id] ?? 0 })),
     closed,
     citizenHidden: citizen,
     newCount: rows.filter((r) => r.isNew).length,

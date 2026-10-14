@@ -7,9 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import {
-  closedLinks, emptyCache, feedConfig, isUSLocation, phdOnly, queryFeed, readBoard, readSimplify, refreshFeed, termOk, trackOf,
+  closedLinks, defaultSummer, emptyCache, feedConfig, isUSLocation, phdOnly, queryFeed, readBoard, readSimplify, refreshFeed, termOk,
   type BoardSpec, type FeedCache, type FeedConfig, type Http,
 } from "../src/feed.ts";
+import { fieldOf } from "../src/fields.ts";
 import { POINTER } from "../src/h1b.ts";
 import { cleanup } from "./helpers.ts";
 
@@ -21,7 +22,8 @@ const tmp = () => {
   return d;
 };
 
-const CFG = (over: Record<string, unknown> = {}): FeedConfig => feedConfig({ feed: { skip_companies: [], ...over } });
+const NOW0 = new Date("2026-10-13T12:00:00Z"); // from September on, "this summer" means next year's
+const CFG = (over: Record<string, unknown> = {}): FeedConfig => feedConfig({ feed: { skip_companies: [], ...over } }, NOW0);
 const NO_BOARDS = (over: Record<string, unknown> = {}) => {
   const c = CFG(over);
   return { ...c, boards: [] as BoardSpec[] };
@@ -97,45 +99,33 @@ test("termOk／phdOnly：寫了不要的年份或季節就不收；只收博士�
   expect(phdOnly("Research Intern (MS/PhD)")).toBe(false);
 });
 
-test("trackOf：標題先看硬體字、再看商業字、再看軟體字；沒有才看來源的分類；自己加的關鍵字最優先", () => {
-  const cfg = { keywords: { cs: [], ece: [], business: [] } };
-  expect(trackOf("FPGA Design Intern", "Hardware", cfg)).toBe("ece");
-  expect(trackOf("Embedded Software Engineer", "Software", cfg)).toBe("ece");
-  expect(trackOf("Business Analyst Intern", "Product", cfg)).toBe("business");
-  expect(trackOf("Financial Analyst Intern", "", cfg)).toBe("business");
-  expect(trackOf("Software Engineer Intern", "Software", cfg)).toBe("cs");
-  expect(trackOf("Machine Learning Intern", "AI/ML/Data", cfg)).toBe("cs");
-  expect(trackOf("Summer Associate", "Quant", cfg)).toBe("business");
-  expect(trackOf("Machine Learning Engineer Intern - E-Commerce User Growth", "", cfg)).toBe("cs"); // a business word inside software work
-  expect(trackOf("Robot Learning Research Intern", "", cfg)).toBe("ece");
-  expect(trackOf("Mystery Intern", "", cfg)).toBe("other");
-  expect(trackOf("Mystery Intern", "Hardware", cfg)).toBe("ece");
-  expect(trackOf("Wizard Intern", "", { keywords: { cs: ["wizard"], ece: [], business: [] } })).toBe("cs");
-});
-
 test("feedConfig：沒寫就是預設；壞的公司（不認得的 ATS、網址字元）被丟掉；網址只認 raw.githubusercontent.com；skip_companies 拿掉預設公司", () => {
-  const d = feedConfig(null);
-  expect(d).toMatchObject({ autoRefresh: true, tracks: ["cs", "ece", "business"], kinds: ["internship", "newgrad"], terms: ["Summer 2027"], hideCitizenship: true, h1b: true });
+  const d = feedConfig(null, NOW0);
+  expect(d).toMatchObject({ autoRefresh: true, fields: [], kinds: ["internship", "newgrad"], terms: ["Summer 2027"], hideCitizenship: true, h1b: true });
   expect(d.boards.length).toBeGreaterThan(30);
   expect(d.boards.some((b) => /anduril|palantir/i.test(b.name))).toBe(false); // defense employers that want US citizens
   const c = feedConfig({
     feed: {
-      tracks: ["business", "nope"], kinds: ["newgrad"], auto_refresh: false, h1b: false, hide_citizenship_required: false, terms: ["Fall 2027"],
+      fields: ["Business", "Health Care!"], keywords: { "Pre-Law": ["lsat", "paralegal"], software: ["quant dev"], empty: [] }, kinds: ["newgrad"], auto_refresh: false, h1b: false, hide_citizenship_required: false, terms: ["Fall 2027"],
       skip_companies: ["stripe"],
       companies: [
         { name: "Good Co", ats: "lever", board: "good-co" },
         { name: "Bad ATS", ats: "workday", board: "x" },
         { name: "Bad Token", ats: "greenhouse", board: "x/../y" },
+        { name: "Good Day", ats: "workday", board: "acme.wd5/Careers" },
+        { name: "Bad Day", ats: "workday", board: "acme/Careers" },
+        { name: "Bad Day 2", ats: "workday", board: "acme.wd5/a/b" },
         { name: "", ats: "greenhouse", board: "z" },
       ],
       internships_url: "https://evil.example/x.json",
       new_grad_url: "https://raw.githubusercontent.com/Someone/Repo/main/x.json",
     },
-  });
-  expect(c.tracks).toEqual(["business"]);
+  }, NOW0);
+  expect(c.fields).toEqual(["business", "health-care-"]); // ids are lower case, letters and digits
+  expect(c.keywords).toEqual({ "pre-law": ["lsat", "paralegal"], software: ["quant dev"] }); // a field with no words is dropped
   expect(c).toMatchObject({ kinds: ["newgrad"], autoRefresh: false, h1b: false, hideCitizenship: false, terms: ["Fall 2027"] });
   expect(c.boards.some((b) => b.name === "Stripe")).toBe(false);
-  expect(c.boards.filter((b) => b.name === "Good Co" || b.name.startsWith("Bad")).map((b) => b.name)).toEqual(["Good Co"]);
+  expect(c.boards.filter((b) => b.name === "Good Co" || b.name === "Good Day" || b.name.startsWith("Bad")).map((b) => b.name)).toEqual(["Good Co", "Good Day"]);
   expect(c.internshipsUrl).toBe(d.internshipsUrl);
   expect(c.newGradUrl).toBe("https://raw.githubusercontent.com/Someone/Repo/main/x.json");
 });
@@ -143,9 +133,9 @@ test("feedConfig：沒寫就是預設；壞的公司（不認得的 ATS、網址
 test("readSimplify：只收開著、要的學期、不是只給博士、在美國的；沒有學期欄位的（新鮮人清單）照收", () => {
   const rows = readSimplify(INTERN_LIST, "internship", "simplify-internships", CFG());
   expect(rows.map((r) => r.id)).toEqual(["a1", "a2", "a3", "a8", "a9"]);
-  expect(rows.find((r) => r.id === "a1")).toMatchObject({ company: "Acme Corp", locations: "SF", track: "cs", kind: "internship", link: "https://acme.example/jobs/1", posted: "2026-09-21" });
-  expect(rows.find((r) => r.id === "a2")!.track).toBe("ece");
-  expect(rows.find((r) => r.id === "a3")!.track).toBe("business");
+  expect(rows.find((r) => r.id === "a1")).toMatchObject({ company: "Acme Corp", locations: "SF", category: "Software", kind: "internship", link: "https://acme.example/jobs/1", posted: "2026-09-21" });
+  expect(rows.find((r) => r.id === "a2")!.category).toBe("Hardware");
+  expect(rows.find((r) => r.id === "a3")!.category).toBe("Product");
   expect(rows.find((r) => r.id === "a8")!.citizen).toBe(true);
   expect(rows.find((r) => r.id === "a9")!.sponsor).toBe("yes");
   expect(readSimplify(NEWGRAD_LIST, "newgrad", "simplify-newgrad", CFG()).map((r) => r.id)).toEqual(["g1", "g2"]);
@@ -153,11 +143,11 @@ test("readSimplify：只收開著、要的學期、不是只給博士、在美�
 
 test("readBoard：只收美國的實習（要的學期）和新鮮人職缺；資深職缺、國外、別的學期不收", async () => {
   const rows = await readBoard(BOARD, http(PAGES()), CFG());
-  expect(rows.map((r) => [r.title, r.kind, r.track])).toEqual([
-    ["Software Engineer Intern, Summer 2027", "internship", "cs"],
-    ["University Graduate - Data Engineer", "newgrad", "cs"],
-    ["Marketing Intern", "internship", "business"],
-    ["Software Engineer Intern (2027)", "internship", "cs"],
+  expect(rows.map((r) => [r.title, r.kind, fieldOf(r.title, r.category)])).toEqual([
+    ["Software Engineer Intern, Summer 2027", "internship", "software"],
+    ["University Graduate - Data Engineer", "newgrad", "software"],
+    ["Marketing Intern", "internship", "marketing"],
+    ["Software Engineer Intern (2027)", "internship", "software"],
   ]);
   expect(rows[0].id).toBe("b-greenhouse-acme-1");
   await expect(readBoard(BOARD, http({}), CFG())).rejects.toThrow("HTTP 404");
@@ -197,12 +187,15 @@ test("更新：第一次只建立基準（沒有任何「新」）；同一個�
   expect(r.cache.h1b.byCompany["Acme Corp"]).toEqual({ filed: 40, certified: 38, greenCard: 3, firstYear: 2019, lastYear: 2026, clientSitePct: 0 });
   expect(r.cache.h1b.byCompany["Bankco"]).toEqual({ filed: 0, certified: 0, greenCard: 2, firstYear: 2020, lastYear: 2020, clientSitePct: 0 });
   expect(r.cache.h1b.byCompany["Chipco"]).toBeNull();
-  // asking for the list: nothing is new, citizenship-only is hidden, counts per track
+  // asking for the list: nothing is new, citizenship-only is hidden, counts per field
   const q = queryFeed(r.cache, {}, cfgWithBoard(), "2026-10-13");
   expect(q.newCount).toBe(0);
   expect(q.rows.some((x) => x.company === "Defense Inc")).toBe(false);
   expect(q.citizenHidden).toBe(1);
-  expect(q.counts.business).toBeGreaterThanOrEqual(2);
+  expect(q.counts.business).toBe(1);
+  expect(q.counts.marketing).toBe(1);
+  expect(q.fields.map((f) => f.id)).toEqual(["software", "hardware", "marketing", "business"]); // only fields that have jobs, in the list's order
+  expect(q.fields.find((f) => f.id === "hardware")).toEqual({ id: "hardware", label: "Electrical & hardware", count: 1 });
   expect(queryFeed(r.cache, { showCitizen: true }, cfgWithBoard(), "2026-10-13").rows.some((x) => x.company === "Defense Inc")).toBe(true);
 });
 
@@ -259,13 +252,63 @@ test("queryFeed：分類、搜尋、只看新、近兩年有 H-1B 申請、筆�
   const r = await refresh(emptyCache(), PAGES(), "2026-10-13");
   const cfg = cfgWithBoard();
   const q = (x: object) => queryFeed(r.cache, x, cfg, "2026-10-13");
-  expect(q({ tracks: ["ece"] }).rows.map((x) => x.company)).toEqual(["Chipco"]);
+  expect(q({ fields: ["hardware"] }).rows.map((x) => x.company)).toEqual(["Chipco"]);
   expect(q({ q: "bankco" }).rows).toHaveLength(1);
   expect(q({ q: "new york" }).rows.map((x) => x.company)).toEqual(["Bankco"]);
   expect(q({ h1bRecent: true }).rows.every((x) => x.company === "Acme Corp")).toBe(true); // Bankco's last filing was 2020
   expect(q({ kinds: ["newgrad"] }).rows.every((x) => x.kind === "newgrad")).toBe(true);
   expect(q({ limit: 2 }).rows).toHaveLength(2);
   expect(q({ limit: 2 }).total).toBeGreaterThan(2);
-  const only = queryFeed(r.cache, {}, { ...cfg, tracks: ["ece"] }, "2026-10-13");
-  expect(only.rows.map((x) => x.track)).toEqual(["ece"]); // the settings' tracks are the default view
+  const only = queryFeed(r.cache, {}, { ...cfg, fields: ["hardware"] }, "2026-10-13");
+  expect(only.rows.map((x) => x.field)).toEqual(["hardware"]); // the settings' fields are the default view
+  // the person's own words make a field of their own, shown under its name
+  const custom = queryFeed(r.cache, {}, { ...cfg, keywords: { "my-picks": ["fpga"] } }, "2026-10-13");
+  expect(custom.rows.find((x) => x.company === "Chipco")!.field).toBe("my-picks");
+  expect(custom.fields.map((f) => f.id)).toContain("my-picks");
+});
+
+test("Workday：搜幾個字、每個翻幾頁，之後用職稱決定；地點只寫「N Locations」就看路徑裡的地點；國外的不收", async () => {
+  const WD: BoardSpec = { name: "Big Bank", ats: "workday", board: "bigbank.wd5/Careers" };
+  const url = "https://bigbank.wd5.myworkdayjobs.com/wday/cxs/bigbank/Careers/jobs";
+  const post = (title: string, req: string, loc: string, path: string, posted = "Posted 3 Days Ago") => ({ title, externalPath: path, bulletFields: [req], locationsText: loc, postedOn: posted });
+  const seen: string[] = [];
+  const h: Http = async (u, opt) => {
+    expect(u).toBe(url);
+    const body: any = opt?.post;
+    seen.push(`${body.searchText}@${body.offset}`);
+    if (body.searchText === "internship" && body.offset === 0)
+      return {
+        status: 200,
+        body: {
+          total: 3,
+          jobPostings: [
+            post("2027 Summer Analyst, Wealth", "R1", "New York, NY", "/job/New-York/Summer-Analyst_R1"),
+            post("International Payments Manager", "R2", "Dallas, TX", "/job/Dallas/Intl_R2"), // matches the search, not entry level
+            post("Summer Internship - Markets", "R3", "2 Locations", "/job/London/Markets_R3"), // abroad
+          ],
+        },
+      };
+    if (body.searchText === "new graduate" && body.offset === 0)
+      return { status: 200, body: { total: 1, jobPostings: [post("Graduate Program - Risk Analyst", "R4", "3 Locations", "/job/Charlotte-NC/Risk_R4", "Posted Today")] } };
+    return { status: 200, body: { total: 0, jobPostings: [] } };
+  };
+  const rows = await readBoard(WD, h, CFG());
+  expect(rows.map((r) => [r.id, r.title, r.kind, r.locations])).toEqual([
+    ["b-workday-bigbank-R1", "2027 Summer Analyst, Wealth", "internship", "New York, NY; New York"],
+    ["b-workday-bigbank-R4", "Graduate Program - Risk Analyst", "newgrad", "3 Locations; Charlotte NC"],
+  ]);
+  expect(rows[0].link).toBe("https://bigbank.wd5.myworkdayjobs.com/en-US/Careers/job/New-York/Summer-Analyst_R1");
+  expect(rows[1].posted).toBe(new Date().toISOString().slice(0, 10));
+  // one page per search when the answer is short; three searches
+  expect(seen).toEqual(["internship@0", "new graduate@0", "university@0"]);
+});
+
+test("defaultSummer／学期：九月起「這個夏天」是明年；之前是今年；網址跟著年份", () => {
+  expect(defaultSummer(new Date("2026-08-31T12:00:00Z"))).toBe(2026);
+  expect(defaultSummer(new Date("2026-09-01T12:00:00Z"))).toBe(2027);
+  expect(defaultSummer(new Date("2027-01-15T12:00:00Z"))).toBe(2027);
+  const c = feedConfig(null, new Date("2027-10-01T12:00:00Z"));
+  expect(c.terms).toEqual(["Summer 2028"]);
+  expect(c.internshipsUrl).toContain("/Summer2028-Internships/");
+  expect(feedConfig({ feed: { terms: ["Summer 2027"] } }, new Date("2027-10-01T12:00:00Z")).terms).toEqual(["Summer 2027"]);
 });

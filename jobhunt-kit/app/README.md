@@ -126,11 +126,11 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 
 ## 職缺清單、H-1B 紀錄、下架提醒（美國版，`src/feed.ts`、`src/h1b.ts`）
 
-「Jobs」分頁（只有 `market: us` 的資料夾有；台灣版的 `/api/feed` 回 404）：開著的實習和新鮮人職缺，分 CS／ECE／Business 三類，每一筆旁邊是雇主的 H-1B 申請紀錄。移植自 D:\job-hunt 的 `fetch_jobs.py`、`boards.py`、`h1b.py`、`liveness.py`，但分類**不是**那邊的機器人／ML／SWE。
+「Jobs」分頁（只有 `market: us` 的資料夾有；台灣版的 `/api/feed` 回 404）：開著的實習和新鮮人職缺，依領域分類（各個科系都有地方放，不只工程），每一筆旁邊是雇主的 H-1B 申請紀錄。移植自 D:\job-hunt 的 `fetch_jobs.py`、`boards.py`、`h1b.py`、`liveness.py`，但分類**不是**那邊的機器人／ML／SWE。
 
-- **來源**：SimplifyJobs 的 Summer 實習清單和 New-Grad 清單（`listings.json`，約各 13 MB，用 ETag 沒變就不重抓），加公司官網的公開徵才 API：Greenhouse、Lever、Ashby、SmartRecruiters、Workable。預設放 39 家常見公司（`DEFAULT_BOARDS`；國防業者要美國公民，刻意不放）。**不用 zapply**：它的授權是 CC BY-NC-SA。
+- **來源**：SimplifyJobs 的 Summer 實習清單和 New-Grad 清單（`listings.json`，約各 13 MB，用 ETag 沒變就不重抓），加公司官網的公開徵才 API：Greenhouse、Lever、Ashby、SmartRecruiters、Workable、Workday。預設放 67 家（`DEFAULT_BOARDS`：科技 39 家，加 28 家 Workday 的金融、醫療、零售、消費品、能源、媒體、顧問公司，例如 Citi、CVS Health、Target、Pfizer、P&G、PwC、Disney；國防業者要美國公民，刻意不放）。**Simplify 偏科技**；其他領域靠公司官網，教育、非營利、公部門在預設清單裡很少，使用者可以在 `feed.companies` 加自己想看的學校、醫院、機構。Workday 的搜尋很鬆（搜「intern」也會找到「International」），所以搜 internship／new graduate／university 幾個字、每個翻幾頁，最後用職稱決定。**不用 zapply**：它的授權是 CC BY-NC-SA。
 - **什麼時候讀**：按「Update the list」，或打開分頁時清單超過一天（`jobhunt.yaml` 的 `feed.auto_refresh: false` 關掉）。全部在這台電腦上讀，每個請求都是對公開網址的 GET，沒有任何使用者資料；讀到的存在 `.jobhunt/feed.json`（和 `update.json` 一樣是程式自己的紀錄，不在任何讀寫名單）。
-- **分類**（`trackOf`）：先看使用者在設定檔加的關鍵字，再看標題（硬體字 → ece；商業字且沒有軟體字 → business；軟體字 → cs），最後才看來源分類。看不出來的是 other。`jobhunt.yaml` 的 `feed:` 可以改類別、實習學期（預設 Summer 2027）、加關鍵字、加／跳過公司；不認得的值用預設，公司代號只收英數字、點、橫線、底線。
+- **領域**（`src/fields.ts`，開放的，不是固定幾類）：內建 13 個領域：軟體與資料、電機與硬體、醫療與公共衛生、財務與會計、人資與法務、教育／非營利／公共服務、工程（機械、土木、工業…）、科學與研究、媒體藝術與寫作、設計與產品、行銷業務與傳播、營運供應鏈與客服、商業策略與顧問，加「一般／其他」。標題決定：使用者在設定檔加的關鍵字最優先；再來硬體字、軟體字（軟體字贏過同一個標題裡的商業字，「Machine Learning Engineer, User Growth」是工程）；再一個領域一個領域從最具體的比；最後才看一般的 engineer／data／IT 字、來源自己的分類，都沒有就是 other。領域是**問的時候才算**（存的是來源的原始分類），所以改了關鍵字馬上生效。`feed.keywords` 裡寫內建領域的名字是加字，寫別的名字就是新領域（用它自己的名字顯示）；`feed.fields` 限定要看哪些領域（預設全部）。頁面上的勾選框只列有職缺的領域，旁邊有筆數。`jobhunt.yaml` 的 `feed:` 還可以改實習學期、加／跳過公司；不認得的值用預設，公司代號只收英數字、點、橫線、底線（Workday 是 `tenant.wdN/site`）。實習學期預設是「這個夏天」：九月起算明年、之前算今年，Simplify 的清單網址跟著年份。
 - **篩選**：只收美國（任一地點像美國就算；公司官網只寫「In-Office」這類沒有國家的，當美國，除非明確在國外）、要的學期、不是只給博士的；要求美國公民或安全許可的預設隱藏（可勾選顯示）。同公司同職稱在兩個地方只列一筆（其他編號記在 `also`）。
 - **新職缺**：第一次讀某個來源只建立基準，那天的都不算新；之後新出現的標「New」三天。
 - **下架**：Simplify 的 `active` 欄位；公司官網某個職缺不見了就是下架（記日期，保留 60 天）。某一家整頁突然少一大半（超過一半）當成壞掉的回應，不當成大量下架，沿用上次的；某一家讀不到只有那一家失敗，上次的職缺照留。進度表裡「待投遞」且連結對得上已下架職缺的那一筆，卡片上寫「這個職缺已經下架」。

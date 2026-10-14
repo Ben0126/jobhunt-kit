@@ -28,13 +28,17 @@ resume:
 # about you is sent anywhere). The AI never changes this file; you can. Delete this whole block to get the defaults.
 feed:
   auto_refresh: true            # read the sources when you open the Jobs tab and the list is over a day old
-  tracks: [cs, ece, business]   # which jobs to show: cs, ece, business, other
+  # fields: [software, finance]   # show only these fields (default: every field). Built in: software, hardware, health,
+  #                               # finance, people, education, engineering, science, media, design, marketing, operations,
+  #                               # business, other. A field you invent in keywords below can be listed here too.
   kinds: [internship, newgrad]
-  terms: ["Summer 2027"]        # internship terms to keep
-  # keywords:                   # extra words, matched in the job title, that put a job in a track
-  #   cs: [quant dev]
-  # companies:                  # add a company career page (ats: greenhouse, lever, ashby, smartrecruiters or workable)
+  # terms: ["Summer 2027"]      # internship terms to keep (default: the coming summer)
+  # keywords:                   # your own words, matched in the job title. A built-in field name adds to it, any other name is a new field.
+  #   software: [quant dev]
+  #   pre-law: [lsat, paralegal]
+  # companies:                  # add a company career page (ats: greenhouse, lever, ashby, smartrecruiters, workable or workday)
   #   - {name: Example Co, ats: greenhouse, board: exampleco}
+  #   - {name: Example Bank, ats: workday, board: "examplebank.wd5/Careers"}   # tenant.wdN/site from the career page address
   # skip_companies: [Stripe]    # leave one of the built-in companies out
   h1b: true                     # show what each employer filed with the Labor Department (downloads one ~8 MB public file)
   hide_citizenship_required: true

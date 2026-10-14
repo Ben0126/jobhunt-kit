@@ -126,10 +126,9 @@ const TEXT = {
       `共 ${total} 筆${shown < total ? `，先列前 ${shown} 筆` : ""}。${closed ? `上次更新後有 ${closed} 筆已下架。` : ""}${citizen ? `有 ${citizen} 筆要求美國公民，已隱藏。` : ""}`,
     jobsEmpty: "沒有符合的職缺。改一下篩選，或按「更新職缺清單」。",
     jobsFailed: (list) => `這次有幾個來源讀不到（其他正常）：${list}`,
-    jobsTrack: { cs: "資訊", ece: "電機電子", business: "商管", other: "其他" },
     jobsKind: { internship: "實習", newgrad: "新鮮人正職" },
     jobsKindOne: { internship: "實習", newgrad: "新鮮人正職" },
-    jobsCol: { track: "類別", company: "公司", title: "職缺", place: "地點", posted: "刊登", posting: "職缺寫的", h1b: "雇主 H-1B 紀錄", add: "追蹤" },
+    jobsCol: { field: "領域", company: "公司", title: "職缺", place: "地點", posted: "刊登", posting: "職缺寫的", h1b: "雇主 H-1B 紀錄", add: "追蹤" },
     jobsNew: "新",
     jobsSponsorYes: "寫可以贊助",
     jobsSponsorNo: "寫不贊助",
@@ -318,10 +317,9 @@ const TEXT = {
       `${total} jobs${shown < total ? `, showing the first ${shown}` : ""}.${closed ? ` ${closed} closed since the last updates.` : ""}${citizen ? ` ${citizen} that need US citizenship are hidden.` : ""}`,
     jobsEmpty: "No jobs match. Change the filters, or press Update the list.",
     jobsFailed: (list) => `Some sources could not be read this time (the rest are fine): ${list}`,
-    jobsTrack: { cs: "CS", ece: "ECE", business: "Business", other: "Other" },
     jobsKind: { internship: "Internships", newgrad: "New grad" },
     jobsKindOne: { internship: "Internship", newgrad: "New grad" },
-    jobsCol: { track: "Track", company: "Company", title: "Job", place: "Place", posted: "Posted", posting: "Posting says", h1b: "Employer H-1B record", add: "Track" },
+    jobsCol: { field: "Field", company: "Company", title: "Job", place: "Place", posted: "Posted", posting: "Posting says", h1b: "Employer H-1B record", add: "Track" },
     jobsNew: "New",
     jobsSponsorYes: "Offers sponsorship",
     jobsSponsorNo: "No sponsorship",
@@ -1455,18 +1453,43 @@ function resumeDetail(item) {
 let jobsState = null;
 const jobsPick = { tracks: null, kinds: null };
 
+const jobsOff = new Set(); // fields the person turned off
+
 function jobsQuery() {
   const f = $("jobs-filter").elements;
   const p = new URLSearchParams();
-  const tracks = [...document.querySelectorAll("#jobs-tracks input:checked")].map((i) => i.value);
+  // only when something is turned off is the list of wanted fields sent (otherwise the settings file's choice stands)
+  if (jobsOff.size && jobsState) p.set("fields", jobsState.fields.map((x) => x.id).filter((id) => !jobsOff.has(id)).join(","));
   const kinds = [...document.querySelectorAll("#jobs-kinds input:checked")].map((i) => i.value);
-  if (tracks.length) p.set("tracks", tracks.join(","));
   if (kinds.length) p.set("kinds", kinds.join(","));
   if (f.q.value.trim()) p.set("q", f.q.value.trim());
   if (f.new.checked) p.set("new", "1");
   if (f.h1b.checked) p.set("h1b", "1");
   if (f.citizen.checked) p.set("citizen", "1");
   return p.toString();
+}
+
+/** One tick per field that has jobs, with how many; ticking one off hides it. */
+function jobsFieldChips(r) {
+  $("jobs-fields").replaceChildren(
+    ...r.fields.map((f) =>
+      h(
+        "label",
+        {},
+        h("input", {
+          type: "checkbox",
+          value: f.id,
+          checked: !jobsOff.has(f.id),
+          onchange: (e) => {
+            if (e.target.checked) jobsOff.delete(f.id);
+            else jobsOff.add(f.id);
+            loadJobs(true);
+          },
+        }),
+        ` ${f.label} (${f.count})`,
+      ),
+    ),
+  );
 }
 
 function jobsChecks(box, labels, chosen) {
@@ -1484,7 +1507,6 @@ async function loadJobs(filterOnly) {
   try {
     if (!board) board = await api("GET", "/api/applications").catch(() => null);
     let r = await api("GET", "/api/feed" + (jobsState ? "?" + jobsQuery() : ""));
-    jobsChecks($("jobs-tracks"), T.jobsTrack, r.tracks);
     jobsChecks($("jobs-kinds"), T.jobsKind, r.kinds);
     if (!jobsState) r = await api("GET", "/api/feed?" + jobsQuery()); // again, now with the ticks the page built
     // the first time the page opens with an old list, read the sources again (once a day at most; switch off in the settings file)
@@ -1529,6 +1551,7 @@ function jobsWhen(iso) {
 
 function renderJobs(r) {
   $("at-jobs").textContent = r.fetchedAt ? T.jobsUpdated(jobsWhen(r.fetchedAt)) : T.jobsNever;
+  jobsFieldChips(r);
   $("jobs-count").textContent = r.total ? T.jobsCount(r.rows.length, r.total, r.closed, r.citizenHidden) : "";
   const errs = [...r.errors, ...(r.h1bError ? ["H-1B: " + r.h1bError] : [])];
   $("jobs-errors").hidden = !errs.length;
@@ -1543,7 +1566,7 @@ function renderJobs(r) {
     h(
       "table",
       { class: "jobs" },
-      h("thead", {}, h("tr", {}, ...[c.track, c.company, c.title, c.place, c.posted, c.posting, c.h1b, ""].map((x) => h("th", {}, x)))),
+      h("thead", {}, h("tr", {}, ...[c.field, c.company, c.title, c.place, c.posted, c.posting, c.h1b, ""].map((x) => h("th", {}, x)))),
       h(
         "tbody",
         {},
@@ -1572,7 +1595,7 @@ function renderJobs(r) {
           return h(
             "tr",
             {},
-            h("td", {}, h("span", { class: "tkpill " + j.track }, T.jobsTrack[j.track] || j.track), " ", h("span", { class: "hint" }, T.jobsKindOne[j.kind] || "")),
+            h("td", {}, h("span", { class: "fpill", title: j.field }, j.fieldShort), " ", h("span", { class: "hint" }, T.jobsKindOne[j.kind] || "")),
             h("td", { class: "co" }, h("b", {}, j.company)),
             h("td", { class: "ttl" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, j.title) : j.title),
             h("td", { class: "loc", title: j.locations }, j.locations),

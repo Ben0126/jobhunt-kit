@@ -321,13 +321,13 @@ export function startServer(opts: {
   // ---- the job list (US kit): refresh runs one at a time; closed postings are marked on tracked jobs
   let feedRunning: Promise<unknown> | null = null;
   const NEW_STALE_MS = 24 * 60 * 60 * 1000;
-  async function feedAnswer(url: URL) {
+  async function feedAnswer(url: URL, lang: "en" | "zh-TW") {
     const cfg = feedConfig(await folder.readYaml("jobhunt.yaml").catch(() => null));
     const cache = readCache(folder.feedPath);
     const q = url.searchParams;
     const list = (k: string) => (q.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     const today = new Date().toISOString().slice(0, 10);
-    const res = queryFeed(cache, { tracks: list("tracks"), kinds: list("kinds"), q: q.get("q") ?? "", newOnly: q.get("new") === "1", h1bRecent: q.get("h1b") === "1", showCitizen: q.get("citizen") === "1", limit: Number(q.get("limit")) || 200 }, cfg, today);
+    const res = queryFeed(cache, { fields: list("fields"), kinds: list("kinds"), q: q.get("q") ?? "", newOnly: q.get("new") === "1", h1bRecent: q.get("h1b") === "1", showCitizen: q.get("citizen") === "1", limit: Number(q.get("limit")) || 200 }, cfg, today, lang === "en" ? "en" : "zh-TW");
     const errors = Object.entries(cache.sources).filter(([, s]) => s.error).map(([k, s]) => `${k.replace(/^board:/, "")}: ${s.error}`);
     const at = Date.parse(cache.fetchedAt);
     return {
@@ -336,7 +336,7 @@ export function startServer(opts: {
       stale: !Number.isFinite(at) || Date.now() - at > NEW_STALE_MS,
       refreshing: !!feedRunning,
       autoRefresh: cfg.autoRefresh,
-      tracks: cfg.tracks,
+      shownFields: cfg.fields,
       kinds: cfg.kinds,
       errors,
       h1bVersion: cache.h1b.version,
@@ -577,7 +577,7 @@ export function startServer(opts: {
           return json(markClosed(await apps.remove(body)));
         case "GET /api/feed":
           if (M.market !== "us") return json({ error: T.badRequest }, 404);
-          return json(await feedAnswer(new URL(req.url)));
+          return json(await feedAnswer(new URL(req.url), M.language));
         case "POST /api/feed/refresh": {
           if (M.market !== "us") return json({ error: T.badRequest }, 404);
           // set at once (before any await), so a second press while one is running joins it
@@ -589,7 +589,7 @@ export function startServer(opts: {
             feedRunning = null;
           });
           await feedRunning?.catch(() => null);
-          return json(await feedAnswer(new URL(req.url)));
+          return json(await feedAnswer(new URL(req.url), M.language));
         }
         case "GET /api/h1b": {
           // what one employer filed, from the index when it is already on this computer (never downloads it here)

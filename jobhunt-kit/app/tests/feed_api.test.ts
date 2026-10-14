@@ -64,7 +64,7 @@ test("更新前是空的（stale）；更新後有職缺、存在 .jobhunt/feed.
   const { dir, get, post, log, base } = usServe();
   expect((await fetch(`${base}/api/feed`)).status).toBe(401);
   const empty = await get("/api/feed");
-  expect(empty).toMatchObject({ total: 0, stale: true, autoRefresh: true, tracks: ["cs", "ece", "business"] });
+  expect(empty).toMatchObject({ total: 0, stale: true, autoRefresh: true, shownFields: [], fields: [] });
   const r = await post("/api/feed/refresh");
   expect(r.total).toBe(2);
   expect(r.stale).toBe(false);
@@ -73,7 +73,7 @@ test("更新前是空的（stale）；更新後有職缺、存在 .jobhunt/feed.
   expect(r.h1bVersion).toBe("t1");
   expect(existsSync(join(dir, ".jobhunt", "feed.json"))).toBe(true);
   const before = log.length;
-  const again = await get("/api/feed?tracks=ece");
+  const again = await get("/api/feed?fields=hardware");
   expect(again.rows.map((x: any) => x.company)).toEqual(["Chipco"]);
   expect(log.length).toBe(before); // asking is local
 });
@@ -87,10 +87,11 @@ test("更新同時按兩次只讀一輪", async () => {
 
 test("jobhunt.yaml 的 feed: 設定有用：只看 ece、關掉 H-1B", async () => {
   intern = [sx({ id: "a1", company_name: "Acme Corp", title: "Software Engineer Intern" }), sx({ id: "a2", company_name: "Chipco", title: "FPGA Design Intern", category: "Hardware" })];
-  const { post } = usServe("feed:\n  tracks: [ece]\n  h1b: false\n  auto_refresh: false\n");
+  const { post } = usServe("feed:\n  fields: [hardware]\n  h1b: false\n  auto_refresh: false\n");
   const r = await post("/api/feed/refresh");
   expect(r.rows.map((x: any) => x.company)).toEqual(["Chipco"]);
-  expect(r).toMatchObject({ autoRefresh: false, tracks: ["ece"], h1bVersion: "" });
+  expect(r).toMatchObject({ autoRefresh: false, shownFields: ["hardware"], h1bVersion: "" });
+  expect(r.fields.map((f: any) => f.id)).toEqual(["software", "hardware"]); // the chips still list what exists, the shown ones come from the settings
 });
 
 test("進度表上追蹤的職缺：官網下架後，那一列帶 _closed；重新出現就拿掉", async () => {

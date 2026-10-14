@@ -96,17 +96,19 @@ def main() -> int:
             expect(page.locator("#jobs-count")).to_contain_text("1 that need US citizenship are hidden")
             acme = rows.filter(has_text="Acme Corp")
             expect(acme).to_contain_text("40 H-1B filed, last 2026, 3 green card")
-            expect(acme).to_contain_text("CS")
-            expect(rows.filter(has_text="Chipco")).to_contain_text("ECE")
+            expect(acme).to_contain_text("Software")
+            expect(rows.filter(has_text="Chipco")).to_contain_text("Hardware")
             expect(rows.filter(has_text="Bankco")).to_contain_text("Business")
             expect(rows.filter(has_text="Bankco")).to_contain_text("Offers sponsorship")
             expect(rows.filter(has_text="Bankco")).to_contain_text("No record found")
             print("ok   opens empty, reads the sources, rows with track, sponsorship and H-1B facts")
 
             # filters
-            page.locator('#jobs-tracks input[value="cs"]').uncheck()
+            expect(page.locator("#jobs-fields label")).to_have_count(3)  # only the fields that have jobs
+            expect(page.locator("#jobs-fields")).to_contain_text("Software & data (1)")
+            page.locator('#jobs-fields input[value="software"]').uncheck()
             expect(rows).to_have_count(2)
-            page.locator('#jobs-tracks input[value="cs"]').check()
+            page.locator('#jobs-fields input[value="software"]').check()
             page.locator('#jobs-filter input[name="q"]').fill("fpga")
             expect(rows).to_have_count(1)
             page.locator('#jobs-filter input[name="q"]').fill("")

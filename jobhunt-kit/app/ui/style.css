@@ -283,9 +283,6 @@ table.jobs td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical
 table.jobs td.loc { max-width: 180px; overflow-wrap: anywhere; }
 table.jobs td.h1b { color: var(--muted); max-width: 240px; }
 table.jobs td.sponsor { white-space: nowrap; color: var(--muted); }
-.tkpill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #ecebe6; }
-.tkpill.cs { background: #e3ecf7; color: #1f4d8f; }
-.tkpill.ece { background: #f3e8d6; color: #7a4b00; }
-.tkpill.business { background: #e3f1ea; color: #1d5b3f; }
+.fpill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #e7efe9; color: #1d5b3f; white-space: nowrap; }
 .badge.new { margin-left: 6px; padding: 0 6px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; }
 .warn-text { color: var(--warn-ink); }
