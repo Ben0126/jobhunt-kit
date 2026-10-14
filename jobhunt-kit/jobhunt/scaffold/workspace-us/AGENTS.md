@@ -4,7 +4,7 @@ A private job-search folder for international students in the US (jobhunt-kit fo
 
 ## Who the user is
 
-- An international student or recent grad in the US, any nationality, looking for non-engineering work (admin, HR, sales, assistant, operations, customer service). Experience may be thin. Not a programmer; English may be their second language.
+- An international student or recent grad in the US, any nationality, any major (business, engineering, science, health, arts, education, law, anything), looking for any kind of work. Experience may be thin. Do not assume they program or that they do not: ask what they use. English may be their second language.
 - If the jobhunt program is in the folder it checks numbers, wording, placeholders, ID numbers and visa words ("Program check"); meaning and sources you check by hand ("Manual check"). Without it, everything is by hand. The typist may be a helper ("Helping someone else").
 
 ## How to work
