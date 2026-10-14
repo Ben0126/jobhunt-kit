@@ -344,6 +344,9 @@ const byKind = (k: TemplateKind) => TEMPLATES.find((t) => t.kind === k)!;
 const validTemplate = (field: string, market: Market) =>
   Object.hasOwn(TEMPLATE_NAMES, field) && (field !== "us" || market === "us") && (market !== "us" || (field !== "tw" && field !== "tw-classic"));
 
+/** The templates a folder of this market has (never `us` in a Taiwan folder, never the A4 Taiwan ones in a US folder). */
+export const templatesFor = (market: Market): TemplateKind[] => (Object.keys(TEMPLATE_NAMES) as TemplateKind[]).filter((k) => validTemplate(k, market));
+
 /** The template a resume file was made from: the file's own <style> when it is exactly a template's, else the
  * target's `template`, else English when the target or the page is English, else 深色抬頭. The style wins over the
  * field because make-resume-file.md falls back to resume-tw.html when the chosen template file is missing.

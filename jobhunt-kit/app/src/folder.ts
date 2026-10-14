@@ -15,6 +15,7 @@ const READ_RULES: RegExp[] = [
   /^checks\/[^/]+$/,
   /^me\/stories\/[^/]+\.md$/,
   /^jobhunt\.yaml$/,
+  /^submitted\/\d{4}-\d{2}-\d{2}_[^/]+\.html$/, // the copies "I applied, save a copy" made: shown on the resume page
 ];
 
 /** Files the app may write. Everything else in the folder belongs to the user or the AI. */

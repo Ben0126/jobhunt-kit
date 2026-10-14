@@ -115,6 +115,18 @@ const TEXT = {
     pdfChrome: (paper) => ["Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「" + paper + "」→ 按「更多設定」，", "取消勾選「頁首和頁尾」", "→ 儲存。"],
     pdfSafari: (paper) => "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。",
     savePdf: "存成 PDF",
+    versionGeneral: "通用版",
+    generalMeta: "用你已確認的經歷排出來",
+    generalTitle: "通用版（不針對特定職缺）",
+    generalNote: "用你已確認的經歷排出來的基本履歷，還沒針對任何職缺改寫。自我介紹寫在每份客製履歷裡，所以這裡沒有自我介紹。這是程式排版出來的預覽，不是 AI 做的履歷檔。",
+    versionView: "看哪一個版本",
+    modeFile: "這份履歷檔（程式檢查過的）",
+    modeTemplate: "換範本看看",
+    modeSubmitted: "已投出的存檔",
+    versionTemplate: "範本",
+    versionVariant: "版本",
+    noteTemplate: (name) => `這是程式用同樣的內容、換成「${name}」排出來的預覽，不是 AI 做的履歷檔。想正式用這個樣式，跟 AI 說「這份履歷改用${name}範本」，它會重做一份再檢查。`,
+    noteSubmitted: (date) => `這是 ${date} 投出去時存下的那一份，永遠不會被改。`,
     saveWord: "下載 Word 檔（可以自己修改）",
     wordHint: "Word 檔裡的字是現在這份履歷的字。下載後你在 Word 裡改的，程式不會再檢查，請自己確認。",
     noResumeFileYet: "還沒有履歷檔，所以還不能存。",
@@ -264,6 +276,18 @@ const TEXT = {
     ],
     pdfSafari: (paper) => `Mac Safari: bottom-left "PDF" menu, "Save as PDF". Click "Show Details", set Paper Size to "${paper === "Letter" ? "US Letter" : paper}" and turn off "Print headers and footers".`,
     savePdf: "Save as PDF",
+    versionGeneral: "General version",
+    generalMeta: "Drawn from your confirmed experience",
+    generalTitle: "General version (not for a specific job)",
+    generalNote: "A basic resume drawn from your confirmed experience, not rewritten for any job. The summary is written in each tailored resume, so this one has none. It is the program's own drawing, not the resume file the AI made.",
+    versionView: "Version to view",
+    modeFile: "The resume file (checked by the program)",
+    modeTemplate: "Try another template",
+    modeSubmitted: "Saved copies sent with applications",
+    versionTemplate: "Template",
+    versionVariant: "Version",
+    noteTemplate: (name) => `This is the program's own drawing of the same content in the "${name}" template, not the resume file the AI made. To use this style for real, tell the AI "Use the ${name} template for this resume". It will remake the file and the program will check it.`,
+    noteSubmitted: (date) => `This is the copy saved when you applied on ${date}. It is never changed.`,
     saveWord: "Download Word file (editable)",
     wordHint: "The Word file has the words of this resume as it is now. Anything you change in Word is no longer checked by the program, so check it yourself.",
     noResumeFileYet: "There is no resume file yet, so it cannot be saved.",
@@ -849,9 +873,39 @@ let selectedResume = null;
 
 let resumeExtra = { drafts: [], items: {} };
 
+// ---- 版本：每份履歷、通用版、換範本、已投出的存檔，都是 /view/<代號> 加不同的問題參數
+const GENERAL = "_general";
+let versions = { variants: [], templates: [], submitted: [] };
+const viewState = {}; // id -> { mode: "file" | "template" | "submitted", template, file, variant }
+
+function vstate(item) {
+  if (!viewState[item.id]) {
+    const mode = item.general || !item.hasHtml ? "template" : "file";
+    viewState[item.id] = { mode, template: "", file: "", variant: "" };
+  }
+  return viewState[item.id];
+}
+
+function viewQuery(item) {
+  const s = vstate(item);
+  const p = new URLSearchParams();
+  if (!item.general && s.mode === "submitted" && s.file) p.set("submitted", s.file);
+  else if (item.general || s.mode === "template") {
+    if (s.template) p.set("template", s.template);
+    else if (!item.general && versions.templates.length) p.set("template", versions.templates[0].kind);
+  }
+  if (item.general && s.variant) p.set("variant", s.variant);
+  return p.toString();
+}
+
+function viewUrl(item, extra) {
+  return `/view/${encodeURIComponent(item.id)}?${[viewQuery(item), extra].filter(Boolean).join("&")}`;
+}
+
 function loadResumes() {
   return runCheck($("recheck-resumes"), renderResumes, $("at-resumes"), async () => {
     resumeExtra = (await api("GET", "/api/resume-info").catch(() => null)) || { drafts: [], items: {} };
+    versions = (await api("GET", "/api/versions").catch(() => null)) || { variants: [], templates: [], submitted: [] };
   });
 }
 $("recheck-resumes").addEventListener("click", () => {
@@ -861,10 +915,15 @@ $("recheck-resumes").addEventListener("click", () => {
 
 function renderResumes(r) {
   $("at-resumes").textContent = stamp(r);
-  const items = r.items.filter((i) => i.hasTarget || i.hasHtml);
+  const jobs = r.items.filter((i) => i.hasTarget || i.hasHtml);
+  // the general version has no job: it is always there once resume.yaml has a version in it
+  const general = versions.variants.length
+    ? [{ id: GENERAL, general: true, company: T.versionGeneral, role: "", hasHtml: true, hasTarget: false, resumeProblems: [], photo: INFO.market !== "us" }]
+    : [];
+  const items = [...general, ...jobs];
   $("resumes-empty").hidden = items.length > 0;
   $("resumes").hidden = items.length === 0;
-  if (!items.some((i) => i.id === selectedResume)) selectedResume = items.length ? items[0].id : null;
+  if (!items.some((i) => i.id === selectedResume)) selectedResume = jobs.length ? jobs[0].id : items.length ? items[0].id : null;
   $("resume-list").replaceChildren(
     ...items.map((i) =>
       h(
@@ -883,8 +942,8 @@ function renderResumes(r) {
           },
           h("span", { class: "company" }, i.company || T.noCompanyShort),
           h("span", { class: "role" }, i.role || ""),
-          h("span", { class: "meta" }, i.updated ? T.updated(i.updated) : ""),
-          h("span", { class: "pills" }, pill(i.resumeProblems), ...waitingPills(i)),
+          h("span", { class: "meta" }, i.general ? T.generalMeta : i.updated ? T.updated(i.updated) : ""),
+          i.general ? null : h("span", { class: "pills" }, pill(i.resumeProblems), ...waitingPills(i)),
         ),
       ),
     ),
@@ -1018,13 +1077,13 @@ async function doArchive(item, p, okBtn, close) {
 
 function openPrint(item) {
   // noopener: the print tab gets no handle on this tab (it can't send it somewhere else)
-  window.open(`/view/${encodeURIComponent(item.id)}?print=1`, "_blank", "noopener");
+  window.open(viewUrl(item, "print=1"), "_blank", "noopener");
 }
 
 function downloadWord(item) {
   // a plain same-site link: the browser sends the preview cookie and the server answers with a file, not a page
   const a = document.createElement("a");
-  a.href = `/view/${encodeURIComponent(item.id)}?format=docx`;
+  a.href = viewUrl(item, "format=docx");
   a.download = "";
   document.body.append(a);
   a.click();
@@ -1221,7 +1280,72 @@ function estimatePages(frame) {
   }
 }
 
+/** The "which version" controls above a preview. `frame` is the preview iframe; changing a menu points it somewhere else. */
+function versionBar(item, frame, note) {
+  const s = vstate(item);
+  const mine = versions.submitted.filter((x) => x.id === item.id);
+  const modes = [];
+  if (!item.general && item.hasHtml) modes.push(["file", T.modeFile]);
+  if (!item.general && item.hasTarget && versions.templates.length) modes.push(["template", T.modeTemplate]);
+  if (!item.general && mine.length) modes.push(["submitted", T.modeSubmitted]);
+  if (!s.file && mine.length) s.file = mine[0].file;
+  if (!s.template && versions.templates.length) s.template = versions.templates[0].kind;
+  if (!item.general && !modes.some((m) => m[0] === s.mode) && modes.length) s.mode = modes[0][0];
+
+  const label = (text, el) => h("label", { class: "vsel" }, text, el);
+  const opt = (v, text, cur) => h("option", { value: v, selected: v === cur }, text);
+  const modeSel = h("select", { onchange: (e) => { s.mode = e.target.value; refresh(); } }, ...modes.map(([v, t]) => opt(v, t, s.mode)));
+  const tplSel = h("select", { onchange: (e) => { s.template = e.target.value; refresh(); } }, ...versions.templates.map((t) => opt(t.kind, t.name, s.template)));
+  const subSel = h("select", { onchange: (e) => { s.file = e.target.value; refresh(); } }, ...mine.map((x) => opt(x.file, x.date, s.file)));
+  const varSel = h("select", { onchange: (e) => { s.variant = e.target.value; refresh(); } }, ...versions.variants.map((v) => opt(v.name, v.title, s.variant || versions.variants[0].name)));
+  const bar = h("div", { class: "versionbar" });
+  function refresh() {
+    const showTpl = item.general || s.mode === "template";
+    // replaceChildren would print a null child as the word "null": the empty ones are filtered out first
+    bar.replaceChildren(
+      ...[
+        !item.general && modes.length > 1 ? label(T.versionView, modeSel) : null,
+        item.general && versions.variants.length > 1 ? label(T.versionVariant, varSel) : null,
+        showTpl && versions.templates.length > 1 ? label(T.versionTemplate, tplSel) : null,
+        !item.general && s.mode === "submitted" ? label(T.modeSubmitted, subSel) : null,
+      ].filter(Boolean),
+    );
+    const tplName = (versions.templates.find((t) => t.kind === s.template) || {}).name || s.template;
+    const sub = mine.find((x) => x.file === s.file);
+    note.textContent = item.general ? T.generalNote : s.mode === "template" ? T.noteTemplate(tplName) : s.mode === "submitted" && sub ? T.noteSubmitted(sub.date) : "";
+    note.hidden = !note.textContent;
+    frame.src = viewUrl(item, `r=${Date.now()}`);
+  }
+  return { bar, refresh };
+}
+
+function generalDetail(item) {
+  const pages = h("span", { class: "pages", hidden: true });
+  const note = h("p", { class: "hint" });
+  const frame = h("iframe", { class: "preview", title: T.previewTitle, sandbox: "allow-same-origin", onload: (e) => showPages(e.target, pages) });
+  const { bar, refresh } = versionBar(item, frame, note);
+  refresh();
+  return [
+    h("h2", {}, T.generalTitle),
+    note,
+    bar,
+    h("div", { class: "pdf" }, h("button", { type: "button", class: "primary", onclick: () => openPrint(item) }, T.savePdf), pages),
+    wordArea(item),
+    item.photo ? photoArea() : null,
+    frame,
+  ];
+}
+
+function showPages(frame, pages) {
+  const p = estimatePages(frame);
+  if (!p) return;
+  pages.textContent = T.pageNote(p, INFO.market);
+  pages.className = "pages" + (p > 1 ? " long" : "");
+  pages.hidden = false;
+}
+
 function resumeDetail(item) {
+  if (item.general) return generalDetail(item);
   const n = item.resumeProblems.length;
   const head = h("h2", {}, `${item.company} ${item.role}`.trim() || T.noCompanyShort);
   const hiddenFromPreview = item.resumeProblems.some((p) => !p.where.startsWith(T.whereResume));
@@ -1243,22 +1367,17 @@ function resumeDetail(item) {
   // The template's photo slot belongs to the Taiwan resume: a US folder never shows this hint.
   const photo = item.photo && INFO.market !== "us" ? photoArea() : null;
   const pages = h("span", { class: "pages", hidden: true });
-  const preview = item.hasHtml
-    ? h("iframe", {
-        class: "preview",
-        title: T.previewTitle,
-        sandbox: "allow-same-origin",
-        src: `/view/${encodeURIComponent(item.id)}?r=${Date.now()}`,
-        onload: (e) => {
-          const p = estimatePages(e.target);
-          if (!p) return;
-          pages.textContent = T.pageNote(p, INFO.market);
-          pages.className = "pages" + (p > 1 ? " long" : "");
-          pages.hidden = false;
-        },
-      })
+  const note = h("p", { class: "hint" });
+  const preview = item.hasHtml || item.hasTarget
+    ? h("iframe", { class: "preview", title: T.previewTitle, sandbox: "allow-same-origin", onload: (e) => showPages(e.target, pages) })
     : h("p", { class: "blank" }, T.blankResume);
-  return [head, result, waitingNote(item), pdfArea(item, pages), wordArea(item), archiveArea(item), photo, rewritesView(item), preview];
+  let bar = null;
+  if (preview.tagName === "IFRAME") {
+    const vb = versionBar(item, preview, note);
+    bar = vb.bar;
+    vb.refresh();
+  }
+  return [head, result, waitingNote(item), pdfArea(item, pages), wordArea(item), archiveArea(item), photo, rewritesView(item), bar, note, preview];
 }
 
 // ---- 104

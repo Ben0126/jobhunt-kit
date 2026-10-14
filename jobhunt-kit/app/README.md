@@ -99,6 +99,18 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 請求大小：傳輸層上限 4 MB，除了 `/api/photo` 其他 API 還是 64 KB（在 `api()` 裡檢查）。
 - 測試：`tests/photo.test.ts`；`python tests/photo_flow.py`（Playwright）用帶 GPS 的手機式照片走完整流程。
 
+## 預覽各版本（`src/render.ts`）
+
+履歷頁除了「每個職缺各一份履歷檔」，還能看三種版本，都是 `/view/<代號>` 加參數：
+
+- **通用版**（`/view/_general?variant=tw|en&template=…`）：`resume.yaml` 已確認的內容，用範本排出來，沒有針對職缺改寫、沒有自我介紹（自我介紹寫在每份客製履歷）。還沒有任何職缺也看得到。
+- **換範本看看**（`/view/<代號>?template=tw|tw-classic|en|us`）：同一份客製內容（`R.resolve(R.tailor(resume, target))`，和程式檢查比對履歷檔用的是同一份資料）換範本重排。這個市場沒有的範本（台灣資料夾的 `us`、美國資料夾的 `tw`）回 404。
+- **已投出的存檔**（`/view/<代號>?submitted=<檔名>.html`）：`submitted/` 裡「我投了這份，存一份」存的那份，照存下來的樣子看。檔名只收 `YYYY-MM-DD_<名稱>.html`；`folder.ts` 的讀取名單因此多開這一類檔案（寫入名單沒動）。
+
+`render.ts` 不是新的履歷產生器：它只畫「預覽」，用範本自己的 `<style>` 加範本註解描述的標記（`header.top`、`section.block`、`div.entry`），AI 做的 `resumes/<代號>.html` 和它的程式檢查完全不動。測試證明排出來的頁面能通過程式檢查（三個台灣範本都只剩假資料裡的佔位字問題）。「存成 PDF」「下載 Word」跟著畫面上的版本走。排不出來（`resume.yaml` 或客製檔壞了）回 422 和白話說明。`GET /api/versions` 給介面版本、範本和存檔清單。
+
+測試：`tests/versions.test.ts`；`python tests/versions_flow.py`（Playwright）。
+
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
 - 「已投遞」10 天以上沒更新：提醒問進度；28 天以上：「可能石沉大海」，建議改成「無回應」。不需要填聯絡人。

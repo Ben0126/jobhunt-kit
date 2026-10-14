@@ -10,7 +10,11 @@ import { runChecks } from "./check.ts";
 import { Folder } from "./folder.ts";
 import { readMarket } from "./market.ts";
 import { serverText } from "./server.text.ts";
+import { textFor } from "./check.text.ts";
 import { stripComments } from "./htmltext.ts";
+import * as R from "../../web/js/core/rules.js";
+import { templatesFor } from "./check.ts";
+import { renderResume, type TemplateKind } from "./render.ts";
 import { resumeToDocx } from "./wordfile.ts";
 import { dataDir, dataUrl, deletePhoto, loadPhoto, photoFile, photoFromDataUrl, PhotoError, savePhoto } from "./photo.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
@@ -94,6 +98,31 @@ function cookieValue(req: Request, name: string): string | null {
 }
 
 // ---------------------------------------------------------------- 履歷頁的補充資料（只讀）
+
+export const GENERAL = "_general";
+
+export type VersionsInfo = {
+  variants: { name: string; title: string }[];
+  templates: { kind: string; name: string }[];
+  submitted: { file: string; id: string; date: string }[];
+};
+
+/** What the resume page can show besides each job's resume file: the general versions, templates, saved copies. */
+export async function versionsInfo(folder: Folder, market: "tw" | "us"): Promise<VersionsInfo> {
+  let variants: VersionsInfo["variants"] = [];
+  try {
+    const r: any = await folder.readYaml("resume.yaml");
+    variants = Object.entries(r?.variants ?? {}).map(([name, v]: [string, any]) => ({ name, title: String(v?.title ?? name) }));
+  } catch {}
+  const names = textFor(market === "us" ? "en" : "zh-TW").templateNames as Record<string, string>;
+  const submitted: VersionsInfo["submitted"] = [];
+  for (const f of folder.list("submitted", "file")) {
+    const m = /^(\d{4}-\d{2}-\d{2})_(.+)\.html$/.exec(f);
+    if (m) submitted.push({ file: f, id: m[2], date: m[1] });
+  }
+  submitted.sort((a, b) => (a.file < b.file ? 1 : -1));
+  return { variants, templates: templatesFor(market).map((kind) => ({ kind, name: names[kind] ?? kind })), submitted };
+}
 
 export type DiffPart = { t: "same" | "add" | "del"; s: string };
 
@@ -307,6 +336,32 @@ export function startServer(opts: {
       .join("_");
   }
 
+  /** The page for the "general version" (id _general: resume.yaml as it is, no job) or for a job's content in a chosen template. */
+  async function drawVersion(id: string, template: TemplateKind | null, variant: string | null, us: boolean): Promise<string> {
+    const resume: any = await folder.readYaml("resume.yaml");
+    let doc: any;
+    let photo = true;
+    let kind: TemplateKind | null = template;
+    if (id === GENERAL) {
+      const names = Object.keys(resume?.variants ?? {});
+      const v = variant && names.includes(variant) ? variant : names[0];
+      doc = R.resolve(resume, v);
+      kind ??= us ? "us" : v === "en" ? "en" : "tw";
+    } else {
+      let target: any = null;
+      for (const ext of ["yaml", "yml"]) {
+        try {
+          target = await folder.readYaml(`targets/${id}.${ext}`);
+          break;
+        } catch {}
+      }
+      if (!target || typeof target !== "object") throw new Error("no target");
+      doc = R.resolve(R.tailor(resume, target), target.base_variant);
+      photo = target.photo === true;
+    }
+    return renderResume(kind!, doc, { photo });
+  }
+
   async function view(req: Request, url: URL): Promise<Response> {
     if (req.method !== "GET" && req.method !== "HEAD") return text("Method Not Allowed", 405);
     const nonce = randomBytes(16).toString("base64");
@@ -322,9 +377,29 @@ export function startServer(opts: {
     } catch {}
     if (!/^[^/\\:*?"<>|]+$/.test(id) || id.startsWith(".")) return page(404, T.notFoundTitle, "");
     let html: string | null = null;
-    try {
-      html = await folder.readText(`resumes/${id}.html`);
-    } catch {}
+    const q = url.searchParams;
+    const submitted = q.get("submitted");
+    const wanted = q.get("template");
+    const known = templatesFor(M.market);
+    if (wanted && !known.includes(wanted as TemplateKind)) return page(404, T.notFoundTitle, "");
+    if (submitted != null) {
+      // a frozen copy saved by "I applied, save a copy": shown exactly as it was saved
+      if (!/^[^/\:*?"<>|]+\.html$/.test(submitted) || submitted.startsWith(".")) return page(404, T.notFoundTitle, "");
+      try {
+        html = await folder.readText(`submitted/${submitted}`);
+      } catch {}
+    } else if (id === GENERAL || wanted) {
+      // drawn by the program from resume.yaml (+ the job's targets file): the general version, or the same words in another template
+      try {
+        html = await drawVersion(id, wanted as TemplateKind | null, q.get("variant"), M.market === "us");
+      } catch (e: any) {
+        return page(422, T.versionFailTitle, T.versionFailMsg);
+      }
+    } else {
+      try {
+        html = await folder.readText(`resumes/${id}.html`);
+      } catch {}
+    }
     if (html == null) return page(404, T.noResumeTitle, T.noResumeMsg);
     html = cleanResume(html);
     const name = await pdfName(id, T.pdfWord);
@@ -446,6 +521,8 @@ export function startServer(opts: {
           return json(await apps.remove(body));
         case "GET /api/resume-info":
           return json(await resumeInfo(folder));
+        case "GET /api/versions":
+          return json(await versionsInfo(folder, M.market));
         case "GET /api/photo": {
           const p = loadPhoto(photoPath());
           return json({ has: !!p, dataUrl: p ? dataUrl(p) : null });

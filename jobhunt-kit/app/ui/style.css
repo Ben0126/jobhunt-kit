@@ -260,3 +260,7 @@ button.done { background: #e3f1ea; border-color: #b4d8cc; color: #1d5b3f; }
 .photo-area .crop { display: block; width: 280px; height: 360px; margin: 8px 0; border: 1px solid var(--line); cursor: grab; touch-action: none; background: #fff; }
 .photo-area .zoom { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .photo-area .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* 看哪一個版本：通用版、換範本、已投出的存檔 */
+.versionbar { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
+.versionbar:empty { display: none; }
+.vsel { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
