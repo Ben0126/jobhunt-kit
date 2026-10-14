@@ -12,6 +12,7 @@ import { readMarket } from "./market.ts";
 import { serverText } from "./server.text.ts";
 import { stripComments } from "./htmltext.ts";
 import { resumeToDocx } from "./wordfile.ts";
+import { dataDir, dataUrl, deletePhoto, loadPhoto, photoFile, photoFromDataUrl, PhotoError, savePhoto } from "./photo.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
 import { applyUpdate, failureText, planView, prepareUpdate, testServerFromEnv, UpdateFailure, type Prepared } from "./selfupdate.ts";
 import { updateTextFor } from "./selfupdate.text.ts";
@@ -252,6 +253,8 @@ export function startServer(opts: {
   selfUpdate?: SelfUpdate;
   /** Called shortly after an update was applied: the app closes, so the next double-click starts the new program. */
   onUpdated?: () => void;
+  /** Where the resume photo is kept (tests pass a temp folder). Default: the program's own data folder, outside the job folder. */
+  dataDir?: string;
 }): Running {
   const folder = opts.folder;
   const updater = opts.update ?? createUpdateChecker({ folder });
@@ -267,6 +270,7 @@ export function startServer(opts: {
   // port, so if it leaks it only shows resume previews and can't change the applications file.
   const viewToken = newToken();
   let port = 0;
+  const photoPath = () => photoFile(opts.dataDir ?? dataDir(), folder.root);
 
   const allowedHosts = () => new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = () => new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
@@ -326,7 +330,7 @@ export function startServer(opts: {
     const name = await pdfName(id, T.pdfWord);
     if (url.searchParams.get("format") === "docx") {
       const file = name || id;
-      const bytes = resumeToDocx(html, { paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
+      const bytes = resumeToDocx(html, { photo: loadPhoto(photoPath()), paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
       return new Response(bytes, {
         headers: {
           ...SECURITY_HEADERS,
@@ -342,7 +346,11 @@ export function startServer(opts: {
         .replace(/<head\b[^>]*>/i, (head) => `${head}<title>${esc(name)}</title>`);
     // The photo is never in the folder (the template's onerror handler that hides the empty frame can't run here).
     // The template's yellow tip says "press Ctrl+P"; the app shows its own steps next to its PDF button instead.
-    let extra = "<style>#photo-slot{display:none !important}.print-tip{display:none !important}</style>";
+    // With a photo saved in the program, the template's photo.jpg becomes that picture (inline, so the print tab needs no
+    // second request); without one the empty frame stays hidden.
+    const photo = loadPhoto(photoPath());
+    let extra = "<style>" + (photo ? "" : "#photo-slot{display:none !important}") + ".print-tip{display:none !important}</style>";
+    if (photo) html = html.replace(/(<img\b[^>]*?\bsrc\s*=\s*)(["']?)photo\.jpg\2/gi, `$1"${dataUrl(photo)}"`);
     // Letter folders: the print dialog gets Letter even if the AI used a template that says A4. A4 folders add nothing.
     if (M.paper === "letter") extra += "<style>@page{size:letter}</style>";
     if (url.searchParams.get("print") === "1")
@@ -364,8 +372,11 @@ export function startServer(opts: {
     let body: any = {};
     if (req.method === "POST") {
       if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return json({ error: T.badRequest }, 415);
+      // The transport allows 4 MB for the photo; everything else stays at the old 64 KB.
+      const raw = await req.text().catch(() => "");
+      if (raw.length > (path === "/api/photo" ? 4 * 1024 * 1024 : 64 * 1024)) return json({ error: T.badRequest }, 413);
       try {
-        body = await req.json();
+        body = JSON.parse(raw);
       } catch {
         return json({ error: T.badRequest }, 400);
       }
@@ -435,6 +446,24 @@ export function startServer(opts: {
           return json(await apps.remove(body));
         case "GET /api/resume-info":
           return json(await resumeInfo(folder));
+        case "GET /api/photo": {
+          const p = loadPhoto(photoPath());
+          return json({ has: !!p, dataUrl: p ? dataUrl(p) : null });
+        }
+        case "POST /api/photo": {
+          let p;
+          try {
+            p = photoFromDataUrl(body.image);
+          } catch (e) {
+            if (e instanceof PhotoError) return json({ error: e.kind === "big" ? T.photoBig : T.photoFormat }, 400);
+            throw e;
+          }
+          savePhoto(photoPath(), p);
+          return json({ has: true, dataUrl: dataUrl(p) });
+        }
+        case "POST /api/photo/delete":
+          deletePhoto(photoPath());
+          return json({ has: false, dataUrl: null });
         case "POST /api/archive/preview":
           return json(await apps.archivePreview(body));
         case "POST /api/archive":
@@ -455,7 +484,7 @@ export function startServer(opts: {
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: opts.port ?? 0,
-    maxRequestBodySize: 64 * 1024,
+    maxRequestBodySize: 4 * 1024 * 1024, // the resume photo (2 MB as a JPEG, a third more as base64) is the only big request
     async fetch(req) {
       const host = req.headers.get("host") || "";
       if (!allowedHosts().has(host)) return text("Forbidden", 403);

@@ -136,7 +136,17 @@ const TEXT = {
     afterRecheck: "，改好之後按「重新檢查」。",
     okHead: "程式檢查通過",
     okBody: "數字、日期、用詞、句子長度、佔位字和來源都沒問題。意思和職稱有沒有寫得比實際大，還是要你自己讀一次。",
-    photoHint: "這份設定要放照片。從這裡存的 PDF 不會有照片；要放照片，請照「開始使用」裡的方法自己存。",
+    photoTitle: "大頭照",
+    photoNone: "還沒有照片。選一張直式的證件照，存成 PDF 和下載 Word 時會放在履歷右上角。",
+    photoPrivacy: "照片只存在這台電腦的程式資料夾，不放進求職資料夾，AI 看不到，也不會上傳到任何地方。",
+    photoPick: "選照片",
+    photoChange: "換一張",
+    photoRemove: "移除照片",
+    photoCropHint: "用滑鼠拖曳照片調整位置，用滑桿放大縮小。",
+    photoZoom: "放大",
+    photoUse: "用這張",
+    photoUnreadable: "這張照片打不開，請換一張 .jpg 或 .png。",
+    photoAlt: "目前的大頭照",
     previewTitle: "履歷預覽",
     blankResume: "還沒有履歷檔。跟 AI 說「做成履歷檔」，做好之後按「重新檢查」。",
     // 104
@@ -274,7 +284,17 @@ const TEXT = {
     afterRecheck: '. After it is fixed, press "Check again".',
     okHead: "Program check passed",
     okBody: "Numbers, wording, sentence length, placeholders, ID numbers, visa words and sources are all fine. You still need to read it yourself to make sure the meaning and job titles are not bigger than what you really did.",
-    photoHint: "This setup asks for a photo. A PDF saved from here has no photo. To include one, follow the steps in the start-here guide and save it yourself.",
+    photoTitle: "Photo",
+    photoNone: "No photo yet. Choose an upright portrait: it goes at the top right of the resume in the PDF and the Word file.",
+    photoPrivacy: "The photo is kept only in the program's own data folder on this computer, not in the job folder. The AI cannot see it and it is never uploaded anywhere.",
+    photoPick: "Choose photo",
+    photoChange: "Change photo",
+    photoRemove: "Remove photo",
+    photoCropHint: "Drag the picture to move it, use the slider to zoom.",
+    photoZoom: "Zoom",
+    photoUse: "Use this photo",
+    photoUnreadable: "This photo can't be opened. Please choose a .jpg or .png.",
+    photoAlt: "Current photo",
     previewTitle: "Resume preview",
     blankResume: 'There is no resume file yet. Tell the AI "Make the resume file", then press "Check again".',
     copy: "Copy",
@@ -1001,6 +1021,138 @@ function wordArea(item) {
   return h("div", { class: "pdf" }, h("button", { type: "button", onclick: () => downloadWord(item) }, T.saveWord), h("span", { class: "hint" }, T.wordHint));
 }
 
+/** Crop to the resume's 35 x 45 mm frame in the browser: that also drops the picture's EXIF (GPS, camera, date). */
+const PHOTO_W = 280;
+const PHOTO_H = 360;
+
+function photoArea() {
+  const box = h("div", { class: "photo-area" });
+  const fill = (st) => {
+    const input = h("input", {
+      type: "file",
+      accept: "image/*",
+      hidden: true,
+      onchange: (e) => {
+        const f = e.target.files[0];
+        e.target.value = "";
+        if (f) openCrop(box, f, fill);
+      },
+    });
+    box.replaceChildren(
+      h("h3", {}, T.photoTitle),
+      h(
+        "div",
+        { class: "photo-row" },
+        st.has ? h("img", { class: "thumb", src: st.dataUrl, alt: T.photoAlt }) : null,
+        h("div", {}, h("p", { class: "hint" }, st.has ? "" : T.photoNone), h("p", { class: "hint" }, T.photoPrivacy)),
+      ),
+      h(
+        "div",
+        { class: "actions" },
+        h("button", { type: "button", onclick: () => input.click() }, st.has ? T.photoChange : T.photoPick),
+        st.has
+          ? h("button", { type: "button", onclick: () => api("POST", "/api/photo/delete", {}).then(fill, (e) => alert(e.message)) }, T.photoRemove)
+          : null,
+        input,
+      ),
+    );
+  };
+  fill({ has: false });
+  api("GET", "/api/photo").then(fill, () => {});
+  return box;
+}
+
+async function openCrop(box, file, done) {
+  let bmp;
+  try {
+    bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    try {
+      bmp = await createImageBitmap(file);
+    } catch {
+      alert(T.photoUnreadable);
+      return;
+    }
+  }
+  const base = Math.max(PHOTO_W / bmp.width, PHOTO_H / bmp.height);
+  let zoom = 1;
+  let ox = (PHOTO_W - bmp.width * base) / 2;
+  let oy = (PHOTO_H - bmp.height * base) / 2;
+  const canvas = h("canvas", { class: "crop", width: PHOTO_W, height: PHOTO_H });
+  const clamp = () => {
+    const sw = bmp.width * base * zoom;
+    const sh = bmp.height * base * zoom;
+    ox = Math.min(0, Math.max(PHOTO_W - sw, ox));
+    oy = Math.min(0, Math.max(PHOTO_H - sh, oy));
+  };
+  const draw = (cv, f) => {
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(bmp, ox * f, oy * f, bmp.width * base * zoom * f, bmp.height * base * zoom * f);
+  };
+  const paint = () => {
+    clamp();
+    draw(canvas, 1);
+  };
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    drag = { x: e.clientX, y: e.clientY, ox, oy };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    // the canvas is shown at its own pixel size, so a screen pixel is a canvas pixel
+    ox = drag.ox + e.clientX - drag.x;
+    oy = drag.oy + e.clientY - drag.y;
+    paint();
+  });
+  canvas.addEventListener("pointerup", () => (drag = null));
+  canvas.addEventListener("pointercancel", () => (drag = null));
+  const slider = h("input", {
+    type: "range",
+    min: "1",
+    max: "3",
+    step: "0.01",
+    value: "1",
+    "aria-label": T.photoZoom,
+    oninput: (e) => {
+      // zoom around the middle of the frame
+      const cx = (PHOTO_W / 2 - ox) / (bmp.width * base * zoom);
+      const cy = (PHOTO_H / 2 - oy) / (bmp.height * base * zoom);
+      zoom = Number(e.target.value);
+      ox = PHOTO_W / 2 - cx * bmp.width * base * zoom;
+      oy = PHOTO_H / 2 - cy * bmp.height * base * zoom;
+      paint();
+    },
+  });
+  const use = h("button", { type: "button", class: "primary" }, T.photoUse);
+  use.onclick = () => {
+    use.disabled = true;
+    const out = h("canvas", { width: 700, height: 900 });
+    clamp();
+    draw(out, 700 / PHOTO_W);
+    out.toBlob(
+      (blob) => {
+        const r = new FileReader();
+        r.onload = () => api("POST", "/api/photo", { image: r.result }).then(done, (e) => { use.disabled = false; alert(e.message); });
+        r.readAsDataURL(blob);
+      },
+      "image/jpeg",
+      0.9,
+    );
+  };
+  box.replaceChildren(
+    h("h3", {}, T.photoTitle),
+    h("p", { class: "hint" }, T.photoCropHint),
+    canvas,
+    h("label", { class: "zoom" }, T.photoZoom, slider),
+    h("div", { class: "actions" }, use, h("button", { type: "button", onclick: () => api("GET", "/api/photo").then(done, () => done({ has: false })) }, T.notNow)),
+  );
+  paint();
+  use.focus();
+}
+
 function pdfSteps() {
   const paper = paperName(INFO.paper);
   const [before, bold, after] = T.pdfChrome(paper);
@@ -1074,7 +1226,7 @@ function resumeDetail(item) {
         h("p", {}, T.okBody),
       );
   // The template's photo slot belongs to the Taiwan resume: a US folder never shows this hint.
-  const photo = item.photo && INFO.market !== "us" ? h("p", { class: "hint" }, T.photoHint) : null;
+  const photo = item.photo && INFO.market !== "us" ? photoArea() : null;
   const pages = h("span", { class: "pages", hidden: true });
   const preview = item.hasHtml
     ? h("iframe", {

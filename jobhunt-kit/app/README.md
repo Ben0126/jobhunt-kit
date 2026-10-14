@@ -89,6 +89,16 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 沒有外部套件：HTML 用 `htmltext.ts` 的註解處理加一個小解析器、ZIP 自己寫（`node:zlib` 的 `deflateRawSync` ＋ CRC32）。
 - 測試：`tests/word.test.ts`（含用 `docx.ts` 的讀取器把產出的檔讀回來，會驗每個部分的大小和 CRC）。在真的 Word 開過：1 頁、版面和範本一致。
 
+## 大頭照（`src/photo.ts`）
+
+台灣履歷的照片：履歷頁「大頭照」那一格選檔、在瀏覽器裡裁成 35×45 公釐的比例（700×900 JPEG），`POST /api/photo` 存起來。
+
+- **存在求職資料夾外面**：程式自己的資料夾（Windows `%APPDATA%\jobhunt-kit\photos\`、Mac `~/Library/Application Support/jobhunt-kit/photos/`），檔名是「資料夾路徑的雜湊」，所以兩個人的資料夾不會共用一張。資料夾裡的東西 AI 都讀得到，所以照片不能放那裡；`folder.ts` 的寫入白名單沒有動，照片是唯一一個寫到資料夾外面的東西。AI 規則（紅線 7）照舊：不開、不描述、不生成。
+- **拿掉隱藏資料**：瀏覽器裁圖重畫時 EXIF（GPS、相機、拍攝時間）就沒了，手機照片的旋轉也已經轉正；伺服器不信任這點，`cleanJpeg` 只收 JPEG，把所有 APPn 區段和註解丟掉再存（上限 2 MB），其他格式一律拒絕。
+- 預覽和列印：`/view` 把範本的 `photo.jpg` 換成內嵌的圖（沒有照片就維持隱藏照片格）。Word：履歷檔有照片格才放，抬頭變成兩格的無框表格（左姓名聯絡、右照片）。履歷檔被刪掉照片格（`photo: false`）就不放，即使存過照片。
+- 請求大小：傳輸層上限 4 MB，除了 `/api/photo` 其他 API 還是 64 KB（在 `api()` 裡檢查）。
+- 測試：`tests/photo.test.ts`；`python tests/photo_flow.py`（Playwright）用帶 GPS 的手機式照片走完整流程。
+
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
 - 「已投遞」10 天以上沒更新：提醒問進度；28 天以上：「可能石沉大海」，建議改成「無回應」。不需要填聯絡人。

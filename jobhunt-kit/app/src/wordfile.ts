@@ -6,8 +6,10 @@
 // name / contact, then <section class="block"> with <h2> and entries), written as WordprocessingML, and zipped by hand.
 import { deflateRawSync } from "node:zlib";
 import { decodeEntities, stripComments } from "./htmltext.ts";
+import type { Photo } from "./photo.ts";
 
-export type WordOptions = { paper: "a4" | "letter"; title: string; lang: "zh-TW" | "en" };
+/** `photo`: put it in the header (right of the name) when the resume file has a photo block. */
+export type WordOptions = { paper: "a4" | "letter"; title: string; lang: "zh-TW" | "en"; photo?: Photo | null };
 
 // ---------------------------------------------------------------- a tiny HTML tree
 
@@ -65,6 +67,9 @@ function parse(html: string): El {
 
 type Run = { t?: string; bold?: boolean; color?: string; tab?: boolean; br?: boolean };
 type Para = { style: string; runs: Run[] };
+/** The header when there is a photo: a borderless two-cell table, name and contact on the left, the picture on the right. */
+type Head = { head: Para[]; photo: Photo };
+type Block = Para | Head;
 
 // XML 1.0 can't carry most control characters at all, not even escaped
 const clean = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
@@ -112,8 +117,8 @@ function tidy(runs: Run[]): Run[] {
 
 const hasText = (runs: Run[]) => runs.some((r) => r.t != null && r.t.trim() !== "");
 
-function paragraphs(root: El): Para[] {
-  const paras: Para[] = [];
+function paragraphs(root: El, photo: Photo | null): Block[] {
+  let paras: Block[] = [];
   const push = (style: string, runs: Run[]) => {
     const r = tidy(runs);
     if (hasText(r)) paras.push({ style, runs: r });
@@ -141,8 +146,17 @@ function paragraphs(root: El): Para[] {
   }
 
   function walk(el: El): void {
-    if (SKIPPED.has(el.tag) || el.cls.includes("print-tip")) return;
+    if (SKIPPED.has(el.tag) || el.cls.includes("print-tip") || el.cls.includes("photo")) return;
     const { tag, cls } = el;
+    if (tag === "header" && photo && el.kids.some((k) => typeof k !== "string" && k.cls.includes("photo"))) {
+      const outer = paras;
+      paras = [];
+      for (const k of el.kids) if (typeof k !== "string" && !k.cls.includes("photo")) walk(k);
+      const head = paras as Para[];
+      paras = outer;
+      if (head.length) paras.push({ head: head.map((x) => (x.style === "Contact" ? { ...x, style: "ContactBare" } : x)), photo });
+      return;
+    }
     if (tag === "h1") return push("Name", inlineOf(el));
     if (tag === "h2" || tag === "h3") return push("Heading1", inlineOf(el));
     if (cls.includes("want")) return push("Want", inlineOf(el));
@@ -193,6 +207,9 @@ function paragraphs(root: El): Para[] {
 // ---------------------------------------------------------------- WordprocessingML
 
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const NS_DRAWING =
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
 const xe = (s: string) => clean(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function runXml(r: Run): string {
@@ -204,6 +221,42 @@ function runXml(r: Run): string {
 
 const paraXml = (p: Para) => `<w:p><w:pPr><w:pStyle w:val="${p.style}"/></w:pPr>${p.runs.map(runXml).join("")}</w:p>`;
 
+const MM = 36000; // EMU per millimetre
+const PHOTO_MM = { w: 35, h: 45 }; // the templates' photo frame
+const PHOTO_CELL = 2100; // twips: a little wider than the frame
+
+/** The picture, scaled to fit the 35 × 45 mm frame without stretching, with the template's thin grey frame line. */
+function pictureXml(p: Photo): string {
+  const k = Math.min(PHOTO_MM.w / p.width, PHOTO_MM.h / p.height);
+  const cx = Math.round(p.width * k * MM);
+  const cy = Math.round(p.height * k * MM);
+  return (
+    `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
+    `<wp:docPr id="1" name="Photo" descr="Photo"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+    `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>` +
+    `<pic:nvPicPr><pic:cNvPr id="1" name="photo.jpg"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+    `<a:ln w="9525"><a:solidFill><a:srgbClr val="B9BEC6"/></a:solidFill></a:ln></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
+  );
+}
+
+function headXml(h: Head, textWidth: number): string {
+  const rule = '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="B9BEC6"/>';
+  const cell = (w: number, inner: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:tcBorders>${rule}</w:tcBorders><w:tcMar><w:bottom w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>${inner}</w:tc>`;
+  const left = textWidth - PHOTO_CELL;
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="${textWidth}" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
+    `<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="${left}"/><w:gridCol w:w="${PHOTO_CELL}"/></w:tblGrid><w:tr>` +
+    cell(left, h.head.map(paraXml).join("")) +
+    cell(PHOTO_CELL, `<w:p><w:pPr><w:jc w:val="right"/></w:pPr>${pictureXml(h.photo)}</w:p>`) +
+    `</w:tr></w:tbl>`
+  );
+}
+
+const blockXml = (b: Block, textWidth: number) => ("head" in b ? headXml(b, textWidth) : paraXml(b));
 
 type Look = { latin: string; size: number; nameSize: number; accent: string };
 
@@ -253,6 +306,7 @@ function stylesXml(look: Look, lang: "zh-TW" | "en", textWidth: number): string 
     style("Want", "Subtitle", "<w:keepNext/><w:spacing w:after=\"40\"/>", `<w:b/><w:bCs/><w:color w:val="${look.accent}"/>${sz(11)}`) +
     style("Contact", "Contact", `${rule("B9BEC6", 6)}<w:spacing w:after="120"/>`, `<w:color w:val="${MUTED}"/>${sz(Math.max(look.size - 1, 8))}`) +
     style("Heading1", "heading 1", `<w:keepNext/>${rule("D9DDE3", 6)}<w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="0"/>`, `<w:b/><w:bCs/><w:color w:val="${look.accent}"/>${sz(12)}`) +
+    style("ContactBare", "Contact (in header table)", "<w:spacing w:after=\"0\"/>", `<w:color w:val="${MUTED}"/>${sz(Math.max(look.size - 1, 8))}`) +
     style("Summary", "Summary", "<w:jc w:val=\"both\"/>", "<w:color w:val=\"3A3E45\"/>") +
     style("EntryHead", "Entry heading", `<w:keepNext/><w:tabs><w:tab w:val="right" w:pos="${textWidth}"/></w:tabs><w:spacing w:before="100"/>`, sz(11)) +
     style("EntrySub", "Entry detail", "<w:keepNext/>", `<w:color w:val="${MUTED}"/>${sz(Math.max(look.size - 1, 8))}`) +
@@ -271,7 +325,7 @@ const NUMBERING =
 
 const CONTENT_TYPES =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>` +
+  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpg" ContentType="image/jpeg"/>` +
   `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
   `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>` +
   `<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>` +
@@ -281,6 +335,8 @@ const ROOT_RELS =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
   `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`;
+
+const PHOTO_REL = `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/photo.jpg"/>`;
 
 const DOC_RELS =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
@@ -306,7 +362,7 @@ function crc32(b: Uint8Array): number {
 }
 
 /** A zip with every part deflated. Part names are plain ASCII. */
-export function zip(parts: [string, string][]): Uint8Array {
+export function zip(parts: [string, string | Uint8Array][]): Uint8Array {
   const chunks: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   const d = new Date();
@@ -314,7 +370,7 @@ export function zip(parts: [string, string][]): Uint8Array {
   const date = (Math.max(d.getFullYear() - 1980, 0) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
   let offset = 0;
   for (const [name, text] of parts) {
-    const raw = new TextEncoder().encode(text);
+    const raw = typeof text === "string" ? new TextEncoder().encode(text) : text;
     const data = new Uint8Array(deflateRawSync(raw));
     const nm = new TextEncoder().encode(name);
     const crc = crc32(raw);
@@ -365,12 +421,15 @@ export function zip(parts: [string, string][]): Uint8Array {
 
 /** `html` must already be cleaned (scripts gone). The photo is left out, as in the PDF the app prints. */
 export function resumeToDocx(html: string, opts: WordOptions): Uint8Array {
-  const paras = paragraphs(parse(html));
+  const photo = opts.photo ?? null;
+  const blocks = paragraphs(parse(html), photo);
   const [w, h] = opts.paper === "letter" ? [12240, 15840] : [11906, 16838];
   const margin = opts.paper === "letter" ? 864 : 850; // 0.6 in / 15 mm, as in the templates
   const look = lookOf(html, opts.lang);
+  const textWidth = w - 2 * margin;
+  const usedPhoto = blocks.some((b) => "head" in b) ? photo : null;
   const doc =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS}><w:body>${paras.map(paraXml).join("")}` +
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS} ${NS_DRAWING}><w:body>${blocks.map((b) => blockXml(b, textWidth)).join("")}` +
     `<w:sectPr><w:pgSz w:w="${w}" w:h="${h}"/><w:pgMar w:top="${margin}" w:right="${margin}" w:bottom="${margin}" w:left="${margin}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   const core =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ` +
@@ -379,9 +438,10 @@ export function resumeToDocx(html: string, opts: WordOptions): Uint8Array {
     ["[Content_Types].xml", CONTENT_TYPES],
     ["_rels/.rels", ROOT_RELS],
     ["word/document.xml", doc],
-    ["word/_rels/document.xml.rels", DOC_RELS],
-    ["word/styles.xml", stylesXml(look, opts.lang, w - 2 * margin)],
+    ["word/_rels/document.xml.rels", usedPhoto ? DOC_RELS.replace("</Relationships>", PHOTO_REL + "</Relationships>") : DOC_RELS],
+    ["word/styles.xml", stylesXml(look, opts.lang, textWidth)],
     ["word/numbering.xml", NUMBERING],
     ["docProps/core.xml", core],
+    ...(usedPhoto ? ([["word/media/photo.jpg", usedPhoto.bytes]] as [string, Uint8Array][]) : []),
   ]);
 }

@@ -16,6 +16,8 @@ const ZH = {
   noResumeMsg: "請跟 AI 說「做成履歷檔」，做好再回來。",
   /** The middle word of the PDF's file name (name_RESUME_company). */
   pdfWord: "履歷",
+  photoFormat: "這張照片不能用，請換一張 .jpg 或 .png 的照片。",
+  photoBig: "這張照片檔案太大，請換一張小一點的。",
 };
 
 const EN: typeof ZH = {
@@ -32,6 +34,8 @@ const EN: typeof ZH = {
   noResumeTitle: "Resume file not found",
   noResumeMsg: 'Tell the AI "Make the resume file", then come back.',
   pdfWord: "Resume",
+  photoFormat: "This photo can't be used. Please choose a .jpg or .png picture.",
+  photoBig: "This photo file is too big. Please choose a smaller one.",
 };
 
 export const SERVER_TEXT = { "zh-TW": ZH, en: EN } as const;

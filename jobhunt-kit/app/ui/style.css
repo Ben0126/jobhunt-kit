@@ -247,3 +247,12 @@ button.done { background: #e3f1ea; border-color: #b4d8cc; color: #1d5b3f; }
 .update-banner details { margin: 8px 0; }
 .update-banner summary { cursor: pointer; }
 .update-banner .done { font-weight: 700; }
+/* 大頭照：選好檔案後在瀏覽器裡裁成 35×45 公釐的比例 */
+.photo-area { margin: 12px 0; }
+.photo-area h3 { margin: 0 0 4px; font-size: 15px; }
+.photo-row { display: flex; gap: 12px; align-items: flex-start; }
+.photo-row p { margin: 0 0 4px; }
+.photo-area .thumb { width: 56px; height: 72px; object-fit: cover; border: 1px solid var(--line); border-radius: 4px; flex: none; }
+.photo-area .crop { display: block; width: 280px; height: 360px; margin: 8px 0; border: 1px solid var(--line); cursor: grab; touch-action: none; background: #fff; }
+.photo-area .zoom { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.photo-area .actions { display: flex; gap: 8px; flex-wrap: wrap; }
