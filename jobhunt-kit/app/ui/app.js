@@ -413,8 +413,12 @@ function pagesFor(contentPx, paper) {
 const LANG = document.documentElement.lang === "en" ? "en" : "zh-TW";
 const T = TEXT[LANG];
 /** What /api/info says about the folder; until it answers, the language's usual country. */
-let INFO = LANG === "en" ? { market: "us", paper: "letter" } : { market: "tw", paper: "a4" };
-const tabKnown = () => (INFO.market === "us" ? ["progress", "jobs", "resumes", "nokey"] : ["progress", "resumes", "104", "nokey"]);
+let INFO = LANG === "en" ? { market: "us", paper: "letter", markets: ["us"], modeSet: true } : { market: "tw", paper: "a4", markets: ["tw"], modeSet: true };
+/** The tabs this folder has: before the start screen is answered only that screen; then 104 for Taiwan and Jobs for the US. */
+const tabKnown = () =>
+  !INFO.modeSet
+    ? ["start", "nokey"]
+    : ["progress", ...(INFO.markets.includes("us") ? ["jobs"] : []), "resumes", ...(INFO.markets.includes("tw") ? ["104"] : []), "nokey"];
 
 const ACTIVE = ["todo", "applied", "oa", "interview", "offer"];
 const CLOSED = ["rejected", "ghosted", "withdrawn"];
@@ -585,6 +589,7 @@ async function checkUpdate() {
 // ---- 分頁
 /** The tab the address asks for, or "progress" when it is unknown (or hidden for this country). */
 function currentTab() {
+  if (token && !INFO.modeSet) return "start";
   const tab = token ? (location.hash.replace("#", "") || "progress") : "nokey";
   return tabKnown().includes(tab) ? tab : "progress";
 }
@@ -602,6 +607,28 @@ function showTab() {
   if (known === "104") load104();
   if (known === "jobs") loadJobs();
 }
+
+// ---- 開始畫面和語言切換
+$("start-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const v = new FormData(e.target).get("mode");
+  const markets = v === "both" ? ["us", "tw"] : [v];
+  try {
+    await api("POST", "/api/mode", { markets });
+    location.hash = "#progress";
+    location.reload();
+  } catch (err) {
+    fail(err);
+  }
+});
+$("lang-switch").addEventListener("click", async () => {
+  try {
+    await api("POST", "/api/mode", { language: LANG === "en" ? "zh-TW" : "en" });
+    location.reload();
+  } catch (err) {
+    fail(err);
+  }
+});
 
 // ---- 進度看板
 let board = null;
@@ -1715,9 +1742,17 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("hashchange", showTab);
 // Ask the folder which country it is for (hides the 104 tab for the US, picks the paper) before the first page loads.
 folderInfo().then((info) => {
-  if (info && (info.market === "us" || info.market === "tw")) INFO = { market: info.market, paper: info.paper === "letter" ? "letter" : "a4" };
-  for (const a of document.querySelectorAll('.tabs a[data-tab="104"]')) a.hidden = INFO.market === "us";
-  for (const a of document.querySelectorAll('.tabs a[data-tab="jobs"]')) a.hidden = INFO.market !== "us";
+  if (info && (info.market === "us" || info.market === "tw"))
+    INFO = {
+      market: info.market,
+      paper: info.paper === "letter" ? "letter" : "a4",
+      markets: Array.isArray(info.markets) && info.markets.length ? info.markets : [info.market],
+      modeSet: info.modeSet !== false,
+    };
+  for (const a of document.querySelectorAll('.tabs a[data-tab="104"]')) a.hidden = !INFO.markets.includes("tw");
+  for (const a of document.querySelectorAll('.tabs a[data-tab="jobs"]')) a.hidden = !INFO.markets.includes("us");
+  // until they say where they look for work, the start screen is the only page
+  document.querySelector(".tabs").hidden = !INFO.modeSet;
   showTab();
   if (token) checkUpdate();
 });

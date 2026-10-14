@@ -286,3 +286,13 @@ table.jobs td.sponsor { white-space: nowrap; color: var(--muted); }
 .fpill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #e7efe9; color: #1d5b3f; white-space: nowrap; }
 .badge.new { margin-left: 6px; padding: 0 6px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; }
 .warn-text { color: var(--warn-ink); }
+
+/* 開始畫面：選美國、台灣或兩邊；頁首的語言切換 */
+.lang-switch { align-self: center; flex: none; line-height: 1.3; white-space: nowrap; margin-left: 12px; padding: 4px 10px; font-size: 13px; background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); cursor: pointer; }
+.page.start { max-width: 640px; margin: 24px auto; }
+.start-form { display: grid; gap: 12px; margin-top: 16px; }
+.start-form .choice { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: start; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font-weight: 400; }
+.start-form .choice input { grid-row: span 2; margin-top: 4px; }
+.start-form .choice .t { font-weight: 700; font-size: 18px; }
+.start-form .choice .d { color: var(--muted); font-size: 14px; }
+.start-form .choice:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

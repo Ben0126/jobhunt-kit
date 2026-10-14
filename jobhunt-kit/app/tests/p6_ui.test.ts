@@ -81,7 +81,12 @@ async function said(r: Response): Promise<string> {
   return await r.text();
 }
 
+/** The language switch says "中文" on the English page on purpose: it is the one way to get the Chinese page (owner,
+ * 2026-10-13: the page starts in English and can be switched to Chinese). Nothing else on the English page may be Chinese. */
+const withoutLangSwitch = (html: string) => html.replace(/<button[^>]*id="lang-switch"[^>]*>[^<]*<\/button>/, "");
+
 function noCjk(label: string, text: string) {
+  text = withoutLangSwitch(text);
   const m = CJK.exec(text);
   expect(m ? `${label}: found "${text.slice(Math.max(0, m.index - 20), m.index + 20)}"` : "").toBe("");
 }

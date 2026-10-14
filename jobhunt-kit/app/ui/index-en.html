@@ -18,10 +18,22 @@
     <a href="#104" data-tab="104" hidden>104</a>
   </nav>
   <p class="folder" id="folder"></p>
+  <button type="button" id="lang-switch" class="lang-switch">中文</button>
 </header>
 
 <main>
   <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+  <section id="page-start" class="page start" hidden>
+    <h2>Welcome</h2>
+    <p class="lead">Where are you looking for work? You can change this later.</p>
+    <form id="start-form" class="start-form">
+      <label class="choice"><input type="radio" name="mode" value="us" checked><span class="t">United States</span><span class="d">English resume on US Letter, LinkedIn and Handshake text, work authorization questions, and a list of open jobs.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="tw"><span class="t">Taiwan</span><span class="d">Chinese resume (English if you want it) and what to fill in on 104.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="both"><span class="t">Both</span><span class="d">One set of your experience. English comes first; Chinese is added when you apply on 104 or need a Chinese resume.</span></label>
+      <div class="actions"><button type="submit" class="primary">Start</button></div>
+    </form>
+  </section>
 
   <section id="page-progress" class="page" hidden>
     <div class="toolbar">

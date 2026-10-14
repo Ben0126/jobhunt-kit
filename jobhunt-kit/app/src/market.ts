@@ -4,6 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Folder } from "./folder.ts";
+import { leadMarket, readMode, readModeSync } from "./mode.ts";
 
 export type Market = "tw" | "us";
 export type Language = "zh-TW" | "en";
@@ -28,9 +29,15 @@ export function marketFromConfig(cfg: unknown): MarketConfig {
   };
 }
 
+/** jobhunt.yaml with no `market` of its own (the one-for-all kit) takes it from me/mode.yaml: the US leads when chosen. */
+const withMode = (cfg: unknown, markets: ("us" | "tw")[]): unknown => {
+  const c: any = cfg && typeof cfg === "object" ? cfg : {};
+  return c.market == null && markets.length ? { ...c, market: leadMarket(markets) } : cfg;
+};
+
 export async function readMarket(folder: Folder): Promise<MarketConfig> {
   try {
-    return marketFromConfig(await folder.readYaml("jobhunt.yaml"));
+    return marketFromConfig(withMode(await folder.readYaml("jobhunt.yaml"), (await readMode(folder)).markets));
   } catch {
     return TW_DEFAULTS;
   }
@@ -39,7 +46,7 @@ export async function readMarket(folder: Folder): Promise<MarketConfig> {
 /** Same as readMarket for code that cannot await (the Word reader). `dir` is the folder's path. */
 export function readMarketSync(dir: string): MarketConfig {
   try {
-    return marketFromConfig(Bun.YAML.parse(readFileSync(join(dir, "jobhunt.yaml"), "utf-8").replace(/^﻿/, "")));
+    return marketFromConfig(withMode(Bun.YAML.parse(readFileSync(join(dir, "jobhunt.yaml"), "utf-8").replace(/^﻿/, "")), readModeSync(dir).markets));
   } catch {
     return TW_DEFAULTS;
   }

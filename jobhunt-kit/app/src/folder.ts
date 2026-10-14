@@ -16,11 +16,14 @@ const READ_RULES: RegExp[] = [
   /^checks\/[^/]+$/,
   /^me\/stories\/[^/]+\.md$/,
   /^jobhunt\.yaml$/,
+  /^me\/mode\.yaml$/, // where they look for work (src/mode.ts)
   /^submitted\/\d{4}-\d{2}-\d{2}_[^/]+\.html$/, // the copies "I applied, save a copy" made: shown on the resume page
 ];
 
 /** Files the app may write. Everything else in the folder belongs to the user or the AI. */
 const WRITE_RULES: RegExp[] = [
+  /^me\/mode\.yaml$/, // the start screen's choice: us, tw or both (src/mode.ts)
+  /^jobhunt\.yaml$/, // only its `language:` line, from the start screen or the language switch (mode.ts withLanguage)
   /^data\/applications\.csv$/,
   /^data\/resume_versions\.csv$/, // only "I applied, save a copy" adds a row (applications.ts archive)
   /^checks\/[^/]+\.md$/, // only the「## 程式檢查」section is replaced (src/checksfile.ts)

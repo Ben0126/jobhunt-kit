@@ -17,10 +17,22 @@
     <a href="#104" data-tab="104">104</a>
   </nav>
   <p class="folder" id="folder"></p>
+  <button type="button" id="lang-switch" class="lang-switch">English</button>
 </header>
 
 <main>
   <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+  <section id="page-start" class="page start" hidden>
+    <h2>歡迎</h2>
+    <p class="lead">你要找哪裡的工作？之後還可以改。</p>
+    <form id="start-form" class="start-form">
+      <label class="choice"><input type="radio" name="mode" value="us" checked><span class="t">美國</span><span class="d">英文履歷（US Letter）、LinkedIn 和 Handshake 的文字、工作簽證相關問題，還有開著的職缺清單。</span></label>
+      <label class="choice"><input type="radio" name="mode" value="tw"><span class="t">台灣</span><span class="d">中文履歷（要英文也可以）和 104 每一欄怎麼填。</span></label>
+      <label class="choice"><input type="radio" name="mode" value="both"><span class="t">兩邊都找</span><span class="d">經歷只整理一份。以英文為主；要投 104 或需要中文履歷時，再加上中文。</span></label>
+      <div class="actions"><button type="submit" class="primary">開始</button></div>
+    </form>
+  </section>
 
   <section id="page-progress" class="page" hidden>
     <div class="toolbar">

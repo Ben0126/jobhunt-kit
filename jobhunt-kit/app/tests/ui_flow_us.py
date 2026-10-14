@@ -86,7 +86,8 @@ def main() -> int:
             failures.append(name)
 
     def english_only(page, where):
-        text = page.inner_text("body")
+        # the language switch says "中文" on purpose (the way to the Chinese page); nothing else may be Chinese
+        text = page.evaluate("() => { const b = document.body.cloneNode(true); b.querySelector('#lang-switch')?.remove(); document.body.after(b); const t = b.innerText; b.remove(); return t; }")
         m = CJK.search(text)
         assert not m, f"{where}: Chinese on screen near: {text[max(0, m.start() - 30):m.start() + 30]!r}"
 

@@ -11,6 +11,7 @@ import { Applications, UserError } from "./applications.ts";
 import { runChecks } from "./check.ts";
 import { Folder } from "./folder.ts";
 import { readMarket } from "./market.ts";
+import { cleanMarkets, readMode, withLanguage, writeMode } from "./mode.ts";
 import { serverText } from "./server.text.ts";
 import { textFor } from "./check.text.ts";
 import { stripComments } from "./htmltext.ts";
@@ -519,8 +520,27 @@ export function startServer(opts: {
       switch (route) {
         case "GET /api/ping":
           return json({ ok: true, app: APP_ID, version: VERSION });
-        case "GET /api/info":
-          return withCookie(json({ folder: folder.root, version: VERSION, market: M.market, language: M.language, paper: M.paper }));
+        case "GET /api/info": {
+          const mode = await readMode(folder);
+          return withCookie(json({ folder: folder.root, version: VERSION, market: M.market, language: M.language, paper: M.paper, markets: mode.markets, modeSet: mode.set }));
+        }
+        case "POST /api/mode": {
+          // the start screen and the language switch: where they look for work (me/mode.yaml) and the page language
+          // (only the `language:` line of jobhunt.yaml)
+          if (body.markets !== undefined) {
+            const markets = cleanMarkets(body.markets);
+            if (!markets.length) return json({ error: T.badRequest }, 400);
+            await writeMode(folder, markets);
+          }
+          if (body.language !== undefined) {
+            if (body.language !== "en" && body.language !== "zh-TW") return json({ error: T.badRequest }, 400);
+            const text = (await folder.readText("jobhunt.yaml")) ?? "";
+            await folder.writeText("jobhunt.yaml", withLanguage(text, body.language));
+          }
+          const mode = await readMode(folder);
+          const M2 = await readMarket(folder);
+          return json({ markets: mode.markets, modeSet: mode.set, language: M2.language, market: M2.market, paper: M2.paper });
+        }
         case "GET /api/update": {
           // The "newer version" reminder: the page asks after it has loaded. Never part of check/read output.
           const u = await updater.get();
@@ -576,10 +596,10 @@ export function startServer(opts: {
         case "POST /api/applications/delete":
           return json(markClosed(await apps.remove(body)));
         case "GET /api/feed":
-          if (M.market !== "us") return json({ error: T.badRequest }, 404);
+          if (!(await readMode(folder)).markets.includes("us")) return json({ error: T.badRequest }, 404);
           return json(await feedAnswer(new URL(req.url), M.language));
         case "POST /api/feed/refresh": {
-          if (M.market !== "us") return json({ error: T.badRequest }, 404);
+          if (!(await readMode(folder)).markets.includes("us")) return json({ error: T.badRequest }, 404);
           // set at once (before any await), so a second press while one is running joins it
           feedRunning ??= (async () => {
             const cfg = feedConfig(await folder.readYaml("jobhunt.yaml").catch(() => null));

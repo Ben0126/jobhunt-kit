@@ -138,6 +138,18 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - **加進追蹤**：「+ Track」呼叫 `/api/applications/add`，來源填 Simplify 或 Company site，連結就是職缺網址（之後靠它對下架）。
 - 測試：`tests/feed.test.ts`、`tests/h1b.test.ts`、`tests/feed_api.test.ts`（假的 http 和假的索引，不連網）；`python tests/jobs_flow.py`（Playwright，用 `JOBHUNT_FEED_SERVER=http://127.0.0.1:<埠>` 指到本機假伺服器，只接受 127.0.0.1，見 `src/testserver.ts`）。
 
+## 模式：只找美國／只找台灣／兩邊都找（`src/mode.ts`）
+
+合一版的第 1 段（設計見 `../docs/plan-dual-market.zh-TW.md`）。
+
+- 選擇存在 `me/mode.yaml`（`markets: [us, tw]`）。程式的開始畫面會寫，AI 問過本人後也可以寫。不放在 `me/profile.md`：兩邊的開場流程都用「profile.md 存不存在」判斷是不是第一次用。
+- 舊資料夾沒有 `me/mode.yaml` 時，照 `jobhunt.yaml` 的 `market`，不會出現開始畫面；`jobhunt.yaml` 有寫 `market` 時永遠照它。沒寫 `market` 的資料夾（合一版）由模式決定：選了美國就以美國為主（英文、Letter）。
+- 開始畫面（`#page-start`）：還沒選模式時只有這一頁，分頁列隱藏。預設英文，頁首的切換鈕隨時可以換中文或英文：只改 `jobhunt.yaml` 的 `language:` 那一行，其他行和註解都不動（`withLanguage`）。寫入名單因此多了 `me/mode.yaml` 和 `jobhunt.yaml`。
+- 分頁照模式出現：有台灣才有 104，有美國才有 Jobs（`/api/feed` 也照模式）。
+- `POST /api/mode`：`{markets?: ["us","tw"], language?: "en"|"zh-TW"}`。
+- 這一段還沒換 AI 規則：資料夾裡的 AGENTS.md 還是原本那一套（第 2 段才依模式裝規則）。
+- 測試：`tests/mode.test.ts`；`python tests/start_flow.py`（Playwright）。
+
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
 - 「已投遞」10 天以上沒更新：提醒問進度；28 天以上：「可能石沉大海」，建議改成「無回應」。不需要填聯絡人。
