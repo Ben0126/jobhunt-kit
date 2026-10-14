@@ -359,7 +359,7 @@ export function templateFor(html: string, target: any, market: Market = "tw"): {
   if (validTemplate(field, market)) return { kind: field as TemplateKind, how: "field" };
   const en =
     /^en\b/i.test(String(target?.lang ?? "")) ||
-    String(target?.base_variant ?? "") === "en" ||
+    /^en(?:[-_]|$)/i.test(String(target?.base_variant ?? "")) || // en, en-swe, en_ops: several English versions, each with its own `major`
     /<html\b[^>]*\slang\s*=\s*["']?en\b/i.test(stripComments(html));
   return { kind: en || market === "us" ? "en" : "tw", how: "guess" };
 }

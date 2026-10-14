@@ -193,6 +193,8 @@ test("樣式被改過（認不出範本）：照 template 欄位；欄位也沒�
   expect(templateFor(changed, { template: "tw-classic" })).toEqual({ kind: "tw-classic", how: "field" });
   expect(templateFor(changed, {})).toEqual({ kind: "tw", how: "guess" });
   expect(templateFor(changed, { base_variant: "en" })).toEqual({ kind: "en", how: "guess" });
+  for (const v of ["en-swe", "en_ops", "EN-Business"]) expect(templateFor(changed, { base_variant: v }), v).toEqual({ kind: "en", how: "guess" }); // several English versions
+  for (const v of ["tw", "tw-sales", "english", "ent"]) expect(templateFor(changed, { base_variant: v }), v).toEqual({ kind: "tw", how: "guess" });
   expect(templateFor(changed, { template: "toString" })).toEqual({ kind: "tw", how: "guess" });
   expect(templateFor(fill(tpl("resume-tw-classic.html"), TW), { template: "tw" })).toEqual({ kind: "tw-classic", how: "style" });
 });
