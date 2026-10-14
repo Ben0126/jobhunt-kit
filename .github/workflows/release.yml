@@ -113,6 +113,9 @@ jobs:
           cp -R jobhunt-kit/jobhunt/scaffold/workspace-general pkg/job-hunt
           cp -R jobhunt-kit/jobhunt/scaffold/workspace-us pkg/job-hunt-us
           for d in job-hunt job-hunt-us; do
+            # Codex 找技能的地方是 .agents/skills；內容和 .claude/skills 同一份，只在這裡複製，原始碼只維護一份。
+            mkdir -p "pkg/$d/.agents"
+            cp -R "pkg/$d/.claude/skills" "pkg/$d/.agents/skills"
             cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/$d/${{ matrix.bin }}"
             if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/$d/${{ matrix.bin }}"; fi
             ls -la "pkg/$d"
@@ -157,6 +160,8 @@ jobs:
                   "開場句.txt",  # 開場句.txt
                   "AGENTS.md",
                   ".claude/settings.json",
+                  ".codex/rules/jobhunt.rules",
+                  ".agents/skills/start/SKILL.md",
               ]),
               ("job-hunt-us-%s.zip" % suffix, "job-hunt-us", [
                   "AGENTS.md",
@@ -165,6 +170,8 @@ jobs:
                   "jobhunt.yaml",
                   "templates/resume-us.html",
                   ".claude/settings.json",
+                  ".codex/rules/jobhunt.rules",
+                  ".agents/skills/start/SKILL.md",
               ]),
           ]
 

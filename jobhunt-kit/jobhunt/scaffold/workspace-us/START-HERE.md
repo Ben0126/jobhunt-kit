@@ -157,4 +157,10 @@ To back up, copy the whole folder to a USB drive or cloud drive.
 
 ## If you use ChatGPT
 
-Codex app: you need an OpenAI account (probably, to be confirmed). Open this folder in Codex and type "start". Codex should read AGENTS.md by itself (probably, to be confirmed). The same rule applies: do not let it log in to any site or apply for you.
+Codex (OpenAI's coding AI, desktop app or command line): you need a ChatGPT or OpenAI account. Open this folder in Codex and type "start". Codex reads AGENTS.md by itself.
+
+- The first time, if Codex asks whether to trust this project folder, choose trust. That turns on the rules in `.codex/rules`, so Codex does not ask each time it runs the program's check or reads an old Word resume. If it still asks, just allow it.
+- Opening a resume file or saving a file still asks you: allow it.
+- The same rule applies: do not let it log in to any site or apply for you.
+- ChatGPT in the browser or the phone app cannot see your folder, so it does not work this way.
+- Claude Code blocks the AI from editing AGENTS.md, playbooks and the other instruction files. Codex has no such block, so please do not ask it to change them.

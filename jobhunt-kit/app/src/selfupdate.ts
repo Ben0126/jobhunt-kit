@@ -24,8 +24,9 @@ const ROOT_FILES: Record<Market, string[]> = {
   tw: ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "開始使用.md", "開場句.txt"],
   us: ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "START-HERE.md", "opening-prompt.txt"],
 };
-/** Folders that hold only instruction files the AI is not allowed to edit (the kit's .claude/settings.json denies it). */
-const KIT_DIRS = ["playbooks/", "templates/", ".claude/"];
+/** Folders that hold only instruction files the AI is not allowed to edit (the kit's .claude/settings.json denies it).
+ * .agents/ (Codex's copy of the skills) and .codex/ (its command rules) hold the same kind of thing. */
+const KIT_DIRS = ["playbooks/", "templates/", ".claude/", ".agents/", ".codex/"];
 /** Claude Code keeps the user's own permission answers here: never replaced. */
 const NEVER = new Set([".claude/settings.local.json"]);
 const SETTINGS = "jobhunt.yaml";
