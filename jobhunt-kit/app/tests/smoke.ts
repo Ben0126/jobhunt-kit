@@ -98,7 +98,9 @@ async function runUs() {
   check(ping.status === 200, "/api/ping with token");
   const home = await fetch(`${base}/`);
   const html = await home.text();
-  check(home.status === 200 && html.includes('lang="en"') && !CJK.test(html), "UI page is English, no CJK");
+  // the language switch says 中文 on the English page on purpose (the way to the Chinese page; tests/p6_ui.test.ts)
+  const page = html.replace(/<button[^>]*id="lang-switch"[^>]*>[^<]*<\/button>/, "");
+  check(home.status === 200 && html.includes('lang="en"') && !CJK.test(page) && page !== html, "UI page is English, no CJK besides the 中文 switch");
   const js = await (await fetch(`${base}/app.js`)).text();
   check(js.includes("x-jobhunt-token"), "UI script embedded in the binary");
   const board: any = await (await fetch(`${base}/api/applications`, { headers: H })).json();
