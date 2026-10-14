@@ -1,6 +1,6 @@
 # 求職小幫手（本機程式）
 
-放在求職資料夾裡的單一執行檔。點兩下會在 `127.0.0.1` 開一個小伺服器並打開瀏覽器；`jobhunt check [職缺代號 ...] [--104] [--all]` 是命令列的程式檢查，`jobhunt read <檔案>` 印出 Word 舊履歷的文字（都給 AI 照 AGENTS.md 呼叫）。規格見 `../docs/plan-v1-local-app.zh-TW.md` 第 10 節。
+放在求職資料夾裡的單一執行檔。點兩下會在 `127.0.0.1` 開一個小伺服器並打開瀏覽器；`jobhunt check [職缺代號 ...] [--104] [--all]` 是命令列的程式檢查，`jobhunt read <檔案>` 印出 Word 舊履歷的文字，`jobhunt mode us|tw|both` 裝上選的那套 AI 規則（都給 AI 照 AGENTS.md 呼叫）。規格見 `../docs/plan-v1-local-app.zh-TW.md` 第 10 節。
 
 ## 開發
 
@@ -34,7 +34,7 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 預設開著。介面載好之後才問 `GET /api/update`；程式最多每 24 小時對 `https://api.github.com/repos/Ben0126/jobhunt-kit/releases/latest` 發一次 GET（沒有任何使用者資料、沒有查詢參數，User-Agent 固定是 `jobhunt-kit/<版本>`，逾時 3 秒），任何失敗都不出聲、也不再重試到隔天。草稿和 prerelease 不算。版本號用數字一段一段比（v0.10 > v0.9）。
 - 關掉：`jobhunt.yaml` 寫 `update_check: false`（兩套資料夾的 jobhunt.yaml 都有註解說明）。關掉時完全不連線。
 - 上次問的時間和結果存在資料夾裡的 `.jobhunt/update.json`（和 `app.lock` 同一個地方，不在 `folder.ts` 的任何白名單裡，AI 和介面都碰不到）。它只在執行時才出現，發布 zip 裡沒有。
-- 橫幅給的下載連結是這個使用者自己的那一個：`assetName(市場, 系統, 晶片)` 回 `job-hunt[-us]-{windows,mac-apple,mac-intel}.zip`，`programName()` 回要換的程式檔。第二階段（一鍵更新）會用同樣兩個函式，設計草稿在 `../docs/plan-update.zh-TW.md`。
+- 橫幅給的下載連結是這個使用者自己的那一個：`assetName(種類, 系統, 晶片)` 回 `jobhunt-kit-{windows,mac-apple,mac-intel}.zip`（合一版，`jobhunt.yaml` 的 `kit_format: one-…`；舊的兩套是 `job-hunt[-us]-…zip`，v0.10 起不再發布），`programName()` 回要換的程式檔。第二階段（一鍵更新）會用同樣兩個函式，設計草稿在 `../docs/plan-update.zh-TW.md`。
 - 測試一律注入假的 `fetch` 和時鐘，不碰網路（`tests/update.test.ts`）。
 
 ## 一鍵更新（`src/selfupdate.ts`）
@@ -140,15 +140,18 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 
 ## 模式：只找美國／只找台灣／兩邊都找（`src/mode.ts`）
 
-合一版的第 1 段（設計見 `../docs/plan-dual-market.zh-TW.md`）。
+合一版（設計見 `../docs/plan-dual-market.zh-TW.md`）。發布的 zip 只有這一種；舊的台灣版、美國版兩套不再單獨發布。
 
 - 選擇存在 `me/mode.yaml`（`markets: [us, tw]`）。程式的開始畫面會寫，AI 問過本人後也可以寫。不放在 `me/profile.md`：兩邊的開場流程都用「profile.md 存不存在」判斷是不是第一次用。
 - 舊資料夾沒有 `me/mode.yaml` 時，照 `jobhunt.yaml` 的 `market`，不會出現開始畫面；`jobhunt.yaml` 有寫 `market` 時永遠照它。沒寫 `market` 的資料夾（合一版）由模式決定：選了美國就以美國為主（英文、Letter）。
 - 開始畫面（`#page-start`）：還沒選模式時只有這一頁，分頁列隱藏。預設英文，頁首的切換鈕隨時可以換中文或英文：只改 `jobhunt.yaml` 的 `language:` 那一行，其他行和註解都不動（`withLanguage`）。寫入名單因此多了 `me/mode.yaml` 和 `jobhunt.yaml`。
 - 分頁照模式出現：有台灣才有 104，有美國才有 Jobs（`/api/feed` 也照模式）。
 - `POST /api/mode`：`{markets?: ["us","tw"], language?: "en"|"zh-TW"}`。
-- 這一段還沒換 AI 規則：資料夾裡的 AGENTS.md 還是原本那一套（第 2 段才依模式裝規則）。
-- 測試：`tests/mode.test.ts`；`python tests/start_flow.py`（Playwright）。
+- **合一版的套件**（第 2 段）：`bun kitbuild.ts <輸出資料夾>` 把 `../jobhunt/scaffold/kit`（選之前的「設定用」AGENTS.md、兩種語言的使用說明、`.claude/settings.json`、`.codex/rules/`）和三套規則組在一起：`.kit/us`、`.kit/tw`（來源是 `workspace-us`、`workspace-general`）、`.kit/both`（美國那套加 `kit/both/` 的「Taiwan too」一節、`taiwan.md`、`fill-104`）。
+- **裝規則**：`jobhunt mode us|tw|both`（`src/kitinstall.ts`，開始畫面的 `POST /api/mode` 也走它）把 `.kit/<模式>/AGENTS.md` 複製成 `AGENTS.md`，整個換掉 `playbooks/`、`.claude/skills`、`.agents/skills`，`resume.yaml` 和該模式要的資料夾只在不存在時才建，最後寫 `me/mode.yaml`。只能加市場不能減（`narrow` 拒絕，結束碼 2）；碰到捷徑（symlink）或路徑型態不對就整個拒絕。第一次就選「只找台灣」時，`jobhunt.yaml` 的 `language:` 改成 `zh-TW`（開始畫面另外送語言，不受影響）。
+- **兩邊都找**：每份客製履歷 `targets/<id>.yaml` 寫 `market: us|tw`（沒寫就看 `base_variant`：`en…` 是美國），檢查照那個市場的規則跑（`ctx.withMarket`）。中文句子要對得上故事檔的 `## 中文確認時的句子（不能改）`；從「只找台灣」加成兩邊時，舊故事的 `## 確認時的句子（不能改）` 就算中文卡，「你說的原話」也算本人說過的數字。進度表多一欄 `market`（只在寫值時才加），看板可以只看一個國家。
+- 一鍵更新：合一版的 zip 是 `jobhunt-kit-<系統>.zip`；選過模式的資料夾，`AGENTS.md`、`playbooks/` 和兩個 skills 資料夾從新的 `.kit/<模式>` 重裝（`installedFrom`）。**還沒處理**：新版刪掉或改名的 playbook／skill，舊檔會留在資料夾裡。
+- 測試：`tests/mode.test.ts`、`kit_one.test.ts`、`both_check.test.ts`、`selfupdate_one.test.ts`、`bun tests/smoke_one.ts <程式>`；`python tests/start_flow.py`（Playwright）。
 
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 

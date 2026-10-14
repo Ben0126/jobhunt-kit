@@ -314,6 +314,7 @@ test("main.ts in a US English folder: an unknown command and the usage line are 
   expect(code).toBe(2);
   expect(out).toContain('Unknown command or option "bogus".');
   expect(out).toContain("Usage: double-click to open the app.");
+  expect(out).toContain('"jobhunt mode us"');
   expect(CJK.test(out)).toBe(false);
 });
 

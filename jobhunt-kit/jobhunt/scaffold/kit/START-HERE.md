@@ -4,7 +4,7 @@ This folder is your private job-search helper (jobhunt-kit). You talk to an AI i
 
 (中文說明請看「開始使用.md」。)
 
-You can chat in your own language. The AI answers in the language you write in, but everything that goes on your resume and profiles is in English. For each experience it shows you the English sentence and a word-for-word translation back into your language, so you can see exactly what you are claiming.
+You can chat in your own language. The AI answers in the language you write in. For US jobs, everything that goes on your resume and profiles is in English: for each experience it shows you the English sentence and a word-for-word translation back into your language, so you can see exactly what you are claiming. For Taiwan, the resume is in Chinese (see Step 3).
 
 You need:
 
