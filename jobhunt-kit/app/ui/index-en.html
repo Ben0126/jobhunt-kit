@@ -14,6 +14,7 @@
   <nav class="tabs" aria-label="Tabs">
     <a href="#progress" data-tab="progress">Progress</a>
     <a href="#resumes" data-tab="resumes">Resumes</a>
+    <a href="#jobs" data-tab="jobs" hidden>Jobs</a>
     <a href="#104" data-tab="104" hidden>104</a>
   </nav>
   <p class="folder" id="folder"></p>
@@ -75,6 +76,26 @@
       <ul id="resume-list" class="resume-list" aria-label="Resume versions"></ul>
       <div id="resume-detail" class="resume-detail"></div>
     </div>
+  </section>
+
+  <section id="page-jobs" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="jobs-refresh" class="primary">Update the list</button>
+      <span id="at-jobs" class="hint"></span>
+    </div>
+    <p class="hint lead">Open internships and new-grad jobs from SimplifyJobs and company career pages, sorted into CS, ECE and Business. The program reads them on this computer and sends nothing about you.</p>
+    <form id="jobs-filter" class="jobsfilter">
+      <span class="group" id="jobs-tracks"></span>
+      <span class="group" id="jobs-kinds"></span>
+      <input type="search" name="q" placeholder="Company, title or place" autocomplete="off">
+      <label><input type="checkbox" name="new"> New only</label>
+      <label title="The employer filed H-1B papers with the Labor Department in the last two years"><input type="checkbox" name="h1b"> Filed H-1B recently</label>
+      <label title="Postings that ask for US citizenship or a clearance are hidden unless you tick this"><input type="checkbox" name="citizen"> Show citizen-only</label>
+    </form>
+    <p id="jobs-count" class="hint"></p>
+    <p id="jobs-errors" class="hint warn-text" hidden></p>
+    <div id="jobs-wrap" class="jobs-wrap"></div>
+    <p class="hint">H-1B and green card numbers are what the employer filed with the US Department of Labor, shown as facts. They do not say whether this employer will sponsor you, and no record is not proof. Check with your school's international student office (DSO).</p>
   </section>
 
   <section id="page-104" class="page" hidden>

@@ -13,6 +13,7 @@
   <nav class="tabs" aria-label="分頁">
     <a href="#progress" data-tab="progress">進度</a>
     <a href="#resumes" data-tab="resumes">履歷</a>
+    <a href="#jobs" data-tab="jobs" hidden>職缺</a>
     <a href="#104" data-tab="104">104</a>
   </nav>
   <p class="folder" id="folder"></p>
@@ -74,6 +75,26 @@
       <ul id="resume-list" class="resume-list" aria-label="履歷版本"></ul>
       <div id="resume-detail" class="resume-detail"></div>
     </div>
+  </section>
+
+  <section id="page-jobs" class="page" hidden>
+    <div class="toolbar">
+      <button type="button" id="jobs-refresh" class="primary">更新職缺清單</button>
+      <span id="at-jobs" class="hint"></span>
+    </div>
+    <p class="hint lead">這一頁是美國版用的（台灣版不會出現）：從 SimplifyJobs 和公司官網讀開著的實習與新鮮人職缺。</p>
+    <form id="jobs-filter" class="jobsfilter">
+      <span class="group" id="jobs-tracks"></span>
+      <span class="group" id="jobs-kinds"></span>
+      <input type="search" name="q" placeholder="公司、職稱或地點" autocomplete="off">
+      <label><input type="checkbox" name="new"> 只看新的</label>
+      <label title="雇主最近兩年有送 H-1B 申請"><input type="checkbox" name="h1b"> 最近有送 H-1B</label>
+      <label title="要求美國公民或安全許可的職缺預設隱藏"><input type="checkbox" name="citizen"> 也顯示限美國公民</label>
+    </form>
+    <p id="jobs-count" class="hint"></p>
+    <p id="jobs-errors" class="hint warn-text" hidden></p>
+    <div id="jobs-wrap" class="jobs-wrap"></div>
+    <p class="hint">H-1B 和綠卡的數字是雇主向美國勞工部送過的紀錄，只列事實，不代表這家會幫你辦。有問題請問學校的國際學生辦公室。</p>
   </section>
 
   <section id="page-104" class="page" hidden>

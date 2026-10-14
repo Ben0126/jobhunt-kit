@@ -1,5 +1,7 @@
 // 本機小伺服器：只聽 127.0.0.1，每次啟動一組隨機通行碼（token），只認自己的 Host。
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import indexHtml from "../ui/index.html" with { type: "text" };
 import indexEnHtml from "../ui/index-en.html" with { type: "text" };
 import appJs from "../ui/app.js" with { type: "text" };
@@ -16,6 +18,8 @@ import * as R from "../../web/js/core/rules.js";
 import { templatesFor } from "./check.ts";
 import { renderResume, type TemplateKind } from "./render.ts";
 import { versionFor } from "./resumever.ts";
+import { closedLinks, feedConfig, queryFeed, readCache, refreshFeed, writeCache, type Http as FeedHttp } from "./feed.ts";
+import { lookup as h1bLookup, type Fetcher as H1BFetcher } from "./h1b.ts";
 import { resumeToDocx } from "./wordfile.ts";
 import { dataDir, dataUrl, deletePhoto, loadPhoto, photoFile, photoFromDataUrl, PhotoError, savePhoto } from "./photo.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
@@ -293,6 +297,9 @@ export function startServer(opts: {
   onUpdated?: () => void;
   /** Where the resume photo is kept (tests pass a temp folder). Default: the program's own data folder, outside the job folder. */
   dataDir?: string;
+  /** Tests: stand-ins for the network (the job list sources, the H-1B index download). */
+  feedHttp?: FeedHttp;
+  h1bGet?: H1BFetcher;
 }): Running {
   const folder = opts.folder;
   const updater = opts.update ?? createUpdateChecker({ folder });
@@ -309,6 +316,44 @@ export function startServer(opts: {
   const viewToken = newToken();
   let port = 0;
   const photoPath = () => photoFile(opts.dataDir ?? dataDir(), folder.root);
+  const h1bDir = () => join(opts.dataDir ?? dataDir(), "h1b");
+
+  // ---- the job list (US kit): refresh runs one at a time; closed postings are marked on tracked jobs
+  let feedRunning: Promise<unknown> | null = null;
+  const NEW_STALE_MS = 24 * 60 * 60 * 1000;
+  async function feedAnswer(url: URL) {
+    const cfg = feedConfig(await folder.readYaml("jobhunt.yaml").catch(() => null));
+    const cache = readCache(folder.feedPath);
+    const q = url.searchParams;
+    const list = (k: string) => (q.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    const today = new Date().toISOString().slice(0, 10);
+    const res = queryFeed(cache, { tracks: list("tracks"), kinds: list("kinds"), q: q.get("q") ?? "", newOnly: q.get("new") === "1", h1bRecent: q.get("h1b") === "1", showCitizen: q.get("citizen") === "1", limit: Number(q.get("limit")) || 200 }, cfg, today);
+    const errors = Object.entries(cache.sources).filter(([, s]) => s.error).map(([k, s]) => `${k.replace(/^board:/, "")}: ${s.error}`);
+    const at = Date.parse(cache.fetchedAt);
+    return {
+      ...res,
+      fetchedAt: cache.fetchedAt,
+      stale: !Number.isFinite(at) || Date.now() - at > NEW_STALE_MS,
+      refreshing: !!feedRunning,
+      autoRefresh: cfg.autoRefresh,
+      tracks: cfg.tracks,
+      kinds: cfg.kinds,
+      errors,
+      h1bVersion: cache.h1b.version,
+      h1bError: cache.h1b.error ?? "",
+    };
+  }
+  /** A tracker row whose posting was seen closed in the job list gets `_closed`. */
+  function markClosed<T extends { rows?: any[]; board?: any }>(b: T): T {
+    const set = closedLinks(readCache(folder.feedPath));
+    if (!set.size) return b;
+    const mark = (board: any) => {
+      for (const r of board?.rows ?? []) r._closed = !!r.link && set.has(String(r.link));
+    };
+    if (b.rows) mark(b);
+    if (b.board) mark(b.board);
+    return b;
+  }
 
   const allowedHosts = () => new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = () => new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
@@ -523,13 +568,36 @@ export function startServer(opts: {
           // editing them at the same moment).
           return withCookie(json(await runChecks(folder)));
         case "GET /api/applications":
-          return json(await apps.board());
+          return json(markClosed(await apps.board()));
         case "POST /api/applications/add":
-          return json(await apps.add(body));
+          return json(markClosed(await apps.add(body)));
         case "POST /api/applications/update":
-          return json(await apps.update(body));
+          return json(markClosed(await apps.update(body)));
         case "POST /api/applications/delete":
-          return json(await apps.remove(body));
+          return json(markClosed(await apps.remove(body)));
+        case "GET /api/feed":
+          if (M.market !== "us") return json({ error: T.badRequest }, 404);
+          return json(await feedAnswer(new URL(req.url)));
+        case "POST /api/feed/refresh": {
+          if (M.market !== "us") return json({ error: T.badRequest }, 404);
+          // set at once (before any await), so a second press while one is running joins it
+          feedRunning ??= (async () => {
+            const cfg = feedConfig(await folder.readYaml("jobhunt.yaml").catch(() => null));
+            const r = await refreshFeed(readCache(folder.feedPath), { config: cfg, http: opts.feedHttp, get: opts.h1bGet, h1bDir: h1bDir() });
+            writeCache(folder.feedPath, r.cache);
+          })().finally(() => {
+            feedRunning = null;
+          });
+          await feedRunning?.catch(() => null);
+          return json(await feedAnswer(new URL(req.url)));
+        }
+        case "GET /api/h1b": {
+          // what one employer filed, from the index when it is already on this computer (never downloads it here)
+          const name = String(new URL(req.url).searchParams.get("company") ?? "").slice(0, 200);
+          const idx = join(h1bDir(), "index.ndjson.gz");
+          if (!name || !existsSync(idx)) return json({ available: false, facts: null });
+          return json({ available: true, facts: h1bLookup(idx, [name])[name] ?? null });
+        }
         case "GET /api/resume-info":
           return json(await resumeInfo(folder));
         case "GET /api/versions":
@@ -555,7 +623,7 @@ export function startServer(opts: {
         case "POST /api/archive/preview":
           return json(await apps.archivePreview(body));
         case "POST /api/archive":
-          return json(await apps.archive(body));
+          return json(markClosed(await apps.archive(body)));
         default:
           return json({ error: T.badRequest }, 404);
       }

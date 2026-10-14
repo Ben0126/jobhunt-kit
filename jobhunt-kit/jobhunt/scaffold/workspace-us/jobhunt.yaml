@@ -23,3 +23,18 @@ resume:
       - fast-paced
       - passion for
       - excellent communication skills
+
+# The Jobs tab: open internships and new-grad jobs, read from SimplifyJobs and company career pages (public addresses; nothing
+# about you is sent anywhere). The AI never changes this file; you can. Delete this whole block to get the defaults.
+feed:
+  auto_refresh: true            # read the sources when you open the Jobs tab and the list is over a day old
+  tracks: [cs, ece, business]   # which jobs to show: cs, ece, business, other
+  kinds: [internship, newgrad]
+  terms: ["Summer 2027"]        # internship terms to keep
+  # keywords:                   # extra words, matched in the job title, that put a job in a track
+  #   cs: [quant dev]
+  # companies:                  # add a company career page (ats: greenhouse, lever, ashby, smartrecruiters or workable)
+  #   - {name: Example Co, ats: greenhouse, board: exampleco}
+  # skip_companies: [Stripe]    # leave one of the built-in companies out
+  h1b: true                     # show what each employer filed with the Labor Department (downloads one ~8 MB public file)
+  hide_citizenship_required: true

@@ -210,6 +210,11 @@ export class Folder {
     return join(this.root, ".jobhunt", "app.lock");
   }
 
+  /** The job list the program read (src/feed.ts): bookkeeping too, in no rule above. */
+  get feedPath(): string {
+    return join(this.root, ".jobhunt", "feed.json");
+  }
+
   /** When the program last asked GitHub about a newer version (src/update.ts): bookkeeping too, in no rule above. */
   get updatePath(): string {
     return join(this.root, ".jobhunt", "update.json");

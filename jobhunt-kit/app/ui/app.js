@@ -118,6 +118,34 @@ const TEXT = {
     pdfChrome: (paper) => ["Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「" + paper + "」→ 按「更多設定」，", "取消勾選「頁首和頁尾」", "→ 儲存。"],
     pdfSafari: (paper) => "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。",
     savePdf: "存成 PDF",
+    jobsRefresh: "更新職缺清單",
+    jobsUpdating: "更新中（約 10 秒）……",
+    jobsNever: "還沒讀過職缺清單。",
+    jobsUpdated: (when) => `更新於 ${when}。`,
+    jobsCount: (shown, total, closed, citizen) =>
+      `共 ${total} 筆${shown < total ? `，先列前 ${shown} 筆` : ""}。${closed ? `上次更新後有 ${closed} 筆已下架。` : ""}${citizen ? `有 ${citizen} 筆要求美國公民，已隱藏。` : ""}`,
+    jobsEmpty: "沒有符合的職缺。改一下篩選，或按「更新職缺清單」。",
+    jobsFailed: (list) => `這次有幾個來源讀不到（其他正常）：${list}`,
+    jobsTrack: { cs: "資訊", ece: "電機電子", business: "商管", other: "其他" },
+    jobsKind: { internship: "實習", newgrad: "新鮮人正職" },
+    jobsKindOne: { internship: "實習", newgrad: "新鮮人正職" },
+    jobsCol: { track: "類別", company: "公司", title: "職缺", place: "地點", posted: "刊登", posting: "職缺寫的", h1b: "雇主 H-1B 紀錄", add: "追蹤" },
+    jobsNew: "新",
+    jobsSponsorYes: "寫可以贊助",
+    jobsSponsorNo: "寫不贊助",
+    jobsSponsorTip: "職缺本身寫的，常常不準或沒寫。雇主實際送過什麼，看 H-1B 紀錄。",
+    jobsH1b: (f) =>
+      f.filed || f.greenCard
+        ? `送過 H-1B ${f.filed.toLocaleString("en-US")} 件，最近 ${f.lastYear || "?"} 年${f.greenCard ? `，綠卡 ${f.greenCard.toLocaleString("en-US")} 件` : ""}${f.clientSitePct >= 20 ? `，${f.clientSitePct}% 派到客戶端` : ""}`
+        : "查到沒有申請紀錄",
+    jobsH1bNone: "查不到這家",
+    jobsH1bTip: "資料來自美國勞工部公開的申請紀錄（msampath/h1b-sponsor-data）。有紀錄不代表會幫你辦，沒有紀錄也不代表不會。",
+    jobsAdd: "＋追蹤",
+    jobsAdded: "已追蹤",
+    jobsAddedNote: (company, role) => `已追蹤 ${company}：${role}`,
+    jobsSourceSimplify: "Simplify",
+    jobsSourceSite: "公司官網",
+    postingClosed: "這個職缺已經下架（從職缺清單看到的）。",
     versionGeneral: "通用版",
     generalMeta: "用你已確認的經歷排出來",
     generalTitle: "通用版（不針對特定職缺）",
@@ -282,6 +310,34 @@ const TEXT = {
     ],
     pdfSafari: (paper) => `Mac Safari: bottom-left "PDF" menu, "Save as PDF". Click "Show Details", set Paper Size to "${paper === "Letter" ? "US Letter" : paper}" and turn off "Print headers and footers".`,
     savePdf: "Save as PDF",
+    jobsRefresh: "Update the list",
+    jobsUpdating: "Updating (about 10 seconds)...",
+    jobsNever: "The list has not been read yet.",
+    jobsUpdated: (when) => `Updated ${when}.`,
+    jobsCount: (shown, total, closed, citizen) =>
+      `${total} jobs${shown < total ? `, showing the first ${shown}` : ""}.${closed ? ` ${closed} closed since the last updates.` : ""}${citizen ? ` ${citizen} that need US citizenship are hidden.` : ""}`,
+    jobsEmpty: "No jobs match. Change the filters, or press Update the list.",
+    jobsFailed: (list) => `Some sources could not be read this time (the rest are fine): ${list}`,
+    jobsTrack: { cs: "CS", ece: "ECE", business: "Business", other: "Other" },
+    jobsKind: { internship: "Internships", newgrad: "New grad" },
+    jobsKindOne: { internship: "Internship", newgrad: "New grad" },
+    jobsCol: { track: "Track", company: "Company", title: "Job", place: "Place", posted: "Posted", posting: "Posting says", h1b: "Employer H-1B record", add: "Track" },
+    jobsNew: "New",
+    jobsSponsorYes: "Offers sponsorship",
+    jobsSponsorNo: "No sponsorship",
+    jobsSponsorTip: "What the posting says, which is often wrong or missing. See the H-1B record for what the employer actually filed.",
+    jobsH1b: (f) =>
+      f.filed || f.greenCard
+        ? `${f.filed.toLocaleString("en-US")} H-1B filed, last ${f.lastYear || "?"}${f.greenCard ? `, ${f.greenCard.toLocaleString("en-US")} green card` : ""}${f.clientSitePct >= 20 ? `, ${f.clientSitePct}% at client sites` : ""}`
+        : "No filings found",
+    jobsH1bNone: "No record found",
+    jobsH1bTip: "From the US Department of Labor's public filings (msampath/h1b-sponsor-data). A record is not a promise, and no record is not proof.",
+    jobsAdd: "+ Track",
+    jobsAdded: "Tracking",
+    jobsAddedNote: (company, role) => `Now tracking ${company}: ${role}`,
+    jobsSourceSimplify: "Simplify",
+    jobsSourceSite: "Company site",
+    postingClosed: "This posting has closed (seen on the job list).",
     versionGeneral: "General version",
     generalMeta: "Drawn from your confirmed experience",
     generalTitle: "General version (not for a specific job)",
@@ -360,7 +416,7 @@ const LANG = document.documentElement.lang === "en" ? "en" : "zh-TW";
 const T = TEXT[LANG];
 /** What /api/info says about the folder; until it answers, the language's usual country. */
 let INFO = LANG === "en" ? { market: "us", paper: "letter" } : { market: "tw", paper: "a4" };
-const tabKnown = () => (INFO.market === "us" ? ["progress", "resumes", "nokey"] : ["progress", "resumes", "104", "nokey"]);
+const tabKnown = () => (INFO.market === "us" ? ["progress", "jobs", "resumes", "nokey"] : ["progress", "resumes", "104", "nokey"]);
 
 const ACTIVE = ["todo", "applied", "oa", "interview", "offer"];
 const CLOSED = ["rejected", "ghosted", "withdrawn"];
@@ -546,6 +602,7 @@ function showTab() {
   if (known === "progress") loadBoard();
   if (known === "resumes") loadResumes();
   if (known === "104") load104();
+  if (known === "jobs") loadJobs();
 }
 
 // ---- 進度看板
@@ -618,6 +675,7 @@ function card(row, flagged) {
   const who = [row.source, row.contact].filter(Boolean).join(" · ");
   if (who) meta.push(h("div", { class: "meta" }, who));
   if (row.notes) meta.push(h("div", { class: "meta" }, row.notes));
+  if (row._closed && row.status === "todo") meta.push(h("div", { class: "meta warn-text" }, T.postingClosed));
   const link = safeLink(row.link);
   return h(
     "article",
@@ -1393,6 +1451,142 @@ function resumeDetail(item) {
   return [head, result, waitingNote(item), pdfArea(item, pages), wordArea(item), archiveArea(item), photo, rewritesView(item), bar, note, preview];
 }
 
+// ---- 職缺清單（美國版）
+let jobsState = null;
+const jobsPick = { tracks: null, kinds: null };
+
+function jobsQuery() {
+  const f = $("jobs-filter").elements;
+  const p = new URLSearchParams();
+  const tracks = [...document.querySelectorAll("#jobs-tracks input:checked")].map((i) => i.value);
+  const kinds = [...document.querySelectorAll("#jobs-kinds input:checked")].map((i) => i.value);
+  if (tracks.length) p.set("tracks", tracks.join(","));
+  if (kinds.length) p.set("kinds", kinds.join(","));
+  if (f.q.value.trim()) p.set("q", f.q.value.trim());
+  if (f.new.checked) p.set("new", "1");
+  if (f.h1b.checked) p.set("h1b", "1");
+  if (f.citizen.checked) p.set("citizen", "1");
+  return p.toString();
+}
+
+function jobsChecks(box, labels, chosen) {
+  // built once, from what the settings file asks for; after that the person's own ticks stay
+  if (box.dataset.built) return;
+  box.dataset.built = "1";
+  box.replaceChildren(
+    ...Object.entries(labels)
+      .filter(([k]) => chosen.includes(k))
+      .map(([k, text]) => h("label", {}, h("input", { type: "checkbox", value: k, checked: true, onchange: () => loadJobs(true) }), " " + text)),
+  );
+}
+
+async function loadJobs(filterOnly) {
+  try {
+    if (!board) board = await api("GET", "/api/applications").catch(() => null);
+    let r = await api("GET", "/api/feed" + (jobsState ? "?" + jobsQuery() : ""));
+    jobsChecks($("jobs-tracks"), T.jobsTrack, r.tracks);
+    jobsChecks($("jobs-kinds"), T.jobsKind, r.kinds);
+    if (!jobsState) r = await api("GET", "/api/feed?" + jobsQuery()); // again, now with the ticks the page built
+    // the first time the page opens with an old list, read the sources again (once a day at most; switch off in the settings file)
+    if (!filterOnly && !r.refreshing && r.autoRefresh && r.stale) return refreshJobs();
+    jobsState = r;
+    renderJobs(r);
+  } catch (e) {
+    fail(e);
+  }
+}
+
+async function refreshJobs() {
+  const btn = $("jobs-refresh");
+  btn.disabled = true;
+  $("at-jobs").textContent = T.jobsUpdating;
+  try {
+    jobsState = await api("POST", "/api/feed/refresh", {});
+    jobsState = await api("GET", "/api/feed?" + jobsQuery());
+    renderJobs(jobsState);
+  } catch (e) {
+    $("at-jobs").textContent = "";
+    fail(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+$("jobs-refresh").addEventListener("click", () => {
+  hideNotice();
+  refreshJobs();
+});
+$("jobs-filter").addEventListener("submit", (e) => e.preventDefault());
+let jobsTimer = 0;
+$("jobs-filter").addEventListener("input", () => {
+  clearTimeout(jobsTimer);
+  jobsTimer = setTimeout(() => jobsState && loadJobs(true), 250);
+});
+
+function jobsWhen(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function renderJobs(r) {
+  $("at-jobs").textContent = r.fetchedAt ? T.jobsUpdated(jobsWhen(r.fetchedAt)) : T.jobsNever;
+  $("jobs-count").textContent = r.total ? T.jobsCount(r.rows.length, r.total, r.closed, r.citizenHidden) : "";
+  const errs = [...r.errors, ...(r.h1bError ? ["H-1B: " + r.h1bError] : [])];
+  $("jobs-errors").hidden = !errs.length;
+  $("jobs-errors").textContent = errs.length ? T.jobsFailed(errs.join("; ")) : "";
+  const tracked = new Set((board ? board.rows : []).map((x) => x.link).filter(Boolean));
+  const c = T.jobsCol;
+  if (!r.rows.length) {
+    $("jobs-wrap").replaceChildren(h("p", { class: "blank" }, T.jobsEmpty));
+    return;
+  }
+  $("jobs-wrap").replaceChildren(
+    h(
+      "table",
+      { class: "jobs" },
+      h("thead", {}, h("tr", {}, ...[c.track, c.company, c.title, c.place, c.posted, c.posting, c.h1b, ""].map((x) => h("th", {}, x)))),
+      h(
+        "tbody",
+        {},
+        ...r.rows.map((j) => {
+          const link = safeLink(j.link);
+          const done = tracked.has(j.link);
+          const add = h("button", { type: "button", class: "small", disabled: done }, done ? T.jobsAdded : T.jobsAdd);
+          add.onclick = async () => {
+            add.disabled = true;
+            try {
+              if (!board) board = await api("GET", "/api/applications");
+              const b = await api("POST", "/api/applications/add", {
+                company: j.company, role: j.title, link: j.link, version: board.version,
+                source: j.source.startsWith("board:") ? T.jobsSourceSite : T.jobsSourceSimplify,
+              });
+              board = b;
+              add.textContent = T.jobsAdded;
+              notice(T.jobsAddedNote(j.company, j.title));
+            } catch (e) {
+              add.disabled = false;
+              if (e.data && e.data.board) board = e.data.board;
+              fail(e);
+            }
+          };
+          const f = j.h1b;
+          return h(
+            "tr",
+            {},
+            h("td", {}, h("span", { class: "tkpill " + j.track }, T.jobsTrack[j.track] || j.track), " ", h("span", { class: "hint" }, T.jobsKindOne[j.kind] || "")),
+            h("td", { class: "co" }, h("b", {}, j.company)),
+            h("td", { class: "ttl" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, j.title) : j.title),
+            h("td", { class: "loc", title: j.locations }, j.locations),
+            h("td", { class: "when" }, j.posted || "", j.isNew ? h("span", { class: "badge new" }, T.jobsNew) : null),
+            h("td", { class: "sponsor", title: T.jobsSponsorTip }, j.sponsor === "yes" ? T.jobsSponsorYes : j.sponsor === "no" ? T.jobsSponsorNo : ""),
+            h("td", { class: "h1b", title: T.jobsH1bTip }, f ? T.jobsH1b(f) : T.jobsH1bNone),
+            h("td", {}, add),
+          );
+        }),
+      ),
+    ),
+  );
+}
+
 // ---- 104
 function load104() {
   return runCheck($("recheck-104"), render104, $("at-104"));
@@ -1492,6 +1686,7 @@ document.addEventListener("visibilitychange", () => {
   if (tab === "progress") loadBoard();
   else if (tab === "resumes") loadResumes();
   else if (tab === "104") load104();
+  else if (tab === "jobs" && jobsState) loadJobs(true);
 });
 
 window.addEventListener("hashchange", showTab);
@@ -1499,6 +1694,7 @@ window.addEventListener("hashchange", showTab);
 folderInfo().then((info) => {
   if (info && (info.market === "us" || info.market === "tw")) INFO = { market: info.market, paper: info.paper === "letter" ? "letter" : "a4" };
   for (const a of document.querySelectorAll('.tabs a[data-tab="104"]')) a.hidden = INFO.market === "us";
+  for (const a of document.querySelectorAll('.tabs a[data-tab="jobs"]')) a.hidden = INFO.market !== "us";
   showTab();
   if (token) checkUpdate();
 });

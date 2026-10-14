@@ -70,7 +70,7 @@ Open the Code tab, pick the same folder, start a new conversation and type "cont
 
 ## Open the app (optional)
 
-If the folder contains the "jobhunt" program, you can open a small page in your browser. Its "Progress" tab is your application tracker. Its "Resumes" tab checks your resume and saves it as a PDF. You can use the kit without it.
+If the folder contains the "jobhunt" program, you can open a small page in your browser. Its "Progress" tab is your application tracker. Its "Resumes" tab checks your resume and saves it as a PDF or Word file. Its "Jobs" tab lists open internships and new-grad jobs (CS, ECE and Business) with what each employer has filed for H-1B, and warns you when a job you track has closed; the program reads those public sources on your computer and sends nothing about you. You can use the kit without it.
 
 - Windows: double-click "jobhunt" in the folder (the one whose type is "Application"). The first time, if Windows says it protected your PC, click "More info" and then "Run anyway".
 - Mac: double-click the program whose name starts with "jobhunt-mac" (there is only one). If it says it is not supported on this computer, you downloaded the wrong version. Open the Apple menu, then "About This Mac": if "Chip" says Apple, you need the Apple version; if "Processor" says Intel, you need the Intel version.

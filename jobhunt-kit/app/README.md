@@ -16,7 +16,7 @@ jobhunt --version                                            # 印出包進去�
 bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包好的執行檔跑冒煙測試
 ```
 
-不需要 `bun install`，沒有外部套件。網頁檔案（`ui/`）用 `import ... with { type: "text" }` 包進執行檔。
+不需要 `bun install`，沒有外部套件。美國版的職缺清單會連到公開的 GitHub 和各公司的徵才網址（見下面「職缺清單」一節）；其他功能除了新版本提醒都不連網。網頁檔案（`ui/`）用 `import ... with { type: "text" }` 包進執行檔。
 
 ## 安全與資料規則
 
@@ -123,6 +123,20 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - 通用版沒有登記動作（沒有「投出」），所以不編號；只有投給某個職缺的那份有。
 
 測試：`tests/resumever.test.ts`。
+
+## 職缺清單、H-1B 紀錄、下架提醒（美國版，`src/feed.ts`、`src/h1b.ts`）
+
+「Jobs」分頁（只有 `market: us` 的資料夾有；台灣版的 `/api/feed` 回 404）：開著的實習和新鮮人職缺，分 CS／ECE／Business 三類，每一筆旁邊是雇主的 H-1B 申請紀錄。移植自 D:\job-hunt 的 `fetch_jobs.py`、`boards.py`、`h1b.py`、`liveness.py`，但分類**不是**那邊的機器人／ML／SWE。
+
+- **來源**：SimplifyJobs 的 Summer 實習清單和 New-Grad 清單（`listings.json`，約各 13 MB，用 ETag 沒變就不重抓），加公司官網的公開徵才 API：Greenhouse、Lever、Ashby、SmartRecruiters、Workable。預設放 39 家常見公司（`DEFAULT_BOARDS`；國防業者要美國公民，刻意不放）。**不用 zapply**：它的授權是 CC BY-NC-SA。
+- **什麼時候讀**：按「Update the list」，或打開分頁時清單超過一天（`jobhunt.yaml` 的 `feed.auto_refresh: false` 關掉）。全部在這台電腦上讀，每個請求都是對公開網址的 GET，沒有任何使用者資料；讀到的存在 `.jobhunt/feed.json`（和 `update.json` 一樣是程式自己的紀錄，不在任何讀寫名單）。
+- **分類**（`trackOf`）：先看使用者在設定檔加的關鍵字，再看標題（硬體字 → ece；商業字且沒有軟體字 → business；軟體字 → cs），最後才看來源分類。看不出來的是 other。`jobhunt.yaml` 的 `feed:` 可以改類別、實習學期（預設 Summer 2027）、加關鍵字、加／跳過公司；不認得的值用預設，公司代號只收英數字、點、橫線、底線。
+- **篩選**：只收美國（任一地點像美國就算；公司官網只寫「In-Office」這類沒有國家的，當美國，除非明確在國外）、要的學期、不是只給博士的；要求美國公民或安全許可的預設隱藏（可勾選顯示）。同公司同職稱在兩個地方只列一筆（其他編號記在 `also`）。
+- **新職缺**：第一次讀某個來源只建立基準，那天的都不算新；之後新出現的標「New」三天。
+- **下架**：Simplify 的 `active` 欄位；公司官網某個職缺不見了就是下架（記日期，保留 60 天）。某一家整頁突然少一大半（超過一半）當成壞掉的回應，不當成大量下架，沿用上次的；某一家讀不到只有那一家失敗，上次的職缺照留。進度表裡「待投遞」且連結對得上已下架職缺的那一筆，卡片上寫「這個職缺已經下架」。
+- **H-1B**：資料是 msampath/h1b-sponsor-data（MIT；整理自勞工部公開資料，每季更新）的 8 MB 索引，第一次更新時下載到程式自己的資料夾（`%APPDATA%\jobhunt-kit\h1b\`，不在求職資料夾），用 sha256 驗證，之後在本機查：公司名稱不會傳出去。名稱正規化和 D:\job-hunt 一樣（去掉 Inc／LLC／Services…；沒有同名時找開頭一樣、申請最多的那家）。**只顯示事實**：H-1B 件數、最近一年、綠卡（PERM＋PWD）件數、派到客戶端的比例；**不評等級**（沒有強／中／弱），頁面上寫明「沒有紀錄不是證明」並請問學校的國際學生辦公室。索引下載失敗只在清單上記原因，不影響職缺。`GET /api/h1b?company=` 只用已經下載的索引，不會在這裡下載。
+- **加進追蹤**：「+ Track」呼叫 `/api/applications/add`，來源填 Simplify 或 Company site，連結就是職缺網址（之後靠它對下架）。
+- 測試：`tests/feed.test.ts`、`tests/h1b.test.ts`、`tests/feed_api.test.ts`（假的 http 和假的索引，不連網）；`python tests/jobs_flow.py`（Playwright，用 `JOBHUNT_FEED_SERVER=http://127.0.0.1:<埠>` 指到本機假伺服器，只接受 127.0.0.1，見 `src/testserver.ts`）。
 
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
