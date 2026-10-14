@@ -56,6 +56,23 @@ def main() -> int:
             assert "markets: [us, tw]" in mode, mode
             print("ok   both: board with 104 and Jobs tabs; me/mode.yaml markets: [us, tw]")
 
+            # looking in both: each job says its country, and the board can show one country
+            page.locator("#add-open").click()
+            f = page.locator("#add-form")
+            f.locator("input[name=company]").fill("台北公司")
+            f.locator("input[name=role]").fill("行政助理")
+            f.locator("details.more summary").click()
+            f.locator("select[name=market]").select_option("tw")
+            f.locator("button[type=submit]").click()
+            card = page.locator("#board .card", has_text="台北公司")
+            expect(card).to_contain_text("台灣")
+            page.locator("#market-filter").select_option("us")
+            expect(page.locator("#board .card", has_text="台北公司")).to_have_count(0)
+            page.locator("#market-filter").select_option("tw")
+            expect(page.locator("#board .card", has_text="台北公司")).to_have_count(1)
+            page.locator("#market-filter").select_option("")
+            print("ok   both: a job's country on its card, and the board filter")
+
             page.locator("#lang-switch").click()
             expect(page.locator('.tabs a[data-tab="progress"]')).to_have_text("Progress")
             expect(page.locator('.tabs a[data-tab="jobs"]')).to_be_visible()

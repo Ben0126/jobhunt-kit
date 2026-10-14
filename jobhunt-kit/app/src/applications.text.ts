@@ -47,6 +47,7 @@ const ZH = {
   emptyCompany: "公司名稱不能空白。",
   emptyRole: "職稱不能空白。",
   badStatus: "狀態不對，請從選單選。",
+  badRequestField: "有一欄的內容不對，請從選單選。",
   badDate: "日期格式不對，請用日期選單選。",
   keepForSnapshot: "這一筆已經存過投遞當時的履歷，不能刪。不想再看到它，可以把狀態改成「放棄」。",
   noRowForResume: "進度表裡找不到這個職缺，所以不知道要記在哪一筆。先到「進度」頁按「＋ 新增一筆」，或跟 AI 說「我投了這家」，再回來存。",
@@ -78,6 +79,7 @@ const EN: typeof ZH = {
   emptyCompany: "The company name cannot be empty.",
   emptyRole: "The job title cannot be empty.",
   badStatus: "That status is not valid. Please pick one from the menu.",
+  badRequestField: "One of the fields is not valid. Please pick from the menu.",
   badDate: "That date is not valid. Please pick it from the date picker.",
   keepForSnapshot: 'This entry has a saved copy of the resume you sent, so it cannot be deleted. If you do not want to see it, change its status to "Withdrawn".',
   noRowForResume:

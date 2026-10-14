@@ -13,12 +13,14 @@ export const KIT_HEADER = [
   "job_id", "company", "role", "track", "tier", "resume_version", "status", "applied_date", "last_update",
   "next_action", "next_action_date", "contact", "source", "notes", "resume_file", "resume_commit", "resume_rev", "link",
 ];
+/** Columns the program may add after the kit's: `market` (us / tw), which country a job is in, in a folder that looks in both. */
+const COLUMNS = [...KIT_HEADER, "market"];
 
 /** Status names for the Taiwan (zh-TW) board; English ones are in applications.text.ts. */
 export const STATUSES: StatusDef[] = STATUSES_ZH;
 const STATUS_CODES = new Set(STATUSES.map((s) => s.code));
 
-export const EDITABLE = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link"] as const;
+export const EDITABLE = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link", "market"] as const;
 type Editable = (typeof EDITABLE)[number];
 const DATE_FIELDS = new Set(["applied_date", "next_action_date"]);
 
@@ -173,7 +175,7 @@ export class Applications {
     const submitted = this.submittedIds();
     const objs = doc.rows.map((r) => rowToObject(doc.header, r));
     const rows = objs.map((o, i) => {
-      const full: Row = { ...Object.fromEntries(KIT_HEADER.map((k) => [k, ""])), ...o, _index: i, _deletable: false } as Row;
+      const full: Row = { ...Object.fromEntries(COLUMNS.map((k) => [k, ""])), ...o, _index: i, _deletable: false } as Row;
       full._deletable = !this.hasSnapshot((o.job_id || "").trim(), submitted, o.resume_file || "");
       return full;
     });
@@ -230,7 +232,7 @@ export class Applications {
   async add(input: {
     company?: unknown; role?: unknown; link?: unknown; version?: unknown;
     status?: unknown; applied_date?: unknown; next_action?: unknown; next_action_date?: unknown;
-    contact?: unknown; source?: unknown; notes?: unknown;
+    contact?: unknown; source?: unknown; notes?: unknown; market?: unknown;
   }): Promise<Board> {
     return this.serial(async () => {
       const T = await this.tx();
@@ -240,6 +242,8 @@ export class Applications {
       if (!company) throw new UserError(T.needCompany);
       if (!role) throw new UserError(T.needRole);
       if (link && !/^https?:\/\/\S+$/i.test(link)) throw new UserError(T.badLink);
+      const market = cleanLine(input.market).toLowerCase();
+      if (market && market !== "us" && market !== "tw") throw new UserError(T.badRequestField);
       const status = cleanLine(input.status) || "todo";
       if (!STATUS_CODES.has(status)) throw new UserError(T.badStatus);
       let appliedDate = cleanLine(input.applied_date);
@@ -267,6 +271,7 @@ export class Applications {
         contact: cleanLine(input.contact),
         source: cleanLine(input.source),
         notes: cleanLine(input.notes),
+        market,
         link,
         resume_version: this.folder.exists(`targets/${jobId}.yaml`) ? `targets/${jobId}` : "",
       };
@@ -303,6 +308,8 @@ export class Applications {
         if (k === "status" && !STATUS_CODES.has(v)) throw new UserError(T.badStatus);
         if (DATE_FIELDS.has(k) && v && !isValidDate(v)) throw new UserError(T.badDate);
         if (k === "link" && v && !/^https?:\/\/\S+$/i.test(v)) throw new UserError(T.badLink);
+        if (k === "market" && v && v !== "us" && v !== "tw") throw new UserError(T.badRequestField);
+        if (k === "market" && !doc.header.includes("market") && !v) continue;
         if (k === "link" && !doc.header.includes("link") && !v) continue; // nothing to store, don't add the column
         next[k as Editable] = v;
       }
@@ -317,7 +324,7 @@ export class Applications {
       // the "no news for N days" reminder.
       if (statusChanged) writes.last_update = today;
       // Columns the file lacks are appended in the kit's order.
-      for (const k of KIT_HEADER) if (k in writes) set(k, writes[k]);
+      for (const k of COLUMNS) if (k in writes) set(k, writes[k]);
       await this.save(doc, T);
       return this.board();
     });

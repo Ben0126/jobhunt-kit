@@ -38,6 +38,7 @@
   <section id="page-progress" class="page" hidden>
     <div class="toolbar">
       <button type="button" id="add-open" class="primary">+ Add a job</button>
+      <label class="market-filter" hidden>Show<select id="market-filter"><option value="">All</option><option value="us">United States</option><option value="tw">Taiwan</option></select></label>
     </div>
 
     <form id="add-form" class="add-form" hidden>
@@ -54,6 +55,7 @@
           <label>Next step date<input name="next_action_date" type="date"></label>
           <label>Contact<input name="contact" autocomplete="off" placeholder="For example: Ms. Rivera, recruiter (no phone or email)"></label>
           <label class="wide3">Notes<input name="notes" autocomplete="off"></label>
+          <label class="market-pick" hidden>Country<select name="market"><option value="">Not decided</option><option value="us">United States</option><option value="tw">Taiwan</option></select></label>
         </div>
         <datalist id="source-list"><option value="Handshake"><option value="LinkedIn"><option value="Company site"><option value="Career fair"><option value="Referral"><option value="Indeed"></datalist>
       </details>
@@ -139,6 +141,7 @@
       <label>Contact<input name="contact" autocomplete="off" placeholder="For example: Ms. Rivera, recruiter (no phone or email)"></label>
       <label>Where you found it<input name="source" list="source-list" autocomplete="off"></label>
       <label class="wide">Notes<input name="notes" autocomplete="off"></label>
+      <label class="market-pick" hidden>Country<select name="market"><option value="">Not decided</option><option value="us">United States</option><option value="tw">Taiwan</option></select></label>
       <label class="wide">Job link<input name="link" type="text" inputmode="url" autocomplete="off" placeholder="Paste the link to the job posting"></label>
     </div>
     <p class="hint">When you change the status to "Applied" and leave the date applied empty, today's date is filled in.</p>

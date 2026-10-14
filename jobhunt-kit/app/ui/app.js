@@ -118,6 +118,7 @@ const TEXT = {
     pdfChrome: (paper) => ["Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「" + paper + "」→ 按「更多設定」，", "取消勾選「頁首和頁尾」", "→ 儲存。"],
     pdfSafari: (paper) => "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。",
     savePdf: "存成 PDF",
+    marketName: { us: "美國", tw: "台灣" },
     jobsRefresh: "更新職缺清單",
     jobsUpdating: "更新中（約 10 秒）……",
     jobsNever: "還沒讀過職缺清單。",
@@ -309,6 +310,7 @@ const TEXT = {
     ],
     pdfSafari: (paper) => `Mac Safari: bottom-left "PDF" menu, "Save as PDF". Click "Show Details", set Paper Size to "${paper === "Letter" ? "US Letter" : paper}" and turn off "Print headers and footers".`,
     savePdf: "Save as PDF",
+    marketName: { us: "US", tw: "Taiwan" },
     jobsRefresh: "Update the list",
     jobsUpdating: "Updating (about 10 seconds)...",
     jobsNever: "The list has not been read yet.",
@@ -697,7 +699,7 @@ function card(row, flagged) {
       ),
     );
   if (row.applied_date) meta.push(h("div", { class: "meta" }, T.appliedOn(shortDate(row.applied_date))));
-  const who = [row.source, row.contact].filter(Boolean).join(" · ");
+  const who = [lookingInBoth() && row.market ? T.marketName[row.market] : "", row.source, row.contact].filter(Boolean).join(" · ");
   if (who) meta.push(h("div", { class: "meta" }, who));
   if (row.notes) meta.push(h("div", { class: "meta" }, row.notes));
   if (row._closed && row.status === "todo") meta.push(h("div", { class: "meta warn-text" }, T.postingClosed));
@@ -731,9 +733,18 @@ function column(code, rows, flagged) {
   );
 }
 
+/** A folder that looks for work in the US and in Taiwan: each job says which country, and the board can show one. */
+const lookingInBoth = () => INFO.markets.includes("us") && INFO.markets.includes("tw");
+let marketShown = "";
+$("market-filter").addEventListener("change", (e) => {
+  marketShown = e.target.value;
+  if (board) render(board);
+});
+
 function render(b) {
   board = b;
-  const rows = b.rows;
+  for (const el of document.querySelectorAll(".market-pick, .market-filter")) el.hidden = !lookingInBoth();
+  const rows = lookingInBoth() && marketShown ? b.rows.filter((r) => (r.market || "") === marketShown) : b.rows;
   const flagged = new Set(b.followUps.map((f) => f.index));
 
   // 一筆都沒有：說明這一頁是做什麼的
@@ -815,6 +826,7 @@ $("add-form").addEventListener("submit", async (e) => {
       company: f.company.value, role: f.role.value, link: fixLink(f.link.value), version: board && board.version,
       source: f.source.value, status: f.status.value, applied_date: f.applied_date.value,
       next_action: f.next_action.value, next_action_date: f.next_action_date.value, contact: f.contact.value, notes: f.notes.value,
+      ...(lookingInBoth() ? { market: f.market.value } : {}),
     });
     notice(T.added(f.company.value.trim(), f.role.value.trim(), board ? label(f.status.value || "todo") : T.todoName));
     e.target.reset();
@@ -828,7 +840,7 @@ $("add-form").addEventListener("submit", async (e) => {
 
 // ---- 修改視窗
 let editing = null;
-const FIELDS = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link"];
+const FIELDS = ["company", "role", "status", "applied_date", "next_action", "next_action_date", "contact", "source", "notes", "link", "market"];
 
 function openEdit(row) {
   editing = row;
@@ -1608,6 +1620,7 @@ function renderJobs(r) {
               const b = await api("POST", "/api/applications/add", {
                 company: j.company, role: j.title, link: j.link, version: board.version,
                 source: j.source.startsWith("board:") ? T.jobsSourceSite : T.jobsSourceSimplify,
+                ...(lookingInBoth() ? { market: "us" } : {}),
               });
               board = b;
               add.textContent = T.jobsAdded;

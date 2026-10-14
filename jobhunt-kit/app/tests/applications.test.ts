@@ -88,6 +88,21 @@ test("新增：可以一次帶入來源、聯絡人、狀態、日期、下一�
   expect(b.rows.at(-1)!.source).toBe("");
 });
 
+test("哪個國家（兩邊都找的資料夾）：新增和修改都可以記 us／tw，亂寫的擋掉；沒用到就不加這一欄", async () => {
+  const { apps, dir } = setup("2026-10-08");
+  const header = () => readCsv(dir).split("\n")[0].replace(/\r$/, "");
+  let b = await apps.add({ company: "甲公司", role: "助理", version: (await apps.board()).version });
+  expect(header()).not.toContain("market"); // nothing to store: the file stays as it was
+  await expect(apps.add({ company: "乙公司", role: "助理", market: "jp", version: b.version })).rejects.toThrow("有一欄的內容不對");
+  b = await apps.add({ company: "乙公司", role: "助理", market: "TW", version: b.version });
+  expect(header().endsWith(",market")).toBe(true);
+  expect(rowsOf(dir).at(-1)!.market).toBe("tw");
+  const i = b.rows.findIndex((r) => r.company === "甲公司");
+  b = await apps.update({ index: i, job_id: b.rows[i].job_id, version: b.version, changes: { market: "us" } });
+  expect(rowsOf(dir).find((r) => r.company === "甲公司")!.market).toBe("us");
+  await expect(apps.update({ index: i, job_id: b.rows[i].job_id, version: b.version, changes: { market: "mars" } })).rejects.toThrow("有一欄的內容不對");
+});
+
 test("新增中文職缺：代號用 日期-流水號，看過所有資料夾和進度表，不撞號", async () => {
   const { apps, dir } = setup("2026-10-08");
   // 261008-01（jobs/targets/checks/resumes）和 261008-02（進度表）都用過了

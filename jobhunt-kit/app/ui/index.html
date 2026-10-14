@@ -37,6 +37,7 @@
   <section id="page-progress" class="page" hidden>
     <div class="toolbar">
       <button type="button" id="add-open" class="primary">＋ 新增一筆</button>
+      <label class="market-filter" hidden>看<select id="market-filter"><option value="">全部</option><option value="us">美國</option><option value="tw">台灣</option></select></label>
     </div>
 
     <form id="add-form" class="add-form" hidden>
@@ -53,6 +54,7 @@
           <label>下一步日期<input name="next_action_date" type="date"></label>
           <label>聯絡人<input name="contact" autocomplete="off" placeholder="例如：人資王小姐（不要寫電話）"></label>
           <label class="wide3">備註<input name="notes" autocomplete="off"></label>
+          <label class="market-pick" hidden>哪個國家<select name="market"><option value="">還沒決定</option><option value="us">美國</option><option value="tw">台灣</option></select></label>
         </div>
         <datalist id="source-list"><option value="104"><option value="1111"><option value="Cake"><option value="公司官網"><option value="學校徵才"><option value="朋友介紹"></datalist>
       </details>
@@ -138,6 +140,7 @@
       <label>聯絡人<input name="contact" autocomplete="off" placeholder="例如：人資王小姐（不要寫電話）"></label>
       <label>在哪裡看到的<input name="source" list="source-list" autocomplete="off"></label>
       <label class="wide">備註<input name="notes" autocomplete="off"></label>
+      <label class="market-pick" hidden>哪個國家<select name="market"><option value="">還沒決定</option><option value="us">美國</option><option value="tw">台灣</option></select></label>
       <label class="wide">職缺網址<input name="link" type="text" inputmode="url" autocomplete="off" placeholder="貼上 104 職缺的網址"></label>
     </div>
     <p class="hint">改成「已投遞」時，沒填投遞日期會自動填今天。</p>
