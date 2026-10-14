@@ -13,7 +13,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync
 import { join } from "node:path";
 import { cliTextFor } from "./cli.text.ts";
 import { readMarketSync } from "./market.ts";
-import { cleanMarkets, modeText, readModeSync, type MarketId } from "./mode.ts";
+import { cleanMarkets, modeText, readModeSync, withLanguage, type MarketId } from "./mode.ts";
 
 export type ModeName = "us" | "tw" | "both";
 
@@ -140,6 +140,13 @@ export function runMode(argv: string[], dir: string | null, print: (s: string) =
   }
   try {
     const r = installMode(dir, marketsOf(word as ModeName));
+    // Taiwan only, chosen for the first time through the AI: the program's pages and check results in Chinese, as Taiwan's
+    // rules are (the start screen sends the page language itself; the US and both are English first).
+    if (r.mode === "tw" && !now.set && existsSync(join(dir, "jobhunt.yaml"))) {
+      writeAtomic(dir, "jobhunt.yaml", withLanguage(readFileSync(join(dir, "jobhunt.yaml"), "utf-8"), "zh-TW"));
+      print(cliTextFor("zh-TW").modeInstalled(cliTextFor("zh-TW").modeNames.tw));
+      return 0;
+    }
     print(T.modeInstalled(T.modeNames[r.mode]));
     return 0;
   } catch (e) {

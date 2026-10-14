@@ -131,6 +131,26 @@ test("jobhunt mode：沒給選擇就說目前是什麼；裝好結束碼 0；亂
   expect(out.pop()).toContain("can be added, not removed");
 });
 
+test("jobhunt mode tw（第一次選，AI 幫忙裝）：程式畫面和檢查結果改成中文；us、both 和之後再選都不動語言", () => {
+  const lang = (d: string) => /^language: (\S+)/m.exec(read(d, "jobhunt.yaml"))?.[1];
+  const out: string[] = [];
+  const tw = kit();
+  expect(runMode(["mode", "tw"], tw, (s) => out.push(s))).toBe(0);
+  expect(lang(tw)).toBe("zh-TW");
+  expect(out.pop()).toContain("台灣");
+  expect(read(tw, "jobhunt.yaml")).toContain("language: zh-TW           # language of the program's pages");
+  for (const m of ["us", "both"]) {
+    const d = kit();
+    expect(runMode(["mode", m], d, () => {})).toBe(0);
+    expect(lang(d)).toBe("en");
+  }
+  // already chosen (us), then adding Taiwan: the language they have stays
+  const later = kit();
+  runMode(["mode", "us"], later, () => {});
+  expect(runMode(["mode", "both"], later, () => {})).toBe(0);
+  expect(lang(later)).toBe("en");
+});
+
 test("開始畫面（POST /api/mode）在合一版裡也會裝規則；拿掉市場回 409", async () => {
   const d = kit();
   const s = startServer({ folder: new Folder(d) });
