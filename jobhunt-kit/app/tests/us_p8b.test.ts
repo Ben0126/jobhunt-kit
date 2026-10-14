@@ -406,6 +406,16 @@ test("M6c: what the old resume said and the user denied is not 'said'; with self
   await rdOk(usFolder({ s001: { ...S001, said: "我一個班次大概30個客人，我不知道確切的數字，還有我教過2個新同事" } }));
 });
 
+test("M6d: the old resume text ends where words 'added in conversation' start (import-resume.md 5 marks them that way)", async () => {
+  const old = "Old resume text (pasted, word for word):\n\n> Helped customers at the register\n\n";
+  const said = "I trained 2 new student hires, around 30 customers a shift.";
+  for (const words of [`${old}Added in conversation (word for word):\n\n> ${said}`, `${old}> ${said} (added in conversation)`, `${old}(helper said)\n\n> ${said}`]) {
+    const dir = usFolder();
+    write(dir, "me/stories/S-001.md", withWords(S001, words));
+    await rdOk(dir);
+  }
+});
+
 test("M6: Arabic-Indic digits are read as digits", async () => {
   expect(has(await rd(usFolder({ s001: hires("١٢") })), "contain the number 12")).toBe(true);
 });

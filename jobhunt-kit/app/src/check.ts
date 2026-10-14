@@ -273,7 +273,8 @@ function saidOf(text: string, selfAttest = false): string | null {
     const t = raw.trim();
     if (!selfAttest) {
       if (/^Old resume text\s*\(/i.test(t)) old = true;
-      else if (/^Their words\b/i.test(t)) old = false;
+      // what they added in conversation (import-resume.md marks it "(added in conversation)", a helper's words "(helper said)")
+      else if (/^Their words\b|\badded in conversation\b|\(helper said\)/i.test(t)) old = false;
       if (old) continue;
     }
     if (numbers && NUMBER_DROPPED.test(t)) continue;
