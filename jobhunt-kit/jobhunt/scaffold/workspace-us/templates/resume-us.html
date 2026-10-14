@@ -140,11 +140,20 @@
     </ul>
   </header>
 
-  <!-- Section order: Summary, Education, Experience, Projects & Activities, Skills & Certifications -->
+  <!-- Section order: Summary, Skills & Certifications, Education, Experience, Projects & Activities (skills first so a reader sees at once what you can do) -->
 
   <section class="block">
     <h2>Summary</h2>
     <p class="summary">{{2–3 sentences}}</p>
+  </section>
+
+  <section class="block">
+    <h2>Skills &amp; Certifications</h2>
+    <ul class="skills">
+      <!-- repeat: one li per category, for example Languages: / Certifications: / Software: -->
+      <li><span class="label">{{Label}}:</span> {{item, item}}</li>
+      <!-- end repeat -->
+    </ul>
   </section>
 
   <section class="block">
@@ -193,15 +202,6 @@
       </ul>
     </div>
     <!-- end repeat -->
-  </section>
-
-  <section class="block">
-    <h2>Skills &amp; Certifications</h2>
-    <ul class="skills">
-      <!-- repeat: one li per category, for example Languages: / Certifications: / Software: -->
-      <li><span class="label">{{Label}}:</span> {{item, item}}</li>
-      <!-- end repeat -->
-    </ul>
   </section>
 
 </main>
