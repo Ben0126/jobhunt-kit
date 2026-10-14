@@ -4,6 +4,7 @@ import { ensureColumn, parseCsv, rowToObject, serializeCsv, type CsvDoc } from "
 import { Folder } from "./folder.ts";
 import { appsText, STATUSES_ZH, type StatusDef } from "./applications.text.ts";
 import { readMarket, type Language } from "./market.ts";
+import { register, versionFor, type VersionInfo } from "./resumever.ts";
 
 export const CSV_PATH = "data/applications.csv";
 
@@ -362,7 +363,9 @@ export class Applications {
     const o = rowToObject(doc.header, doc.rows[index]);
     const to = `submitted/${this.today()}_${id}.html`;
     const existing = await this.folder.readArchived(to);
-    return { id, from, to, doc, version, index, row: o, existing };
+    const html = await this.folder.readText(from);
+    const rev: VersionInfo | null = html ? await versionFor(this.folder, id, html) : null;
+    return { id, from, to, doc, version, index, row: o, existing, rev };
   }
 
   /** What the button will do; writes nothing. */
@@ -372,6 +375,8 @@ export class Applications {
       id: p.id, from: p.from, to: p.to, index: p.index, job_id: p.row.job_id || "",
       company: p.row.company || "", role: p.row.role || "", status: p.row.status || "",
       already: (p.row.resume_file || "").trim(), exists: !!p.existing, version: p.version,
+      // the number this copy will be registered under (null: the resume has no variant with a major number)
+      rev: p.rev ? { version: p.rev.version, isNew: p.rev.isNew } : null,
     };
   }
 
@@ -405,6 +410,18 @@ export class Applications {
         const ai = ensureColumn(p.doc, "applied_date");
         if (!(p.doc.rows[p.index][ai] || "").trim()) p.doc.rows[p.index][ai] = today;
         p.doc.rows[p.index][ensureColumn(p.doc, "last_update")] = today;
+      }
+      // The version number: a new one is registered (data/resume_versions.csv), an existing one is reused. A failure here
+      // must not undo the copy, so it only means no number is written on the row.
+      if (p.rev) {
+        try {
+          if (p.rev.isNew)
+            await register(this.folder, {
+              resume: `targets/${p.id}`, version: p.rev.version, text_sha: p.rev.fingerprint.text, layout_sha: p.rev.fingerprint.layout,
+              registered: this.today(), commit: p.to,
+            });
+          p.doc.rows[p.index][ensureColumn(p.doc, "resume_rev")] = p.rev.version;
+        } catch {}
       }
       try {
         await this.save(p.doc, T);

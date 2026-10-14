@@ -15,6 +15,7 @@ import { stripComments } from "./htmltext.ts";
 import * as R from "../../web/js/core/rules.js";
 import { templatesFor } from "./check.ts";
 import { renderResume, type TemplateKind } from "./render.ts";
+import { versionFor } from "./resumever.ts";
 import { resumeToDocx } from "./wordfile.ts";
 import { dataDir, dataUrl, deletePhoto, loadPhoto, photoFile, photoFromDataUrl, PhotoError, savePhoto } from "./photo.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
@@ -189,7 +190,7 @@ function frontMatter(text: string): any {
 export type Rewrite = { bullet: string; before: string | null; after: string; parts: DiffPart[] };
 export type ResumeInfo = {
   drafts: { id: string; title: string }[];
-  items: Record<string, { confirm: number; rewrites: Rewrite[]; saved: string[] }>;
+  items: Record<string, { confirm: number; rewrites: Rewrite[]; saved: string[]; rev: { version: string; isNew: boolean } | null }>;
 };
 
 /** For the resume page: experiences still waiting to be confirmed (me/stories, status: draft), questions not yet
@@ -238,10 +239,18 @@ export async function resumeInfo(folder: Folder): Promise<ResumeInfo> {
         const before = confirmed.get(bullet) ?? null;
         rewrites.push({ bullet, before, after, parts: before == null ? [{ t: "add", s: after }] : diff(before, after) });
       }
+    // The version number this resume file has (registered when it was sent) or would get (shown as a draft).
+    let rev: { version: string; isNew: boolean } | null = null;
+    try {
+      const html = await folder.readText(`resumes/${id}.html`);
+      const v = html ? await versionFor(folder, id, html) : null;
+      if (v) rev = { version: v.version, isNew: v.isNew };
+    } catch {}
     items[id] = {
       confirm: Array.isArray(t.confirm) ? t.confirm.length : 0,
       rewrites,
       saved: saved.filter((n) => n.endsWith(`_${id}.html`) && /^\d{4}-\d{2}-\d{2}_/.test(n)),
+      rev,
     };
   }
   return { drafts, items };
@@ -405,7 +414,9 @@ export function startServer(opts: {
     const name = await pdfName(id, T.pdfWord);
     if (url.searchParams.get("format") === "docx") {
       const file = name || id;
-      const bytes = resumeToDocx(html, { photo: loadPhoto(photoPath()), paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
+      // a resume file's own number goes into the Word file's properties (Subject: not visible on the page)
+      const rv = id !== GENERAL && !wanted && submitted == null ? await versionFor(folder, id, html).catch(() => null) : null;
+      const bytes = resumeToDocx(html, { version: rv ? rv.version + (rv.isNew ? "-draft" : "") : "", photo: loadPhoto(photoPath()), paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
       return new Response(bytes, {
         headers: {
           ...SECURITY_HEADERS,

@@ -105,7 +105,7 @@ def main() -> int:
 
             def resume_page():
                 page.goto(url.split("?")[0] + "#resumes")
-                pick = page.locator("#resume-list .pick").first
+                pick = page.locator("#resume-list .pick", has_text="宏遠精密")  # the list now also has the general version at the top
                 expect(pick).to_contain_text("未確認 3 段")
                 expect(pick).to_contain_text("待回答 2 題")
                 detail = page.locator("#resume-detail")

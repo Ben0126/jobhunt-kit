@@ -9,7 +9,7 @@ import { decodeEntities, stripComments } from "./htmltext.ts";
 import type { Photo } from "./photo.ts";
 
 /** `photo`: put it in the header (right of the name) when the resume file has a photo block. */
-export type WordOptions = { paper: "a4" | "letter"; title: string; lang: "zh-TW" | "en"; photo?: Photo | null };
+export type WordOptions = { paper: "a4" | "letter"; title: string; lang: "zh-TW" | "en"; photo?: Photo | null; version?: string };
 
 // ---------------------------------------------------------------- a tiny HTML tree
 
@@ -433,7 +433,7 @@ export function resumeToDocx(html: string, opts: WordOptions): Uint8Array {
     `<w:sectPr><w:pgSz w:w="${w}" w:h="${h}"/><w:pgMar w:top="${margin}" w:right="${margin}" w:bottom="${margin}" w:left="${margin}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   const core =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ` +
-    `xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xe(opts.title)}</dc:title></cp:coreProperties>`;
+    `xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xe(opts.title)}</dc:title>${opts.version ? `<dc:subject>${xe(opts.version)}</dc:subject>` : ""}</cp:coreProperties>`;
   return zip([
     ["[Content_Types].xml", CONTENT_TYPES],
     ["_rels/.rels", ROOT_RELS],

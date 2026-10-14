@@ -95,6 +95,9 @@ const TEXT = {
     rewritesSummary: (n) => `AI 改寫的句子（${n} 句）`,
     rewritesHint: "綠底的字是加上去的，畫刪除線的字是拿掉的。這裡只能看；要改請跟 AI 說。",
     // save a copy
+    versionPill: (v, isNew) => (isNew ? `版本 ${v}（草稿）` : `版本 ${v}`),
+    versionPillTip: (isNew) => (isNew ? "這份履歷的字或排版和之前登記過的不一樣；投出去時按「我投了這份，存一份」才會正式登記這個版本號。" : "這份履歷已經登記過的版本號：字和排版跟投出去的那一份一樣。"),
+    willRegister: (v, isNew) => (isNew ? `會登記新的版本號 ${v}，記在進度表那一筆。` : `版本號是 ${v}（和之前投出去的某一份一模一樣），記在進度表那一筆。`),
     saveCopyBtn: "我投了這份，存一份",
     saveCopyHint: "投出去之後按，留一份寄出的版本，之後才查得到寄給這家的是哪一版。",
     alreadySaved: (list) => `已經存過：${list}`,
@@ -253,6 +256,9 @@ const TEXT = {
     tagThisResume: "This resume",
     rewritesSummary: (n) => `Sentences the AI reworded (${n})`,
     rewritesHint: "Green text was added. Struck-through text was removed. This is view only; to change anything, tell the AI.",
+    versionPill: (v, isNew) => (isNew ? `Version ${v} (draft)` : `Version ${v}`),
+    versionPillTip: (isNew) => (isNew ? "The words or the layout of this resume differ from what was registered before. The version number is registered when you press \"I applied, save a copy\"." : "A version number that was registered: the words and the layout are the same as the copy that was sent."),
+    willRegister: (v, isNew) => (isNew ? `This will register a new version number, ${v}, and note it on the tracker entry.` : `The version number is ${v} (identical to a copy sent before), noted on the tracker entry.`),
     saveCopyBtn: "I applied, save a copy",
     saveCopyHint: "Press this after you apply. It keeps a copy of the version you sent, so you can look up later which version went to this company.",
     alreadySaved: (list) => `Already saved: ${list}`,
@@ -1040,6 +1046,7 @@ async function previewArchive(item, btn, box) {
       if (item.resumeProblems.length)
         parts.push(h("p", { class: "warn-text" }, T.unfixedWarn(item.resumeProblems.length)));
       if (p.status === "todo") parts.push(h("p", { class: "hint" }, T.willApply));
+      if (p.rev) parts.push(h("p", { class: "hint" }, T.willRegister(p.rev.version, p.rev.isNew)));
     }
     const close = () => {
       box.hidden = true;
@@ -1347,7 +1354,13 @@ function showPages(frame, pages) {
 function resumeDetail(item) {
   if (item.general) return generalDetail(item);
   const n = item.resumeProblems.length;
-  const head = h("h2", {}, `${item.company} ${item.role}`.trim() || T.noCompanyShort);
+  const rev = (resumeExtra.items[item.id] || {}).rev;
+  const head = h(
+    "h2",
+    {},
+    `${item.company} ${item.role}`.trim() || T.noCompanyShort,
+    rev ? h("span", { class: "vpill" + (rev.isNew ? " draft" : ""), title: T.versionPillTip(rev.isNew) }, T.versionPill(rev.version, rev.isNew)) : null,
+  );
   const hiddenFromPreview = item.resumeProblems.some((p) => !p.where.startsWith(T.whereResume));
   const result = n
     ? h(

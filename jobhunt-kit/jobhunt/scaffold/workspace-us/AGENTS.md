@@ -106,7 +106,7 @@ Playbook: `work-authorization.md`. Short version:
 
 - You write: `me/` (stories become confirmed only as above), `me/work-auth.md`, `resume.yaml` (confirmed only), `jobs/<id>/` (`jd.md` verbatim), `profiles/linkedin.md` and `profiles/handshake.md`, `targets/<id>.yaml` (`id` equals the file name), `checks/` (except the "## Program check" section), `resumes/` (only per `make-resume-file.md`).
 - `data/applications.csv`: you, only the row they mentioned and `last_update`; leave the header row alone. `status` is the English code (`log-application.md`). Turn a relative date ("next Wednesday") into the real date and have them confirm it.
-- `inbox/`: they put files there, you only read. `submitted/`: do not touch.
+- `inbox/`: they put files there, you only read. `submitted/` and `data/resume_versions.csv` (the resume version numbers): do not touch, only the program writes them.
 
 ## Job ids
 

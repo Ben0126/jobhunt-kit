@@ -111,6 +111,19 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 
 測試：`tests/versions.test.ts`；`python tests/versions_flow.py`（Playwright）。
 
+## 履歷版本號（`src/resumever.ts`）
+
+每份投出去的履歷有版本號 `V<大>.<中>.<小>`，規則和 D:\job-hunt 一樣（`jobhunt/resume/versioning.py`）：
+
+- **大號** = `resume.yaml` 裡那個版本（`variants`）的 `major`；客製履歷跟著它的 `base_variant`。中文、英文各自可以有好幾個版本，各有自己的 `major`；沒寫 `major` 就是它排第幾個。
+- **中號** +1：頁面上看得到的字（含連結）變了。**小號** +1：字一樣、只有範本或排版變了。內容和以前某一版一模一樣就沿用那個號碼。
+- **登記**：只有「我投了這份，存一份」才登記（寫進 `data/resume_versions.csv`，同時記在進度表的 `resume_rev`）。登記前履歷頁顯示「版本 V1.2.0（草稿）」（算出來「會是」幾號），看再多次都不會用掉號碼。這個登記表只有程式寫（寫入名單加了這一個檔案，AGENTS.md 也寫明 AI 不碰）。
+- 指紋：字 = 看得到的字加連結的雜湊；排版 = 範本 `<style>` 加標記骨架（標籤加 class）的雜湊。註解、`<script>`、黃色列印提醒不算。
+- Word 檔：履歷檔自己的版本號寫在檔案屬性的「主旨」（沒登記過的加 `-draft`），頁面上看不到；通用版、換範本、存檔的版本沒有版本號。
+- 通用版沒有登記動作（沒有「投出」），所以不編號；只有投給某個職缺的那份有。
+
+測試：`tests/resumever.test.ts`。
+
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
 - 「已投遞」10 天以上沒更新：提醒問進度；28 天以上：「可能石沉大海」，建議改成「無回應」。不需要填聯絡人。

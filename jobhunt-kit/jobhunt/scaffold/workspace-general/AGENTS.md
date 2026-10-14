@@ -92,7 +92,7 @@
 
 - 你寫：`me/`（story 要他指名確認才改 confirmed）、`resume.yaml`（只放已確認的）、`jobs/<id>/`（`jd.md` 逐字原文）、`104/`、`targets/<id>.yaml`（`id` 等於檔名）、`checks/`（「## 程式檢查」那一節除外）、`resumes/`（只照 `make-resume-file.md`）。
 - `data/applications.csv`：你，只改他提到的那一列和 `last_update`，標題列不動。`status` 存英文代碼、對他說中文（照 `log-application.md`）。推算的日期（「下週三」）先講出實際日期給他確認。
-- `inbox/`：他放，你只讀。`submitted/`：不碰。
+- `inbox/`：他放，你只讀。`submitted/` 和 `data/resume_versions.csv`（履歷版本號登記表）：不碰，只有程式會寫。
 
 ## 職缺代號
 

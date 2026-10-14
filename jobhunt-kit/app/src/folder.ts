@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 /** Files the app may read (paths relative to the folder, forward slashes). */
 const READ_RULES: RegExp[] = [
   /^data\/applications\.csv$/,
+  /^data\/resume_versions\.csv$/, // the numbers given to resumes that were sent (resumever.ts)
   /^resume\.yaml$/,
   /^me\/profile\.md$/,
   /^targets\/[^/]+$/,
@@ -21,6 +22,7 @@ const READ_RULES: RegExp[] = [
 /** Files the app may write. Everything else in the folder belongs to the user or the AI. */
 const WRITE_RULES: RegExp[] = [
   /^data\/applications\.csv$/,
+  /^data\/resume_versions\.csv$/, // only "I applied, save a copy" adds a row (applications.ts archive)
   /^checks\/[^/]+\.md$/, // only the「## 程式檢查」section is replaced (src/checksfile.ts)
 ];
 
