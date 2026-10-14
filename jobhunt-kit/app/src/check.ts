@@ -217,11 +217,14 @@ export function parseConfirmed(text: string): Confirmed | null {
   return out.sentences.length ? out : bad();
 }
 /** "## 中文確認時的句子（不能改）": the Chinese layer of a story in a folder that looks for work in the US and Taiwan
- * (playbooks/taiwan.md). Optional 職稱／機構／日期 lines, then numbered sentences, up to the first blank line after them. */
+ * (playbooks/taiwan.md). Optional 職稱／機構／日期 lines, then numbered sentences, up to the first blank line after them.
+ * A story written while the folder looked only in Taiwan (its sections are 「你說的原話」 …) was confirmed in Chinese: its
+ * 「## 確認時的句子（不能改）」 is that story's Chinese card. */
 export type ConfirmedZh = { title: string | null; org: string | null; dates: string | null; sentences: string[]; bad?: true };
 export function parseConfirmedZh(text: string): ConfirmedZh | null {
   const lines = text.split(/\r?\n/);
-  const h = lines.findIndex((l) => /^##\s+中文確認時的句子/.test(l.trim()));
+  let h = lines.findIndex((l) => /^##\s+中文確認時的句子/.test(l.trim()));
+  if (h < 0 && lines.some((l) => /^##\s+你說的原話/.test(l.trim()))) h = lines.findIndex((l) => /^##\s+確認時的句子/.test(l.trim()));
   if (h < 0) return null;
   const out: ConfirmedZh = { title: null, org: null, dates: null, sentences: [] };
   const KEYS: Record<string, "title" | "org" | "dates"> = { 職稱: "title", 機構: "org", 日期: "dates" };
@@ -249,11 +252,12 @@ export function parseConfirmedZh(text: string): ConfirmedZh | null {
 /** A clause where the user says they do not know / did not write the number (so a number in it is not one they said). */
 const NOT_SAID = /不知道|不清楚|不確定|不記得|don'?t know|do not know|not sure|don'?t remember|do not remember|made (?:that|it) up|friend wrote|朋友幫我寫|wasn'?t true|不對/i;
 /** A Numbers line the AI wrote to record that a number was dropped, not said. */
-const NUMBER_DROPPED = /dropped|not written|removed|discarded|don'?t know|do not know|unknown/i;
+const NUMBER_DROPPED = /dropped|not written|removed|discarded|don'?t know|do not know|unknown|拿掉|不寫|刪掉/i;
 const CLAUSE_END = /[。！？；;，、]|[.!?,](?=\s|$)|(?<=[㐀-鿿])\s+(?=[㐀-鿿])/u;
 /** The text under "## Your words" and "## Numbers ..." of a story file (what the user said, and the numbers recorded from it); null when the file has neither.
  * Not counted as said: the "Old resume text (...)" paragraph (the old resume's words; the user only vouched for them when confirmed_via is
- * self-attest), a Numbers line that says the number was dropped, and a clause where the user says they do not know the number. */
+ * self-attest), a Numbers line that says the number was dropped, and a clause where the user says they do not know the number.
+ * A story from a folder's Taiwan-only days has the same sections in Chinese: 「你說的原話」, 「數字」, 「舊履歷原文」, 「（對話補充）」. */
 function saidOf(text: string, selfAttest = false): string | null {
   const out: string[] = [];
   let on = false;
@@ -263,8 +267,8 @@ function saidOf(text: string, selfAttest = false): string | null {
   for (const raw of text.split(/\r?\n/)) {
     const h = /^##\s+(.*)$/.exec(raw.trim());
     if (h) {
-      on = /^(your words|numbers)\b/i.test(h[1].trim());
-      numbers = /^numbers\b/i.test(h[1].trim());
+      on = /^(your words|numbers)\b|^(你說的原話|數字)/i.test(h[1].trim());
+      numbers = /^numbers\b|^數字/i.test(h[1].trim());
       old = false;
       found ||= on;
       continue;
@@ -272,9 +276,9 @@ function saidOf(text: string, selfAttest = false): string | null {
     if (!on) continue;
     const t = raw.trim();
     if (!selfAttest) {
-      if (/^Old resume text\s*\(/i.test(t)) old = true;
+      if (/^Old resume text\s*\(|^舊履歷原文/i.test(t)) old = true;
       // what they added in conversation (import-resume.md marks it "(added in conversation)", a helper's words "(helper said)")
-      else if (/^Their words\b|\badded in conversation\b|\(helper said\)/i.test(t)) old = false;
+      else if (/^Their words\b|\badded in conversation\b|\(helper said\)|對話補充|幫忙的人說/i.test(t)) old = false;
       if (old) continue;
     }
     if (numbers && NUMBER_DROPPED.test(t)) continue;

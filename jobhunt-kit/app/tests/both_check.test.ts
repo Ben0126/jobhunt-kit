@@ -59,9 +59,52 @@ test("兩邊都找：台灣的職缺照台灣規則（A4 中文範本、中文�
 
 test("兩邊都找：中文句子沒有中文卡 → 報錯（中文只能來自確認過的中文卡）", async () => {
   const dir = await bothFolder(false);
+  // an English-first story (the both layout) with no Chinese section; a story from the Taiwan-only days is a Chinese card already (next test)
+  edit(dir, "me/stories/S-001.md", "## 你說的原話", "## Your words");
   const r = await runChecks(new Folder(dir));
   expect((r.resumeData ?? []).map((p) => p.message)).toEqual(["S-001 還沒有中文卡：resume.yaml 的中文句子要先出中文卡、本人打「確認中文 S-001」才能用"]);
   expect(r.ok).toBe(false);
+});
+
+test("只找台灣改成兩邊都找：以前確認的故事（「確認時的句子」）就是中文卡，不用重新確認；以前的回答照樣算本人說過的數字", async () => {
+  const dir = await bothFolder(false);
+  let r = await runChecks(new Folder(dir));
+  expect(r.resumeData ?? []).toEqual([]);
+  expect(r.ok).toBe(true);
+  // the English card added afterwards: its numbers are checked against the Chinese words of the same story
+  const EN = `
+## Sentence at confirmation (do not change)
+
+Title: Cashier
+Org: Costco
+Dates: Jul 2023 – May 2025
+1. Handled small customer issues and passed bigger ones to the manager.
+2. Named employee of the month in Mar 2024.
+`;
+  writeFileSync(join(dir, "me/stories/S-001.md"), readFileSync(join(dir, "me/stories/S-001.md"), "utf-8") + EN);
+  const EN_ITEM = `  - id: s001_en
+    org: Costco
+    role: Cashier
+    dates: "Jul 2023 – May 2025"
+    variants: [en]
+    bullets:
+      - id: s001_en_a
+        text: Handled small customer issues and passed bigger ones to the manager.
+        source: S-001
+      - id: s001_en_b
+        text: Named employee of the month in Mar 2024.
+        source: S-001
+# 例：
+#  - id: pxmart`;
+  edit(dir, "resume.yaml", `# 例：
+#  - id: pxmart`, EN_ITEM);
+  r = await runChecks(new Folder(dir));
+  expect(r.resumeData ?? []).toEqual([]);
+  // 500 is only in the old resume text and in a Numbers line that says it was dropped: not said
+  edit(dir, "me/stories/S-001.md", "2. Named employee of the month in Mar 2024.", "2. Served 500 customers a day.");
+  edit(dir, "resume.yaml", "text: Named employee of the month in Mar 2024.", "text: Served 500 customers a day.");
+  const msgs = ((await runChecks(new Folder(dir))).resumeData ?? []).map((p) => p.message);
+  expect(msgs.some((m) => m.includes("contain the number 500") || m.includes("數字 500"))).toBe(true);
 });
 
 test("兩邊都找：中文句子被改寫、職稱或單位和中文卡不同 → 報錯", async () => {
