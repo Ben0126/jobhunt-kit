@@ -115,6 +115,8 @@ const TEXT = {
     pdfChrome: (paper) => ["Chrome、Edge：目的地選「另存為 PDF」→ 紙張選「" + paper + "」→ 按「更多設定」，", "取消勾選「頁首和頁尾」", "→ 儲存。"],
     pdfSafari: (paper) => "Mac 的 Safari：按左下角「PDF」→「儲存為 PDF」。",
     savePdf: "存成 PDF",
+    saveWord: "下載 Word 檔（可以自己修改）",
+    wordHint: "Word 檔裡的字是現在這份履歷的字。下載後你在 Word 裡改的，程式不會再檢查，請自己確認。",
     noResumeFileYet: "還沒有履歷檔，所以還不能存。",
     confirmPdfAria: "確定要存成 PDF 嗎",
     confirmPdfHead: (n) => `確定要存？這份履歷還有 ${n} 個問題（上面紅色那幾項）。`,
@@ -252,6 +254,8 @@ const TEXT = {
     ],
     pdfSafari: (paper) => `Mac Safari: bottom-left "PDF" menu, "Save as PDF". Click "Show Details", set Paper Size to "${paper === "Letter" ? "US Letter" : paper}" and turn off "Print headers and footers".`,
     savePdf: "Save as PDF",
+    saveWord: "Download Word file (editable)",
+    wordHint: "The Word file has the words of this resume as it is now. Anything you change in Word is no longer checked by the program, so check it yourself.",
     noResumeFileYet: "There is no resume file yet, so it cannot be saved.",
     confirmPdfAria: "Save as PDF anyway?",
     confirmPdfHead: (n) => `Save anyway? This resume still has ${plural(n, "problem")} (the red items above). `,
@@ -982,6 +986,21 @@ function openPrint(item) {
   window.open(`/view/${encodeURIComponent(item.id)}?print=1`, "_blank", "noopener");
 }
 
+function downloadWord(item) {
+  // a plain same-site link: the browser sends the preview cookie and the server answers with a file, not a page
+  const a = document.createElement("a");
+  a.href = `/view/${encodeURIComponent(item.id)}?format=docx`;
+  a.download = "";
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+function wordArea(item) {
+  if (!item.hasHtml) return null;
+  return h("div", { class: "pdf" }, h("button", { type: "button", onclick: () => downloadWord(item) }, T.saveWord), h("span", { class: "hint" }, T.wordHint));
+}
+
 function pdfSteps() {
   const paper = paperName(INFO.paper);
   const [before, bold, after] = T.pdfChrome(paper);
@@ -1072,7 +1091,7 @@ function resumeDetail(item) {
         },
       })
     : h("p", { class: "blank" }, T.blankResume);
-  return [head, result, waitingNote(item), pdfArea(item, pages), archiveArea(item), photo, rewritesView(item), preview];
+  return [head, result, waitingNote(item), pdfArea(item, pages), wordArea(item), archiveArea(item), photo, rewritesView(item), preview];
 }
 
 // ---- 104

@@ -79,6 +79,16 @@ bun tests/smoke.ts dist/jobhunt.exe [測試資料夾]               # 對打包�
 - .doc（舊版 Word）→ 請他另存新檔成 .docx 或 PDF；.pdf → AI 直接讀；有密碼的 .docx（其實是 CFB 檔，不是 ZIP）→ 請他拿掉密碼或另存沒密碼的；壞掉、太大 → 請他另存新檔或複製文字。都是結束碼 2。副檔名 .doc 但內容其實是 .docx 的照樣讀。
 - 測試：`tests/docx.test.ts`，測試檔大多用 `tests/ziptools.ts` 現做（stored 和 deflate 都有，也能故意寫錯大小和 CRC）；`tests/fixture-docx/範例舊履歷.docx` 是用 .NET 的 `System.IO.Compression` 從手寫的 `parts/` 打包的（`make-fixture.ps1`，內容虛構），免得只測到自己寫 ZIP 的習慣。
 
+## 下載 Word（`src/wordfile.ts`）
+
+履歷頁「下載 Word 檔」＝ `GET /view/<代號>?format=docx`（要預覽 cookie，和列印同一套保護）。讓人自己改字、或職缺指定要 Word 時用。
+
+- 來源是 `resumes/<代號>.html` 送出前的同一份乾淨版（`cleanResume`），所以字就是程式檢查過的那些；轉成 Word 之後使用者自己改的，沒有任何東西會再檢查（介面上有一行白話提醒）。
+- 四個範本結構一樣（抬頭、`section.block`、`div.entry`），一支轉換器全吃：姓名、希望職稱、聯絡方式、段落標題（用真正的「標題 1」樣式）、日期靠右、條列、專長一行一類。字型、字級、主色從範本自己的 `<style>` 讀，紙張照 `jobhunt.yaml` 的 `paper`（A4 邊界 15 mm、Letter 0.6 in）。照片和黃色列印提醒不放（和 PDF 一致）。
+- 版面用樣式（Name、Heading1、EntryHead、Bullet…）而不是逐段硬套格式，使用者在 Word 改一次樣式就整份跟著變。
+- 沒有外部套件：HTML 用 `htmltext.ts` 的註解處理加一個小解析器、ZIP 自己寫（`node:zlib` 的 `deflateRawSync` ＋ CRC32）。
+- 測試：`tests/word.test.ts`（含用 `docx.ts` 的讀取器把產出的檔讀回來，會驗每個部分的大小和 CRC）。在真的 Word 開過：1 頁、版面和範本一致。
+
 ## 進度看板的提醒（`src/applications.ts`，和業主自己的系統一致）
 
 - 「已投遞」10 天以上沒更新：提醒問進度；28 天以上：「可能石沉大海」，建議改成「無回應」。不需要填聯絡人。

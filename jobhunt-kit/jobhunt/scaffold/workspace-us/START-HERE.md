@@ -130,7 +130,7 @@ The resume files the AI makes are in the "resumes" folder and end in .html. The 
 
 Always open the PDF and read it once: typos, missing pages, any "[Company Name]" or "TBD" left over, and whether every line is something you really did.
 
-This version gives you a PDF, not a Word file. A PDF looks the same on every computer.
+A PDF is the safest to send: it looks the same on every computer. If you want to edit the text yourself, or the posting asks for Word, click "Download Word file" on the program's resume page and open it in Word. Words you change in Word are no longer checked by the program, so make sure everything is true.
 
 ## Your LinkedIn and Handshake text
 

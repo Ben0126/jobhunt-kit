@@ -9,7 +9,7 @@ Use this when the user says "make the resume file", "I need a PDF", "make my res
 - If the jobhunt program is in the folder, the program check passes too (AGENTS.md "Program check").
 - When you hand it over, say honestly who checked it (AGENTS.md red line 14) and that no second conversation has reviewed it yet.
 
-No PDF, Word or image files are produced. If they want Word: "I only make a PDF for now. A PDF looks the same on every computer. If the posting insists on Word, you can open the PDF in Word and save it, but check the layout yourself."
+You never produce PDF, Word or image files yourself: the jobhunt program's resume page does. If they want Word (or want to edit the text by hand), tell them to click "Download Word file" on the program's resume page, and say: "The Word file has the same words as this resume now, but anything you change in Word is no longer checked by the program, so check it yourself." With no jobhunt program in the folder, say a Word file is not possible this time; only the HTML resume file exists, and the browser can save it as a PDF.
 
 ## 1. Check the conditions (1 to 5: if any fails, stop; 6 is a question for them)
 

@@ -11,6 +11,7 @@ import { Folder } from "./folder.ts";
 import { readMarket } from "./market.ts";
 import { serverText } from "./server.text.ts";
 import { stripComments } from "./htmltext.ts";
+import { resumeToDocx } from "./wordfile.ts";
 import { createUpdateChecker, type UpdateChecker } from "./update.ts";
 import { applyUpdate, failureText, planView, prepareUpdate, testServerFromEnv, UpdateFailure, type Prepared } from "./selfupdate.ts";
 import { updateTextFor } from "./selfupdate.text.ts";
@@ -323,6 +324,18 @@ export function startServer(opts: {
     if (html == null) return page(404, T.noResumeTitle, T.noResumeMsg);
     html = cleanResume(html);
     const name = await pdfName(id, T.pdfWord);
+    if (url.searchParams.get("format") === "docx") {
+      const file = name || id;
+      const bytes = resumeToDocx(html, { paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
+      return new Response(bytes, {
+        headers: {
+          ...SECURITY_HEADERS,
+          "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          // plain ASCII name for old clients, the real (Chinese) name for the rest
+          "Content-Disposition": `attachment; filename="resume.docx"; filename*=UTF-8''${encodeURIComponent(file)}.docx`,
+        },
+      });
+    }
     if (name)
       html = html
         .replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/i, "")
