@@ -1,10 +1,11 @@
 # 發布版本：推 v0.6 或 v0.6.1 這種格式的 tag 就會跑（v0.6-rc1 這種測試用 tag 不會觸發，避免測試版變成「最新版」）。
 # 1) 在 Windows / Apple 晶片 Mac / Intel Mac 上各自測試、打包程式（步驟和 app.yml 相同）。
-# 2) 每個平台只打包一次程式，再把兩套資料夾各自和程式包成「解壓縮就能用」的 zip：
-#    台灣版（workspace-general）→ job-hunt 資料夾 → job-hunt-windows.zip（另兩個同理）
-#    美國版（workspace-us）     → job-hunt-us 資料夾 → job-hunt-us-windows.zip（另兩個同理）
-# 3) 建立 GitHub Release（公開下載頁），台灣版和美國版同一個 tag、同一頁，放上六個 zip。
-# 固定下載連結：https://github.com/<repo>/releases/latest/download/job-hunt-windows.zip（其他同理，美國版是 job-hunt-us-*.zip）。
+# 2) 每個平台只打包一次程式，再和「合一版」資料夾（app/kitbuild.ts 從台灣版、美國版和 scaffold/kit 組出來）包成
+#    「解壓縮就能用」的 zip：job-hunt-kit 資料夾 → jobhunt-kit-windows.zip / jobhunt-kit-mac-apple.zip / jobhunt-kit-mac-intel.zip。
+#    使用者第一次用時選「美國／台灣／兩邊」，程式（jobhunt mode）把那一套規則裝好。
+# 3) 建立 GitHub Release（公開下載頁），放上三個 zip。
+# 固定下載連結：https://github.com/<repo>/releases/latest/download/jobhunt-kit-windows.zip（其他同理）。
+# 舊的分開兩套（job-hunt-*.zip、job-hunt-us-*.zip）不再發布：舊版的一鍵更新找不到新檔名，會請使用者照說明下載新版。
 name: release
 
 on:
@@ -104,22 +105,16 @@ jobs:
         run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us --expect-version "${TAG#v}"
 
       # 只會帶到 git 追蹤的檔案（CI 是全新 checkout），本機的暫存檔不會被包進去。
-      # 台灣版 → pkg/job-hunt，美國版 → pkg/job-hunt-us，各放一份同一個程式。
-      - name: Assemble the ready-to-use folders
+      # 合一版：kitbuild.ts 組出 pkg/job-hunt-kit（三套規則在 .kit/，選了模式才裝到最上層），再放進這個平台的程式。
+      - name: Assemble the ready-to-use folder
         working-directory: ${{ github.workspace }}
         run: |
           rm -rf pkg
           mkdir pkg
-          cp -R jobhunt-kit/jobhunt/scaffold/workspace-general pkg/job-hunt
-          cp -R jobhunt-kit/jobhunt/scaffold/workspace-us pkg/job-hunt-us
-          for d in job-hunt job-hunt-us; do
-            # Codex 找技能的地方是 .agents/skills；內容和 .claude/skills 同一份，只在這裡複製，原始碼只維護一份。
-            mkdir -p "pkg/$d/.agents"
-            cp -R "pkg/$d/.claude/skills" "pkg/$d/.agents/skills"
-            cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/$d/${{ matrix.bin }}"
-            if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/$d/${{ matrix.bin }}"; fi
-            ls -la "pkg/$d"
-          done
+          bun jobhunt-kit/app/kitbuild.ts pkg/job-hunt-kit
+          cp "jobhunt-kit/app/dist/${{ matrix.bin }}" "pkg/job-hunt-kit/${{ matrix.bin }}"
+          if [ "$RUNNER_OS" = "macOS" ]; then chmod 755 "pkg/job-hunt-kit/${{ matrix.bin }}"; fi
+          ls -la pkg/job-hunt-kit
 
       # Windows PowerShell 5.1 的 Compress-Archive：中文檔名寫成 UTF-8 並標上 UTF-8 旗標（已在本機 Windows 11 實測）。
       - name: Zip (Windows)
@@ -128,18 +123,16 @@ jobs:
         working-directory: ${{ github.workspace }}/pkg
         run: |
           $ErrorActionPreference = 'Stop'
-          Compress-Archive -Path job-hunt -DestinationPath 'job-hunt-${{ matrix.suffix }}.zip'
-          Compress-Archive -Path job-hunt-us -DestinationPath 'job-hunt-us-${{ matrix.suffix }}.zip'
+          Compress-Archive -Path job-hunt-kit -DestinationPath 'jobhunt-kit-${{ matrix.suffix }}.zip'
 
       # ditto 保留執行權限和 UTF-8 檔名；不帶 Mac 專用的附加資料，避免多出 __MACOSX、._ 檔。
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         working-directory: ${{ github.workspace }}/pkg
         run: |
-          ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt "job-hunt-${{ matrix.suffix }}.zip"
-          ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt-us "job-hunt-us-${{ matrix.suffix }}.zip"
+          ditto -c -k --norsrc --noextattr --noacl --keepParent job-hunt-kit "jobhunt-kit-${{ matrix.suffix }}.zip"
 
-      # 檢查兩個 zip 裡的檔案和資料夾都和來源一模一樣（不多不少）、檔名沒有變亂碼、Mac 程式有執行權限、必要檔案都在。
+      # 檢查 zip 裡的檔案和資料夾都和來源一模一樣（不多不少）、檔名沒有變亂碼、Mac 程式有執行權限、必要檔案都在。
       - name: Verify the zips
         working-directory: ${{ github.workspace }}/pkg
         env:
@@ -155,23 +148,22 @@ jobs:
 
           # 每套資料夾：(zip 檔名, 資料夾名, 必要檔案)
           kits = [
-              ("job-hunt-%s.zip" % suffix, "job-hunt", [
-                  "開始使用.md",  # 開始使用.md
-                  "開場句.txt",  # 開場句.txt
-                  "AGENTS.md",
-                  ".claude/settings.json",
-                  ".codex/rules/jobhunt.rules",
-                  ".agents/skills/start/SKILL.md",
-              ]),
-              ("job-hunt-us-%s.zip" % suffix, "job-hunt-us", [
-                  "AGENTS.md",
+              ("jobhunt-kit-%s.zip" % suffix, "job-hunt-kit", [
+                  "AGENTS.md",  # the setup rules until a mode is chosen
                   "START-HERE.md",
+                  "開始使用.md",  # 開始使用.md
                   "opening-prompt.txt",
+                  "開場句.txt",  # 開場句.txt
                   "jobhunt.yaml",
                   "templates/resume-us.html",
+                  "templates/resume-tw.html",
                   ".claude/settings.json",
                   ".codex/rules/jobhunt.rules",
-                  ".agents/skills/start/SKILL.md",
+                  ".kit/us/AGENTS.md",
+                  ".kit/tw/AGENTS.md",
+                  ".kit/both/AGENTS.md",
+                  ".kit/both/playbooks/taiwan.md",
+                  ".kit/both/skills/start/SKILL.md",
               ]),
           ]
 
@@ -232,46 +224,32 @@ jobs:
         working-directory: ${{ github.workspace }}/pkg
         run: |
           $ErrorActionPreference = 'Stop'
-          Expand-Archive -Path 'job-hunt-${{ matrix.suffix }}.zip' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
-          Expand-Archive -Path 'job-hunt-us-${{ matrix.suffix }}.zip' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
+          Expand-Archive -Path 'jobhunt-kit-${{ matrix.suffix }}.zip' -DestinationPath (Join-Path $env:RUNNER_TEMP 'unzipped')
 
       - name: Unzip a throwaway copy (macOS)
         if: runner.os == 'macOS'
         working-directory: ${{ github.workspace }}/pkg
         run: |
-          ditto -x -k "job-hunt-${{ matrix.suffix }}.zip" "$RUNNER_TEMP/unzipped"
-          ditto -x -k "job-hunt-us-${{ matrix.suffix }}.zip" "$RUNNER_TEMP/unzipped"
+          ditto -x -k "jobhunt-kit-${{ matrix.suffix }}.zip" "$RUNNER_TEMP/unzipped"
 
-      - name: Test the unzipped programs
+      - name: Test the unzipped program
         env:
           BIN: ${{ matrix.bin }}
         run: |
           set -euo pipefail
-          for kit in job-hunt job-hunt-us; do
-            dir="$RUNNER_TEMP/unzipped/$kit"
-            if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
-            if [ "$kit" = "job-hunt-us" ]; then
-              bun tests/smoke.ts "$dir/$BIN" --us --expect-version "${TAG#v}"
-            else
-              bun tests/smoke.ts "$dir/$BIN" --expect-version "${TAG#v}"
-            fi
-            # 在解出來的資料夾裡直接跑 check：程式要認得這是求職資料夾（認不得會回 2）。全新的資料夾應該回 0。
-            code=0
-            (cd "$dir" && "./$BIN" check) || code=$?
-            [ "$code" -eq 0 ] || { echo "check in the unzipped $kit folder exited $code (expected 0)"; exit 1; }
-          done
+          dir="$RUNNER_TEMP/unzipped/job-hunt-kit"
+          if [ "$RUNNER_OS" = "macOS" ]; then codesign -v --verbose=2 "$dir/$BIN"; fi
+          # smoke_one.ts works on a copy: check before a choice, `mode both`, refusing to remove a market, check, the app
+          bun tests/smoke_one.ts "$dir/$BIN" "$dir" --expect-version "${TAG#v}"
+          # and in the unzipped folder itself: the program must recognise it before any choice (2 = not recognised)
+          code=0
+          (cd "$dir" && "./$BIN" check) || code=$?
+          [ "$code" -eq 0 ] || { echo "check in the unzipped folder exited $code (expected 0)"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: job-hunt-${{ matrix.suffix }}.zip
-          path: pkg/job-hunt-${{ matrix.suffix }}.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: job-hunt-us-${{ matrix.suffix }}.zip
-          path: pkg/job-hunt-us-${{ matrix.suffix }}.zip
+          name: jobhunt-kit-${{ matrix.suffix }}.zip
+          path: pkg/jobhunt-kit-${{ matrix.suffix }}.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -290,7 +268,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: job-hunt-*.zip
+          pattern: jobhunt-kit-*.zip
           path: out
           merge-multiple: true
 
@@ -301,7 +279,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -l out
-          for f in job-hunt-windows.zip job-hunt-mac-apple.zip job-hunt-mac-intel.zip                    job-hunt-us-windows.zip job-hunt-us-mac-apple.zip job-hunt-us-mac-intel.zip; do
+          for f in jobhunt-kit-windows.zip jobhunt-kit-mac-apple.zip jobhunt-kit-mac-intel.zip; do
             test -s "out/$f" || { echo "missing out/$f"; exit 1; }
           done
 
@@ -310,7 +288,7 @@ jobs:
           cat > notes.md <<EOF
           繁體中文 (Traditional Chinese)：[本版更新說明](https://github.com/${REPO}/blob/${TAG}/release-notes/${TAG}.zh.md) | [下載與安裝說明 README.zh-TW.md](https://github.com/${REPO}/blob/${TAG}/README.zh-TW.md)
 
-          Download one zip, unzip it, and open the start guide inside (START-HERE.md for the US edition; any text editor works). Then follow it step by step.
+          Download one zip, unzip it, and open the start guide inside (START-HERE.md, or 開始使用.md in Chinese; any text editor works). Then follow it step by step. The first time, you choose where you are looking for work: the United States, Taiwan, or both.
 
           ## What changed
 
@@ -318,30 +296,22 @@ jobs:
 
           ## Already using an older version?
 
-          Do not set up a new folder. Replace only the program file:
+          Versions up to v0.9 came as two separate kits (job-hunt for Taiwan, job-hunt-us for the US). This version is one kit for both, so please set up a new folder with it:
 
-          1. Close the program's text window.
-          2. Download the zip for your computer (see "Which file to download" below) and unzip it into a different folder, for example your Desktop.
-          3. Copy only the program file into the job-search folder you use now and choose Replace. On Windows it is jobhunt.exe (File Explorer often shows just "jobhunt"; pick the one whose type is "Application"). On a Mac it is jobhunt-mac-arm64 or jobhunt-mac-x64.
-          4. Double-click the program again. The first time you open it, Windows or macOS may show the warning again (see below).
+          1. Download and unzip the new zip into a new place (do not unzip it over your current folder).
+          2. Keep your old folder as it is; nothing in it is changed or deleted.
 
-          **Do not unzip the whole zip over your job-search folder.** The resume.yaml and data/applications.csv inside the new zip are blank templates and would replace your confirmed experience and your application progress.
+          **Do not unzip the whole zip over your job-search folder.** Its resume.yaml and data/applications.csv are blank templates and would replace your confirmed experience and your application progress.
 
           ## Which file to download
 
           Download one zip. Scroll down to "Assets" and click the file name; you do not need to sign in to GitHub. The "Source code" files are for developers; you do not need them.
 
-          **US edition (English)**, for students and new grads looking for jobs in the United States, including international students on F-1 OPT / CPT. Everything in the folder and the local app is in English. If unzipping gives you a folder inside a folder, use the inner job-hunt-us folder, the one that contains START-HERE.md.
+          One kit for the United States, Taiwan, or both. If unzipping gives you a folder inside a folder, use the inner job-hunt-kit folder, the one that contains START-HERE.md.
 
-          - Windows: [job-hunt-us-windows.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-windows.zip)
-          - Mac with Apple silicon (M1, M2, M3, M4): [job-hunt-us-mac-apple.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-mac-apple.zip)
-          - Mac with an Intel processor: [job-hunt-us-mac-intel.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-us-mac-intel.zip)
-
-          **Taiwan edition (Chinese)**, for fresh grads in Taiwan. The folder and the local app are in Traditional Chinese; setup steps are in README.zh-TW.md.
-
-          - Windows: [job-hunt-windows.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-windows.zip)
-          - Mac with Apple silicon: [job-hunt-mac-apple.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-mac-apple.zip)
-          - Mac with an Intel processor: [job-hunt-mac-intel.zip](https://github.com/${REPO}/releases/latest/download/job-hunt-mac-intel.zip)
+          - Windows: [jobhunt-kit-windows.zip](https://github.com/${REPO}/releases/latest/download/jobhunt-kit-windows.zip)
+          - Mac with Apple silicon (M1, M2, M3, M4): [jobhunt-kit-mac-apple.zip](https://github.com/${REPO}/releases/latest/download/jobhunt-kit-mac-apple.zip)
+          - Mac with an Intel processor: [jobhunt-kit-mac-intel.zip](https://github.com/${REPO}/releases/latest/download/jobhunt-kit-mac-intel.zip)
 
           Not sure which Mac you have: Apple menu, then "About This Mac". "Chip: Apple M..." means Apple silicon; "Processor: Intel" means Intel.
 
@@ -352,7 +322,7 @@ jobs:
 
           ## The program is not code-signed
 
-          The jobhunt program in the folder has no paid code signature from Microsoft or Apple, so Windows and macOS show a warning the first time you open it. This is expected. The start guide (START-HERE.md, or 開始使用.md for the Taiwan edition) explains what to click in its "Open the app" section (打開介面 in the Taiwan edition).
+          The jobhunt program in the folder has no paid code signature from Microsoft or Apple, so Windows and macOS show a warning the first time you open it. This is expected. The start guide (START-HERE.md, or 開始使用.md in Chinese) explains what to click in its "Open the app" section (打開介面 in Chinese).
 
           ## More information
 

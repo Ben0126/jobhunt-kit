@@ -9,6 +9,8 @@ on:
       - "jobhunt-kit/web/js/core/rules.js" # bundled into the app (jobhunt check)
       - "jobhunt-kit/jobhunt/scaffold/workspace-general/templates/*.html" # the check compares resume files with them
       - "jobhunt-kit/jobhunt/scaffold/workspace-us/**" # the US kit: the smoke test runs against it
+      - "jobhunt-kit/jobhunt/scaffold/workspace-general/**" # the Taiwan rule set (in the one-for-all kit)
+      - "jobhunt-kit/jobhunt/scaffold/kit/**" # the one-for-all kit's own files
       - ".github/workflows/app.yml"
   pull_request:
     paths:
@@ -16,6 +18,8 @@ on:
       - "jobhunt-kit/web/js/core/rules.js" # bundled into the app (jobhunt check)
       - "jobhunt-kit/jobhunt/scaffold/workspace-general/templates/*.html" # the check compares resume files with them
       - "jobhunt-kit/jobhunt/scaffold/workspace-us/**" # the US kit: the smoke test runs against it
+      - "jobhunt-kit/jobhunt/scaffold/workspace-general/**" # the Taiwan rule set (in the one-for-all kit)
+      - "jobhunt-kit/jobhunt/scaffold/kit/**" # the one-for-all kit's own files
       - ".github/workflows/app.yml"
   workflow_dispatch:
 
@@ -72,6 +76,10 @@ jobs:
 
       - name: Smoke test the compiled binary (US kit)
         run: bun tests/smoke.ts "dist/${{ matrix.bin }}" --us --expect-version dev
+
+      # the one-for-all kit: choose "both", the rules get installed, the app knows both markets
+      - name: Smoke test the compiled binary (one-for-all kit)
+        run: bun tests/smoke_one.ts "dist/${{ matrix.bin }}" --expect-version dev
 
       - name: Package (macOS keeps the exec bit with ditto)
         if: runner.os == 'macOS'

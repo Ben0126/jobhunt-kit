@@ -17,6 +17,7 @@ import { Folder, FolderError, looksLikeJobhuntFolder } from "./folder.ts";
 import { englishYearMonths, EN_PLACEHOLDERS, factText, moreThanClaims, normEnglish, vagueAmounts } from "./english.ts";
 import { extraIdMatches, replaceExtraIds, starMask } from "./ids.ts";
 import { type Language, type Market, type MarketConfig, readMarket, readMarketSync, TW_DEFAULTS, unrecognisedLanguage } from "./market.ts";
+import { marketForTarget, readMode, readModeSync, type MarketId } from "./mode.ts";
 import { type CheckText, textFor } from "./check.text.ts";
 import { maskVisaWords, visaWords } from "./visa.ts";
 import {
@@ -167,7 +168,7 @@ export type Confirmed = {
   /** the section is there but not in the exact format */
   bad?: true;
 };
-type Story = { status: string; via: string; title: string; org: string; dates: string; /** "Your words" and "Numbers" sections as text; null = neither section is there */ said: string | null; conf?: Confirmed | null } | null;
+type Story = { status: string; via: string; title: string; org: string; dates: string; /** "Your words" and "Numbers" sections as text; null = neither section is there */ said: string | null; conf?: Confirmed | null; zh?: ConfirmedZh | null } | null;
 
 export function parseConfirmed(text: string): Confirmed | null {
   const lines = text.split(/\r?\n/);
@@ -215,6 +216,36 @@ export function parseConfirmed(text: string): Confirmed | null {
   }
   return out.sentences.length ? out : bad();
 }
+/** "## 中文確認時的句子（不能改）": the Chinese layer of a story in a folder that looks for work in the US and Taiwan
+ * (playbooks/taiwan.md). Optional 職稱／機構／日期 lines, then numbered sentences, up to the first blank line after them. */
+export type ConfirmedZh = { title: string | null; org: string | null; dates: string | null; sentences: string[]; bad?: true };
+export function parseConfirmedZh(text: string): ConfirmedZh | null {
+  const lines = text.split(/\r?\n/);
+  const h = lines.findIndex((l) => /^##\s+中文確認時的句子/.test(l.trim()));
+  if (h < 0) return null;
+  const out: ConfirmedZh = { title: null, org: null, dates: null, sentences: [] };
+  const KEYS: Record<string, "title" | "org" | "dates"> = { 職稱: "title", 機構: "org", 日期: "dates" };
+  let started = false;
+  for (const raw of lines.slice(h + 1)) {
+    const l = raw.normalize("NFKC").trim();
+    if (/^##\s/.test(l)) break;
+    if (!l) {
+      if (started) break;
+      continue;
+    }
+    started = true;
+    const meta = /^(職稱|機構|日期)\s*[:：]\s*(.*)$/.exec(l);
+    if (meta && !out.sentences.length) {
+      out[KEYS[meta[1]]] = norm(meta[2]);
+      continue;
+    }
+    const num = /^[0-9]+[.)、]\s*(.+)$/.exec(l);
+    if (!num) return { title: null, org: null, dates: null, sentences: [], bad: true };
+    out.sentences.push(norm(num[1]));
+  }
+  return out.sentences.length ? out : { ...out, bad: true };
+}
+
 /** A clause where the user says they do not know / did not write the number (so a number in it is not one they said). */
 const NOT_SAID = /不知道|不清楚|不確定|不記得|don'?t know|do not know|not sure|don'?t remember|do not remember|made (?:that|it) up|friend wrote|朋友幫我寫|wasn'?t true|不對/i;
 /** A Numbers line the AI wrote to record that a number was dropped, not said. */
@@ -344,6 +375,9 @@ const byKind = (k: TemplateKind) => TEMPLATES.find((t) => t.kind === k)!;
 const validTemplate = (field: string, market: Market) =>
   Object.hasOwn(TEMPLATE_NAMES, field) && (field !== "us" || market === "us") && (market !== "us" || (field !== "tw" && field !== "tw-classic"));
 
+/** The templates of a folder that looks in these markets (both: every template). */
+export const templatesForMarkets = (markets: Market[]): TemplateKind[] => (Object.keys(TEMPLATE_NAMES) as TemplateKind[]).filter((k) => markets.some((m) => validTemplate(k, m)));
+
 /** The templates a folder of this market has (never `us` in a Taiwan folder, never the A4 Taiwan ones in a US folder). */
 export const templatesFor = (market: Market): TemplateKind[] => (Object.keys(TEMPLATE_NAMES) as TemplateKind[]).filter((k) => validTemplate(k, market));
 
@@ -368,6 +402,28 @@ const norm = (s: string) => String(s).normalize("NFKC").replace(/\s+/g, " ").tri
 
 class Context {
   market: MarketConfig = TW_DEFAULTS;
+  /** Where this folder looks for work (me/mode.yaml, or the older folders' single market). */
+  markets: MarketId[] = ["tw"];
+  get both(): boolean {
+    return this.markets.includes("us") && this.markets.includes("tw");
+  }
+  /** Run `fn` with the rules of market `m` (a folder that looks in both checks each target under its own market). */
+  async withMarket<T>(m: Market, fn: () => Promise<T>): Promise<T> {
+    if (this.market.market === m) return fn();
+    const keep = this.market;
+    this.market = { ...keep, market: m, paper: m === "us" ? "letter" : "a4" };
+    try {
+      return await fn();
+    } finally {
+      this.market = keep;
+    }
+  }
+  /** The market a target is for: its own `market:` in a folder that looks in both (else its base_variant: en… is the US),
+   * the folder's market otherwise. */
+  targetMarket(target: any): Market {
+    return marketForTarget(target, this.markets, this.market.market);
+  }
+
   /** The sentences of this folder's language (jobhunt.yaml `language`). */
   get T(): CheckText {
     return textFor(this.market.language);
@@ -399,6 +455,8 @@ class Context {
 
   async load() {
     this.market = await readMarket(this.folder);
+    const mode = await readMode(this.folder);
+    this.markets = mode.markets.length ? mode.markets : [this.market.market];
     try {
       const r = await this.folder.readYaml("resume.yaml");
       if (r == null) this.resumeProblem = this.T.resumeMissing;
@@ -477,6 +535,7 @@ class Context {
           dates: String(fm?.dates ?? ""),
           said: saidOf(t, String(fm?.confirmed_via ?? "").trim().toLowerCase() === "self-attest"),
           conf: parseConfirmed(t),
+          zh: parseConfirmedZh(t),
         };
       }
     } catch {
@@ -498,6 +557,8 @@ class Context {
     if (this.market.market !== "us") return out;
     const where = this.T.resumeData;
     const T = this.T;
+    // looking in both: the Chinese items (variants tw…) rest on the Chinese cards instead (confirmedZhProblems)
+    const english = (it: any) => !this.both || !Array.isArray(it?.variants) || !it.variants.length || it.variants.some((v: unknown) => /^en(?:[-_]|$)/i.test(String(v)));
     const srcList = (o: any): string[] => {
       const src = o?.sources ?? o?.source;
       return (Array.isArray(src) ? src.map(String) : src ? splitSources(String(src), true) : []).map((c) => c.normalize("NFKC").trim()).filter(Boolean);
@@ -531,13 +592,13 @@ class Context {
     // one place: "Taipei", "Columbus, OH", "Remote"; at most one comma. (No card records a location, so this is only a shape check.)
     const LOCATION = /^[\p{L}][\p{L} .'’-]{0,40}(?:,\s*[\p{L}][\p{L} .'’-]{0,40})?$/u;
     for (const sec of ["education", ...R.BULLET_SECTIONS])
-      for (const item of asArray(this.resume[sec]))
+      for (const item of asArray(this.resume[sec]).filter(english))
         if (item && typeof item === "object") {
           for (const k of Object.keys(item)) if (!ITEM_KEYS[sec].includes(k)) out.push({ where, message: T.resumeItemKey(k), quote: excerpt(norm(String(item.role ?? item.name ?? item.org ?? item.school ?? ""))) });
           if (norm(String(item.location ?? "")) && !LOCATION.test(norm(String(item.location)))) out.push({ where, message: T.resumeItemLocation, quote: excerpt(String(item.location)) });
         }
     for (const sec of R.BULLET_SECTIONS)
-      for (const item of asArray(this.resume[sec])) {
+      for (const item of asArray(this.resume[sec]).filter(english)) {
         const itemCodes = sOf(item);
         const all = new Set<string>(itemCodes);
         for (const b of asArray(item?.bullets).filter((x: any) => x && typeof x === "object")) {
@@ -609,7 +670,7 @@ class Context {
     // a summary in resume.yaml follows the same title-word rule as a target's summary
     for (const x of R.strings(this.resume.summary ?? "")) out.push(...this.titleWordProblems(x, where));
     const eduText = mdSection(this.profileRaw, "Education");
-    for (const e of asArray(this.resume.education)) {
+    for (const e of asArray(this.resume.education).filter(english)) {
       const details = asArray(e?.details).map((d: any) => (typeof d === "string" ? d : d?.text)).filter((d: unknown) => norm(String(d ?? "")));
       if (!details.length) continue;
       const codes = sOf(e);
@@ -624,10 +685,59 @@ class Context {
     return dedupe(out);
   }
 
+  /** Looking in both: every Chinese item of resume.yaml (variants tw…) against the "中文確認時的句子" of the cards it names, the
+   * same way the English items are held to "Sentence at confirmation": each bullet is one of those sentences, the role is the
+   * card's 職稱 and the employer its 機構 when the card has them. A named, confirmed card without a Chinese section is an error. */
+  async confirmedZhProblems(): Promise<Problem[]> {
+    const out: Problem[] = [];
+    if (!this.both) return out;
+    const where = this.T.resumeData;
+    const T = this.T;
+    const chinese = (it: any) => Array.isArray(it?.variants) && it.variants.length > 0 && it.variants.every((v: unknown) => !/^en(?:[-_]|$)/i.test(String(v)));
+    const codesOf = (o: any): string[] => {
+      const src = o?.sources ?? o?.source;
+      const list = Array.isArray(src) ? src.map(String) : src ? splitSources(String(src), false) : [];
+      return [...new Set(list.map((c) => c.normalize("NFKC").trim().toUpperCase()).filter((c) => /^S-[0-9]+$/.test(c)))];
+    };
+    const reported = new Set<string>();
+    for (const sec of R.BULLET_SECTIONS)
+      for (const item of asArray(this.resume[sec]).filter(chinese)) {
+        const itemCodes = codesOf(item);
+        const used = new Set<string>(itemCodes);
+        for (const b of asArray(item?.bullets).filter((x: any) => x && typeof x === "object")) {
+          const codes = codesOf(b).length ? codesOf(b) : itemCodes;
+          codes.forEach((c) => used.add(c));
+          const sentences = new Set<string>();
+          let ok = false;
+          for (const c of codes) {
+            const st = await this.story(c);
+            if (!st || st.status !== "confirmed") continue; // the source checks report drafts and missing cards
+            if (!st.zh || st.zh.bad) {
+              if (!reported.has(c)) out.push({ where, message: T.confirmedZhNoSection(c, !!st.zh) });
+              reported.add(c);
+              continue;
+            }
+            ok = true;
+            st.zh.sentences.forEach((x) => sentences.add(normQ(x)));
+          }
+          if (ok && !sentences.has(normQ(b.text))) out.push({ where, message: T.confirmedZhBullet(codes.join(", ")), quote: excerpt(String(b.text ?? "")) });
+        }
+        for (const c of used) {
+          const st = await this.story(c);
+          if (!st || st.status !== "confirmed" || !st.zh || st.zh.bad) continue;
+          if (st.zh.title && item?.role != null && norm(String(item.role)) && norm(String(item.role)) !== st.zh.title)
+            out.push({ where, message: T.confirmedZhRole(c, st.zh.title), quote: excerpt(String(item.role)) });
+          const name = norm(String(item?.org ?? item?.name ?? ""));
+          if (st.zh.org && name && name !== st.zh.org) out.push({ where, message: T.confirmedZhOrg(c, st.zh.org), quote: excerpt(name) });
+        }
+      }
+    return dedupe(out);
+  }
+
   /** 學歷 / 求職方向 — in a US folder also Education / Job goals (exact case): sources that are not an experience. */
   isBackground(code: string): boolean {
     const c = code.normalize("NFKC").trim();
-    return c === "學歷" || c === "求職方向" || (this.market.market === "us" && (c === "Education" || c === "Job goals"));
+    return c === "學歷" || c === "求職方向" || ((this.market.market === "us" || this.markets.includes("us")) && (c === "Education" || c === "Job goals"));
   }
 
   /** Problems with one source list (「S-003、學歷」 or a bullet's source field). */
@@ -1146,20 +1256,22 @@ export async function checkItem(ctx: Context, id: string): Promise<Item> {
   }
   if (!item.company && !item.role) Object.assign(item, await jdNames(folder, id));
   if (ctx.resumeProblem && (targetRel || htmlRel)) item.problems.push({ where: T.resumeData, message: ctx.resumeProblem, detail: ctx.resumeDetail });
-  if (targetRel && target != null) item.problems.push(...(await checkTargetFile(ctx, id, target, !!htmlRel)));
+  // a folder that looks in both checks this job under its own market (targets/<id>.yaml `market:`)
+  const tm = ctx.targetMarket(target);
+  if (targetRel && target != null) item.problems.push(...(await ctx.withMarket(tm, () => checkTargetFile(ctx, id, target, !!htmlRel))));
 
   if (htmlRel) {
     const html = (await folder.readText(htmlRel)) ?? "";
-    const tpl = templateFor(html, target, ctx.market.market);
+    const tpl = templateFor(html, target, tm);
     item.checked.push(T.checkedResume(htmlRel, T.templateNames[tpl.kind], tpl.how === "style"));
     if (!targetRel) item.problems.push({ where: T.resumeFile, message: T.noTargetForResume });
-    item.problems.push(...(await checkHtml(ctx, html, target, byKind(tpl.kind))));
+    item.problems.push(...(await ctx.withMarket(tm, () => checkHtml(ctx, html, target, byKind(tpl.kind)))));
   }
 
   item.resumeProblems = dedupe(item.problems);
   const applyRel = `jobs/${id}/104-apply.md`;
   if (folder.exists(applyRel)) {
-    item.apply = await check104File(ctx, applyRel, T.label104Apply);
+    item.apply = await ctx.withMarket(ctx.markets.includes("tw") ? "tw" : ctx.market.market, () => check104File(ctx, applyRel, T.label104Apply)); // 104 is Taiwan
     if (item.apply) {
       item.checked.push(T.checkedApply(applyRel, item.apply.blocks.length));
       item.problems.push(...item.apply.problems, ...item.apply.blocks.flatMap((b) => b.problems));
@@ -1346,7 +1458,11 @@ async function checkProfileFile(ctx: Context, file: string, text: string): Promi
 
 /** profiles/*.md of a US-kit folder (none in a Taiwan folder). */
 async function checkProfiles(ctx: Context): Promise<ProfileFile[]> {
-  if (ctx.market.market !== "us") return [];
+  if (!ctx.markets.includes("us")) return [];
+  return ctx.withMarket("us", () => checkProfilesUs(ctx));
+}
+
+async function checkProfilesUs(ctx: Context): Promise<ProfileFile[]> {
   const out: ProfileFile[] = [];
   for (const name of ctx.folder.list("profiles", "file").filter((n) => n.toLowerCase().endsWith(".md"))) {
     const file = `profiles/${name}`;
@@ -1371,11 +1487,11 @@ export async function runChecks(folder: Folder, opts: { ids?: string[] | null; g
   for (const id of ids) items.push(await checkItem(ctx, id));
   let general: File104 | null = null;
   if (opts.general ?? true) {
-    general = await check104File(ctx, GENERAL_104, ctx.T.label104General);
+    general = await ctx.withMarket(ctx.markets.includes("tw") ? "tw" : ctx.market.market, () => check104File(ctx, GENERAL_104, ctx.T.label104General));
     if (general && ctx.resumeProblem) general.problems.unshift({ where: ctx.T.resumeData, message: ctx.resumeProblem, detail: ctx.resumeDetail });
   }
   const profiles = (opts.profiles ?? true) ? await checkProfiles(ctx) : [];
-  const resumeData = ctx.market.market === "us" ? await ctx.confirmedProblems() : null;
+  const resumeData = ctx.markets.includes("us") ? [...(await ctx.withMarket("us", () => ctx.confirmedProblems())), ...(await ctx.confirmedZhProblems())] : null;
   const count =
     items.reduce((n, i) => n + i.problems.length, 0) +
     (general ? generalProblems(general).length : 0) +
@@ -1529,11 +1645,12 @@ export async function runCheck(argv: string[], dir: string | null, print: (s: st
     return 2;
   }
   const folder = new Folder(dir);
-  if (args.profiles && (await readMarket(folder)).market !== "us") {
+  const markets = readModeSync(dir).markets;
+  if (args.profiles && !markets.includes("us")) {
     print(T.profilesTw);
     return 2;
   }
-  if (args.general && usEn) {
+  if (args.general && usEn && !markets.includes("tw")) {
     print(T.no104Us);
     return 2;
   }

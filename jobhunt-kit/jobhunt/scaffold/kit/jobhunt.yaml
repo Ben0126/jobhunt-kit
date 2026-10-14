@@ -1,0 +1,44 @@
+# jobhunt.yaml: settings for this job-search folder. The AI may read it, never change it.
+# jobhunt.yaml：這個求職資料夾的設定。AI 只能讀，不能改。
+#
+# Where you look for work (US, Taiwan or both) is not set here: you choose it on the program's start screen or by
+# telling the AI, and it is kept in me/mode.yaml. 要找哪裡的工作不寫在這裡：在程式的開始畫面選，或跟 AI 說。
+
+language: en           # language of the program's pages: en or zh-TW (the switch at the top of the page changes it)
+kit_format: one-v1     # this folder was made from the one-for-all kit (US, Taiwan or both)
+update_check: true    # The program asks GitHub at most once a day whether a newer version exists (version number only, none of your information). To turn the reminder off, change true to false.
+
+resume:
+  source: resume.yaml
+  voice:
+    # Words that are always filler on an English resume. The checker already bans its built-in list (proven, passionate,
+    # synergy, leverage, robust and so on), so those are not repeated here.
+    extra_words:
+      - results-driven
+      - team player
+      - self-starter
+      - go-getter
+      - hardworking
+      - dynamic
+      - fast-paced
+      - passion for
+      - excellent communication skills
+
+# The Jobs tab (when you look for work in the US): open internships and new-grad jobs, read from SimplifyJobs and company
+# career pages (public addresses; nothing about you is sent anywhere). Delete this whole block to get the defaults.
+feed:
+  auto_refresh: true            # read the sources when you open the Jobs tab and the list is over a day old
+  # fields: [software, finance]   # show only these fields (default: every field). Built in: software, hardware, health,
+  #                               # finance, people, education, engineering, science, media, design, marketing, operations,
+  #                               # business, other. A field you invent in keywords below can be listed here too.
+  kinds: [internship, newgrad]
+  # terms: ["Summer 2027"]      # internship terms to keep (default: the coming summer)
+  # keywords:                   # your own words, matched in the job title. A built-in field name adds to it, any other name is a new field.
+  #   software: [quant dev]
+  #   pre-law: [lsat, paralegal]
+  # companies:                  # add a company career page (ats: greenhouse, lever, ashby, smartrecruiters, workable or workday)
+  #   - {name: Example Co, ats: greenhouse, board: exampleco}
+  #   - {name: Example Bank, ats: workday, board: "examplebank.wd5/Careers"}   # tenant.wdN/site from the career page address
+  # skip_companies: [Stripe]    # leave one of the built-in companies out
+  h1b: true                     # show what each employer filed with the Labor Department (downloads one ~8 MB public file)
+  hide_citizenship_required: true

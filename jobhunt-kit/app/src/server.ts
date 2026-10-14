@@ -11,12 +11,13 @@ import { Applications, UserError } from "./applications.ts";
 import { runChecks } from "./check.ts";
 import { Folder } from "./folder.ts";
 import { readMarket } from "./market.ts";
-import { cleanMarkets, readMode, withLanguage, writeMode } from "./mode.ts";
+import { cleanMarkets, marketForTarget, readMode, withLanguage, writeMode } from "./mode.ts";
+import { installMode, isOneKit, KitError } from "./kitinstall.ts";
 import { serverText } from "./server.text.ts";
 import { textFor } from "./check.text.ts";
 import { stripComments } from "./htmltext.ts";
 import * as R from "../../web/js/core/rules.js";
-import { templatesFor } from "./check.ts";
+import { templatesFor, templatesForMarkets } from "./check.ts";
 import { renderResume, type TemplateKind } from "./render.ts";
 import { versionFor } from "./resumever.ts";
 import { closedLinks, feedConfig, queryFeed, readCache, refreshFeed, writeCache, type Http as FeedHttp } from "./feed.ts";
@@ -114,7 +115,7 @@ export type VersionsInfo = {
 };
 
 /** What the resume page can show besides each job's resume file: the general versions, templates, saved copies. */
-export async function versionsInfo(folder: Folder, market: "tw" | "us"): Promise<VersionsInfo> {
+export async function versionsInfo(folder: Folder, market: "tw" | "us", markets: ("tw" | "us")[] = [market]): Promise<VersionsInfo> {
   let variants: VersionsInfo["variants"] = [];
   try {
     const r: any = await folder.readYaml("resume.yaml");
@@ -127,7 +128,7 @@ export async function versionsInfo(folder: Folder, market: "tw" | "us"): Promise
     if (m) submitted.push({ file: f, id: m[2], date: m[1] });
   }
   submitted.sort((a, b) => (a.file < b.file ? 1 : -1));
-  return { variants, templates: templatesFor(market).map((kind) => ({ kind, name: names[kind] ?? kind })), submitted };
+  return { variants, templates: templatesForMarkets(markets).map((kind) => ({ kind, name: names[kind] ?? kind })), submitted };
 }
 
 export type DiffPart = { t: "same" | "add" | "del"; s: string };
@@ -435,7 +436,22 @@ export function startServer(opts: {
     const q = url.searchParams;
     const submitted = q.get("submitted");
     const wanted = q.get("template");
-    const known = templatesFor(M.market);
+    // a folder that looks in both markets: every template, and the paper of the job's own market
+    const mode = await readMode(folder);
+    const markets = mode.markets.length ? mode.markets : [M.market];
+    const known = templatesForMarkets(markets);
+    let jobMarket: "us" | "tw" = M.market;
+    if (id !== GENERAL) {
+      let target: any = null;
+      for (const ext of ["yaml", "yml"]) {
+        try {
+          target = await folder.readYaml(`targets/${id}.${ext}`);
+          break;
+        } catch {}
+      }
+      jobMarket = marketForTarget(target, markets, M.market);
+    }
+    const letter = markets.length > 1 ? jobMarket === "us" : M.paper === "letter";
     if (wanted && !known.includes(wanted as TemplateKind)) return page(404, T.notFoundTitle, "");
     if (submitted != null) {
       // a frozen copy saved by "I applied, save a copy": shown exactly as it was saved
@@ -462,7 +478,7 @@ export function startServer(opts: {
       const file = name || id;
       // a resume file's own number goes into the Word file's properties (Subject: not visible on the page)
       const rv = id !== GENERAL && !wanted && submitted == null ? await versionFor(folder, id, html).catch(() => null) : null;
-      const bytes = resumeToDocx(html, { version: rv ? rv.version + (rv.isNew ? "-draft" : "") : "", photo: loadPhoto(photoPath()), paper: M.paper === "letter" ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
+      const bytes = resumeToDocx(html, { version: rv ? rv.version + (rv.isNew ? "-draft" : "") : "", photo: loadPhoto(photoPath()), paper: letter ? "letter" : "a4", title: file, lang: M.language === "en" ? "en" : "zh-TW" });
       return new Response(bytes, {
         headers: {
           ...SECURITY_HEADERS,
@@ -484,7 +500,7 @@ export function startServer(opts: {
     let extra = "<style>" + (photo ? "" : "#photo-slot{display:none !important}") + ".print-tip{display:none !important}</style>";
     if (photo) html = html.replace(/(<img\b[^>]*?\bsrc\s*=\s*)(["']?)photo\.jpg\2/gi, `$1"${dataUrl(photo)}"`);
     // Letter folders: the print dialog gets Letter even if the AI used a template that says A4. A4 folders add nothing.
-    if (M.paper === "letter") extra += "<style>@page{size:letter}</style>";
+    if (letter) extra += "<style>@page{size:letter}</style>";
     if (url.searchParams.get("print") === "1")
       extra += `<script nonce="${nonce}">addEventListener("load",function(){setTimeout(function(){window.print()},400)})</script>`;
     const at = html.toLowerCase().lastIndexOf("</body>");
@@ -530,7 +546,15 @@ export function startServer(opts: {
           if (body.markets !== undefined) {
             const markets = cleanMarkets(body.markets);
             if (!markets.length) return json({ error: T.badRequest }, 400);
-            await writeMode(folder, markets);
+            // the one-for-all kit: install that mode's AI rules (only adding markets); an older folder only records the choice
+            if (isOneKit(folder.root)) {
+              try {
+                installMode(folder.root, markets);
+              } catch (e) {
+                if (e instanceof KitError) return json({ error: e.code === "narrow" ? T.modeNarrow : T.badRequest, code: e.code }, 409);
+                throw e;
+              }
+            } else await writeMode(folder, markets);
           }
           if (body.language !== undefined) {
             if (body.language !== "en" && body.language !== "zh-TW") return json({ error: T.badRequest }, 400);
@@ -621,7 +645,7 @@ export function startServer(opts: {
         case "GET /api/resume-info":
           return json(await resumeInfo(folder));
         case "GET /api/versions":
-          return json(await versionsInfo(folder, M.market));
+          return json(await versionsInfo(folder, M.market, (await readMode(folder)).markets.length ? (await readMode(folder)).markets : [M.market]));
         case "GET /api/photo": {
           const p = loadPhoto(photoPath());
           return json({ has: !!p, dataUrl: p ? dataUrl(p) : null });

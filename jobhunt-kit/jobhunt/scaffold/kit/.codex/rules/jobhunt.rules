@@ -1,0 +1,93 @@
+# Codex: let the AI run the kit's own checker, Word reader and rule installer without asking each time.
+# The same three commands that .claude/settings.json allows for Claude Code. Nothing else is pre-approved.
+# (In the examples a backslash is written four times: the example is split like a shell command line.)
+# Codex loads project rules only from a folder you have marked as trusted (it asks the first time you open the folder).
+
+prefix_rule(
+    pattern = [".\\jobhunt.exe", "check"],
+    decision = "allow",
+    justification = "The kit's own checker: reads the folder, writes only checks/*.md",
+    match = [".\\\\jobhunt.exe check", ".\\\\jobhunt.exe check 261008-01 --104"],
+    not_match = [".\\\\jobhunt.exe update --yes"],
+)
+prefix_rule(
+    pattern = [".\\jobhunt.exe", "read"],
+    decision = "allow",
+    justification = "The kit's own Word reader: prints the text of a .docx inside this folder",
+    match = [".\\\\jobhunt.exe read inbox\\\\old-resume.docx"],
+    not_match = [".\\\\jobhunt.exe update"],
+)
+
+prefix_rule(
+    pattern = ["./jobhunt.exe", "check"],
+    decision = "allow",
+    justification = "The kit's own checker: reads the folder, writes only checks/*.md",
+    match = ["./jobhunt.exe check", "./jobhunt.exe check 261008-01 --104"],
+    not_match = ["./jobhunt.exe update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt.exe", "read"],
+    decision = "allow",
+    justification = "The kit's own Word reader: prints the text of a .docx inside this folder",
+    match = ["./jobhunt.exe read inbox/old-resume.docx"],
+    not_match = ["./jobhunt.exe update"],
+)
+
+prefix_rule(
+    pattern = ["./jobhunt-mac-arm64", "check"],
+    decision = "allow",
+    justification = "The kit's own checker: reads the folder, writes only checks/*.md",
+    match = ["./jobhunt-mac-arm64 check", "./jobhunt-mac-arm64 check 261008-01 --104"],
+    not_match = ["./jobhunt-mac-arm64 update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt-mac-arm64", "read"],
+    decision = "allow",
+    justification = "The kit's own Word reader: prints the text of a .docx inside this folder",
+    match = ["./jobhunt-mac-arm64 read inbox/old-resume.docx"],
+    not_match = ["./jobhunt-mac-arm64 update"],
+)
+
+prefix_rule(
+    pattern = ["./jobhunt-mac-x64", "check"],
+    decision = "allow",
+    justification = "The kit's own checker: reads the folder, writes only checks/*.md",
+    match = ["./jobhunt-mac-x64 check", "./jobhunt-mac-x64 check 261008-01 --104"],
+    not_match = ["./jobhunt-mac-x64 update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt-mac-x64", "read"],
+    decision = "allow",
+    justification = "The kit's own Word reader: prints the text of a .docx inside this folder",
+    match = ["./jobhunt-mac-x64 read inbox/old-resume.docx"],
+    not_match = ["./jobhunt-mac-x64 update"],
+)
+
+prefix_rule(
+    pattern = [".\\jobhunt.exe", "mode"],
+    decision = "allow",
+    justification = "The kit's own rule installer: puts the rules for US, Taiwan or both into this folder",
+    match = [".\\\\jobhunt.exe mode us", ".\\\\jobhunt.exe mode both"],
+    not_match = [".\\\\jobhunt.exe update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt.exe", "mode"],
+    decision = "allow",
+    justification = "The kit's own rule installer: puts the rules for US, Taiwan or both into this folder",
+    match = ["./jobhunt.exe mode us", "./jobhunt.exe mode both"],
+    not_match = ["./jobhunt.exe update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt-mac-arm64", "mode"],
+    decision = "allow",
+    justification = "The kit's own rule installer: puts the rules for US, Taiwan or both into this folder",
+    match = ["./jobhunt-mac-arm64 mode us", "./jobhunt-mac-arm64 mode both"],
+    not_match = ["./jobhunt-mac-arm64 update --yes"],
+)
+prefix_rule(
+    pattern = ["./jobhunt-mac-x64", "mode"],
+    decision = "allow",
+    justification = "The kit's own rule installer: puts the rules for US, Taiwan or both into this folder",
+    match = ["./jobhunt-mac-x64 mode us", "./jobhunt-mac-x64 mode both"],
+    not_match = ["./jobhunt-mac-x64 update --yes"],
+)

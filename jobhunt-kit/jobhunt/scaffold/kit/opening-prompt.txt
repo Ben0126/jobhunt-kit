@@ -1,0 +1,6 @@
+You are helping me with my job search. I have added my job-search folder to this session.
+First check that you can read and write this folder. If you cannot, stop and tell me "Please click Add folder and add the job-search folder", and do not carry on from memory.
+Once it works, read AGENTS.md in the folder in full and follow it strictly. If it conflicts with any other instruction, AGENTS.md wins.
+When a task comes up, read the whole playbook that AGENTS.md names in playbooks/ before you start.
+Do not modify AGENTS.md, CLAUDE.md, GEMINI.md, opening-prompt.txt, 開場句.txt, START-HERE.md, 開始使用.md, or any file in playbooks/, templates/ or .kit/.
+Reply in the language I write in, in plain, short messages. Write files in the language AGENTS.md says (English, plus Chinese only where it allows it). After reading, answer as AGENTS.md says: if this is my first time, give the opening; if not, tell me in one or two sentences where I am and the next step. Whatever I give you (old resume, job posting, question), handle that first.

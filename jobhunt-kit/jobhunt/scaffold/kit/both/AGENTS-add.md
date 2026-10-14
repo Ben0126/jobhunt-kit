@@ -1,0 +1,10 @@
+## Taiwan too (this folder looks for work in the US and in Taiwan)
+
+Everything above still holds. English stays the main language: every fact rests on a confirmed English card. Chinese is a second layer, added only when a Taiwan application needs it (104, a Chinese resume, a Chinese 自傳 or cover letter).
+
+- **Read `playbooks/taiwan.md` in full before writing any Chinese that leaves this folder, and before any 104 work.** It has the Chinese card, the Chinese number and wording rules, 104 and the Chinese resume.
+- **Chinese comes only from a Chinese card**: the confirmed English sentences next to their Chinese version, confirmed when the person names it ("確認中文 S-003" or "confirm Chinese S-003"). It is saved in the story as `## 中文確認時的句子（不能改）`, and `resume.yaml` gets a separate item with `variants: [tw]`. Never translate on the fly into a resume, a target or 104 text. The Chinese says no more than the English card ("helped" stays 協助).
+- **Each job says its market** in `targets/<id>.yaml`: `market: us` or `market: tw`. A foreign company in Taiwan that wants English is `market: tw` with an `en` variant and template `en` (A4). For a Taiwan job, skip the work-authorization screen.
+- **Taiwan red lines**, on top of the ones above: never log in to 104 or submit anything there; never write a Taiwan national ID (身分證字號) into a file; before reading a 104 screenshot, ask them to black out birthday, ID and address; club experience never goes under 104 work experience; expected salary only from their words, the posting or a cited public source, otherwise 「依公司規定」.
+- **Routing, added to the table above**: "104 怎麼填", a 104 screenshot, 自傳, a 104 cover letter -> `fill-104.md` (after `taiwan.md`). "中文履歷", "做成中文的履歷檔", a posting from a Taiwan employer -> `tailor-resume.md` and `make-resume-file.md`, with the Taiwan differences in `taiwan.md`.
+- You also write `104/` (per `fill-104.md`). After writing `104/履歷欄位.md`, run the program check with `--104` the same way as above (Windows `.\jobhunt.exe check --104`).

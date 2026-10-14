@@ -111,6 +111,11 @@ const ZH = {
   profileCourseNotIn: "這個課程名稱不在 resume.yaml 學歷的 details 裡，也不是 resume.yaml 的重點原句（課程只能逐字照抄）",
   profileLineNotOriginal: "這一行不是固定句型，也不是 resume.yaml 的職稱、單位或專案名稱（只能照格式複製，不能自己加句子）",
   profileHeadlineSegment: (seg: string) => `標題的這一段「${seg}」不是 resume.yaml 裡有的學歷、職稱、單位或專長，也不是「Seeking … roles」`,
+  confirmedZhNoSection: (code: string, malformed: boolean) =>
+    malformed ? `${code} 的「## 中文確認時的句子」格式不對，程式沒辦法比對（照 playbooks/taiwan.md 的格式）` : `${code} 還沒有中文卡：resume.yaml 的中文句子要先出中文卡、本人打「確認中文 ${code}」才能用`,
+  confirmedZhBullet: (codes: string) => `resume.yaml 的這句中文和 ${codes} 中文卡上確認過的句子不一樣（不能自己改寫，要改就重新出中文卡）`,
+  confirmedZhRole: (code: string, title: string) => `resume.yaml 這一筆的職稱和 ${code} 中文卡上的職稱「${title}」不一樣`,
+  confirmedZhOrg: (code: string, org: string) => `resume.yaml 這一筆的單位名稱和 ${code} 中文卡上的「${org}」不一樣`,
   confirmedBullet: (code: string) => `resume.yaml 的這句和 ${code} 確認卡上「Sentence at confirmation」的句子不一樣（不能自己改寫，要改就重新出卡確認）`,
   confirmedRole: (code: string, title: string) => `resume.yaml 的職稱和 ${code} 確認卡上的職稱「${title}」不一樣（要改就重新出卡確認）`,
   confirmedRoleNoTitle: (code: string) => `resume.yaml 這筆經歷寫了職稱，但 ${code} 確認卡上「Sentence at confirmation」沒有 Title: 行，沒有確認過的職稱可以對照（要寫職稱，就重新出卡確認）`,
@@ -309,6 +314,13 @@ const EN: CheckText = {
   profileCourseNotIn: "This course name is not in the details of an education entry in resume.yaml, and not a bullet sentence of resume.yaml (course names are copied word for word)",
   profileLineNotOriginal: "This line is not a fixed sentence frame, and it is not a title, employer or project name from resume.yaml (copy the format only; do not add sentences). In \"Looking for <roles> roles in <place>.\" the roles must be written in \"Work they want\" and the place in \"Location and work type\" of me/profile.md; a title line must belong to the experience listed on the Source line",
   profileHeadlineSegment: (seg) => `This headline part "${seg}" is not an education, title, employer or skill from resume.yaml, and not "Seeking <roles> roles" with roles written in "Work they want" of me/profile.md`,
+  confirmedZhNoSection: (code, malformed) =>
+    malformed
+      ? `The Chinese card section of ${code} is not in the expected format, so it cannot be compared (see playbooks/taiwan.md)`
+      : `${code} has no Chinese card yet: a Chinese sentence in resume.yaml needs a Chinese card that the person confirmed ("confirm Chinese ${code}")`,
+  confirmedZhBullet: (codes) => `This Chinese sentence in resume.yaml is not one of the sentences on the Chinese card of ${codes} (do not reword it; make a new Chinese card instead)`,
+  confirmedZhRole: (code, title) => `The title of this resume.yaml entry is not the title on the Chinese card of ${code} ("${title}")`,
+  confirmedZhOrg: (code, org) => `The organization of this resume.yaml entry is not the one on the Chinese card of ${code} ("${org}")`,
   confirmedBullet: (code) => `This sentence in resume.yaml is not one of the sentences under "Sentence at confirmation" on the card of ${code} (do not reword it; to change it, make a new card and confirm again)`,
   confirmedRole: (code, title) => `The title in resume.yaml is not the title "${title}" confirmed on the card of ${code} (to change it, confirm a new card)`,
   confirmedRoleNoTitle: (code) => `This experience in resume.yaml has a title, but the "Sentence at confirmation" of ${code} has no Title: line, so there is no confirmed title to compare it with (to print a title, confirm a new card that has one)`,

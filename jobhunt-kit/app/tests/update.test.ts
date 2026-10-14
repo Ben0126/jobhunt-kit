@@ -425,9 +425,10 @@ test("release.yml 的發布說明：英文為主；第一行連到中文說明�
   expect(notes).toContain("${NOTES_EN}");
   expect(y).toContain('test -s "$f"');
   expect(y).toContain('"release-notes/$TAG.zh.md" "release-notes/$TAG.en.md"');
-  // both kits are still offered, with English wording for the Taiwan files
-  for (const f of ["job-hunt-windows.zip", "job-hunt-mac-apple.zip", "job-hunt-mac-intel.zip", "job-hunt-us-windows.zip", "job-hunt-us-mac-apple.zip", "job-hunt-us-mac-intel.zip"]) expect(notes).toContain(f);
-  expect(notes).toContain("Taiwan edition (Chinese)");
+  // one kit for the US, Taiwan or both (owner, 2026-10-14): three zips, one per computer; the two old kits are no longer offered
+  for (const f of ["jobhunt-kit-windows.zip", "jobhunt-kit-mac-apple.zip", "jobhunt-kit-mac-intel.zip"]) expect(notes).toContain(f);
+  expect(notes).not.toMatch(/job-hunt-us-windows\.zip|job-hunt-windows\.zip/);
+  expect(notes).toContain("the United States, Taiwan, or both");
   const rn = join(APP, "..", "..", "release-notes");
   expect(readFileSync(join(rn, "v0.8.zh.md"), "utf-8")).toContain("每天最多問 GitHub 一次");
   expect(readFileSync(join(rn, "v0.8.en.md"), "utf-8")).toMatch(/at most once a day/);

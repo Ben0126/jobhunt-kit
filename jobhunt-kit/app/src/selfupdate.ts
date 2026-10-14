@@ -13,7 +13,9 @@
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DocxError, unzipEntry, zipEntries, type ZipLimits } from "./docx.ts";
+import { isOneKit, modeName } from "./kitinstall.ts";
 import { type Market, readMarketSync } from "./market.ts";
+import { readModeSync } from "./mode.ts";
 import { apiUrl, assetName, isNewer, parseVersion, programName, REPO, testServerFromEnv } from "./update.ts";
 import type { UpdateText } from "./selfupdate.text.ts";
 
@@ -32,14 +34,35 @@ const NEVER = new Set([".claude/settings.local.json"]);
 const SETTINGS = "jobhunt.yaml";
 const PROGRAMS = ["jobhunt.exe", "jobhunt-mac-arm64", "jobhunt-mac-x64"];
 
-/** The top folder inside the release zip (release.yml: pkg/job-hunt, pkg/job-hunt-us). */
-export const zipTop = (m: Market) => (m === "us" ? "job-hunt-us" : "job-hunt");
+/** The top folder inside the release zip (release.yml: pkg/job-hunt, pkg/job-hunt-us, pkg/job-hunt-kit). */
+export const zipTop = (m: Market | "one") => (m === "one" ? "job-hunt-kit" : m === "us" ? "job-hunt-us" : "job-hunt");
+
+/** The one-for-all kit: its own top-level files and folders. playbooks/, the skills and AGENTS.md are what `jobhunt mode`
+ * installed from .kit/<mode>; an update takes them from the new .kit (see installedFrom), not from the zip's top level. */
+const ONE_ROOT = ["CLAUDE.md", "GEMINI.md", "START-HERE.md", "開始使用.md", "opening-prompt.txt", "開場句.txt"];
+const ONE_DIRS = [".kit/", "templates/", ".claude/", ".codex/"];
+
+/** One-for-all kit, mode chosen: where a file of .kit/<mode>/ goes when installed (the same as kitinstall.ts does). */
+export function installedFrom(rel: string, mode: string): string[] {
+  const p = `.kit/${mode}/`;
+  if (!rel.startsWith(p)) return [];
+  const r = rel.slice(p.length);
+  if (r === "AGENTS.md") return ["AGENTS.md"];
+  if (r.startsWith("playbooks/") && r.length > 10) return [r];
+  if (r.startsWith("skills/") && r.length > 7) return [`.claude/${r}`, `.agents/${r}`];
+  return [];
+}
 
 /** Is this path (relative, forward slashes) one the update may replace in a folder of this market on this computer? */
-export function replaceable(rel: string, market: Market, program: string): boolean {
+export function replaceable(rel: string, market: Market | "one", program: string): boolean {
   if (!rel || rel.includes("\\") || rel.includes(":") || rel.includes("\0") || rel.startsWith("/")) return false;
   if (rel.split("/").some((p) => p === "" || p === "." || p === "..")) return false;
   if (NEVER.has(rel)) return false;
+  if (market === "one") {
+    if (rel === program || ONE_ROOT.includes(rel)) return true;
+    if (rel.startsWith(".claude/skills/")) return false; // installed from .kit
+    return ONE_DIRS.some((d) => rel.startsWith(d) && rel.length > d.length);
+  }
   if (rel === program || ROOT_FILES[market].includes(rel)) return true;
   return KIT_DIRS.some((d) => rel.startsWith(d) && rel.length > d.length);
 }
@@ -124,7 +147,7 @@ export function mergeSettings(oldText: string, newText: string): { text: string;
 
 export type NewFile = { path: string; data: Uint8Array; isNew: boolean; program: boolean };
 /** settingsBase: jobhunt.yaml as it was when the list was made (the merge is redone from nothing if it changed). */
-export type Prepared = { from: string; to: string; market: Market; program: string; files: NewFile[]; settingsAdded: string[]; settingsBase?: string };
+export type Prepared = { from: string; to: string; market: Market; kind?: Market | "one"; program: string; files: NewFile[]; settingsAdded: string[]; settingsBase?: string };
 /** What the page and the command line show before the user agrees. */
 export type PlanView = { from: string; to: string; files: { path: string; isNew: boolean }[]; settingsAdded: string[] };
 
@@ -178,7 +201,10 @@ export async function prepareUpdate(env: UpdateEnv): Promise<Prepared> {
   if (!parseVersion(from)) throw new UpdateFailure("dev");
   const platform = env.platform ?? process.platform, arch = env.arch ?? process.arch;
   const market = readMarketSync(env.dir).market;
-  const asset = assetName(market, platform, arch), program = programName(platform, arch);
+  const kind: Market | "one" = isOneKit(env.dir) ? "one" : market;
+  const mode = kind === "one" ? readModeSync(env.dir) : null;
+  const modeDir = mode && mode.source === "mode" && mode.markets.length ? modeName(mode.markets) : null;
+  const asset = assetName(kind, platform, arch), program = programName(platform, arch);
   if (!asset || !program) throw new UpdateFailure("unsupported");
   const doFetch = env.fetch ?? ((u: string, i: RequestInit) => fetch(u, i));
   const server = env.server ?? null;
@@ -212,7 +238,7 @@ export async function prepareUpdate(env: UpdateEnv): Promise<Prepared> {
   if (digest && new Bun.CryptoHasher("sha256").update(zip).digest("hex") !== digest) throw new UpdateFailure("badDownload");
 
   // Pick the files we may replace; every other entry (the user-data templates included) is skipped unread.
-  const top = zipTop(market) + "/";
+  const top = zipTop(kind) + "/";
   const picked = new Map<string, Uint8Array>();
   let settingsNew: string | null = null;
   try {
@@ -223,9 +249,15 @@ export async function prepareUpdate(env: UpdateEnv): Promise<Prepared> {
       if (!name.startsWith(top) || name.endsWith("/")) continue;
       const rel = name.slice(top.length);
       if (rel === SETTINGS) settingsNew = new TextDecoder().decode(unzipEntry(zip, e, budget, UPDATE_ZIP_LIMITS));
-      else if (replaceable(rel, market, program)) {
+      else if (kind === "one" && rel === "AGENTS.md") {
+        // the setup rules: only for a folder that has not chosen yet (otherwise AGENTS.md is the installed rule set)
+        if (!modeDir) picked.set(rel, unzipEntry(zip, e, budget, UPDATE_ZIP_LIMITS));
+      } else if (replaceable(rel, kind, program)) {
         if (picked.has(rel)) throw new DocxError("corrupt", `duplicate ${rel}`);
-        picked.set(rel, unzipEntry(zip, e, budget, UPDATE_ZIP_LIMITS));
+        const data = unzipEntry(zip, e, budget, UPDATE_ZIP_LIMITS);
+        picked.set(rel, data);
+        // the chosen mode's rules are installed copies: they follow the new .kit (what `jobhunt mode` would install now)
+        if (modeDir) for (const to of installedFrom(rel, modeDir)) picked.set(to, data);
       }
     }
   } catch (e) {
@@ -233,10 +265,11 @@ export async function prepareUpdate(env: UpdateEnv): Promise<Prepared> {
     throw e;
   }
   // A zip without the program or the main rules is not a kit for this folder.
-  if (!picked.has(program) || !picked.has("AGENTS.md") || settingsNew == null) throw new UpdateFailure("badDownload");
+  const rules = kind === "one" ? ".kit/us/AGENTS.md" : "AGENTS.md";
+  if (!picked.has(program) || !picked.has(rules) || settingsNew == null) throw new UpdateFailure("badDownload");
   try {
     const m = Bun.YAML.parse(settingsNew) as any;
-    if ((m?.market === "us" ? "us" : "tw") !== market) throw new Error("market");
+    if (kind === "one" ? !/^one/.test(String(m?.kit_format ?? "")) : (m?.market === "us" ? "us" : "tw") !== market) throw new Error("market");
   } catch {
     throw new UpdateFailure("badDownload");
   }
@@ -257,7 +290,7 @@ export async function prepareUpdate(env: UpdateEnv): Promise<Prepared> {
       settingsAdded = merged.added;
     }
   }
-  return { from, to: tag, market, program, files, settingsAdded, settingsBase };
+  return { from, to: tag, market, kind, program, files, settingsAdded, settingsBase };
 }
 
 // ---------------------------------------------------------------- 2. apply
@@ -432,7 +465,7 @@ export function readBackup(dir: string): BackupRecord | null {
     if (!parseVersion(r?.from) || !parseVersion(r?.to) || !Array.isArray(r.files)) return null;
     const files = r.files.filter((f: any) => f && typeof f.path === "string" && (f.path === SETTINGS || /^[^/]/.test(f.path)));
     // Only paths an update could have written: a hand-edited record can't make undo touch the user's files.
-    const ok = (f: any) => f.path === SETTINGS || (f.program ? PROGRAMS.includes(f.path) : replaceable(f.path, "tw", "") || replaceable(f.path, "us", ""));
+    const ok = (f: any) => f.path === SETTINGS || (f.program ? PROGRAMS.includes(f.path) : replaceable(f.path, "tw", "") || replaceable(f.path, "us", "") || replaceable(f.path, "one", "") || /^(AGENTS\.md|playbooks\/.+|\.agents\/.+)$/.test(f.path));
     if (!files.every(ok)) return null;
     return { from: String(r.from), to: String(r.to), files: files.map((f: any) => ({ path: f.path, existed: !!f.existed, program: !!f.program })) };
   } catch {

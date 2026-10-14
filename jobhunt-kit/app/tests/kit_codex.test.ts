@@ -1,6 +1,6 @@
 // Codex (OpenAI) reads the same kit as Claude Code. Three things have to stay true for it:
 //  1. AGENTS.md fits in what Codex loads (project_doc_max_bytes, 32 KiB by default; it silently stops adding text after that).
-//  2. Skills are kept once (.claude/skills); the release build copies them to .agents/skills, where Codex looks.
+//  2. Skills are kept once (.claude/skills); the installer (`jobhunt mode`) copies them to .agents/skills, where Codex looks.
 //  3. The two commands .claude/settings.json pre-approves (check, read) are pre-approved in .codex/rules too, and nothing more.
 // The rule syntax itself was checked with `codex execpolicy check` (codex-cli 0.162.1); that tool isn't run here.
 import { expect, test } from "bun:test";
@@ -18,11 +18,12 @@ test("AGENTS.md 小於 Codex 預設載入上限（32 KiB）並留餘地給別的
   }
 });
 
-test("技能只在 .claude/skills 維護一份；.agents/skills 是發布時複製出來的（release.yml），原始碼裡不放", () => {
+test("技能只在 .claude/skills 維護一份：原始碼裡不放 .agents；發布時由 kitbuild.ts 組進 .kit，選模式時安裝器才複製到 .agents/skills（Codex 找的地方）", () => {
   for (const [kit] of KITS) expect(existsSync(join(SCAFFOLD, kit, ".agents")), kit).toBe(false);
   const wf = readFileSync(join(import.meta.dir, "..", "..", "..", ".github", "workflows", "release.yml"), "utf-8");
-  expect(wf).toContain('cp -R "pkg/$d/.claude/skills" "pkg/$d/.agents/skills"');
-  expect(wf).toContain('".agents/skills/start/SKILL.md"'); // and the zip check fails if the copy did not happen
+  expect(wf).toContain("bun jobhunt-kit/app/kitbuild.ts pkg/job-hunt-kit");
+  expect(wf).toContain('".kit/both/skills/start/SKILL.md"'); // and the zip check fails if the skills did not get in
+  // (kit_one.test.ts checks that `jobhunt mode` puts them in both .claude/skills and .agents/skills)
 });
 
 test(".codex/rules 預先允許的指令，和 .claude/settings.json 的 check／read 一樣，沒有多的", () => {

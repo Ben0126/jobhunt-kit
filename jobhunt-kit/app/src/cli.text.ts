@@ -17,6 +17,14 @@ const ZH = {
   alreadyRunning: "介面已經開著了，幫你在瀏覽器再打開一次。",
   started: "介面已經在瀏覽器打開。用完再關掉這個視窗。",
   startedNoOpen: "介面已經準備好，請用瀏覽器打開下面的網址。用完再關掉這個視窗。",
+  modeNames: { us: "美國", tw: "台灣", both: "美國和台灣" } as Record<"us" | "tw" | "both", string>,
+  modeInstalled: (name: string) => `已經裝好「找${name}的工作」的規則。請重新完整讀一次 AGENTS.md（已經換成完整的規則），照它的第一次使用步驟繼續。`,
+  modeNow: (name: string) => `這個資料夾目前是：找${name}的工作。要改用「jobhunt mode us」「jobhunt mode tw」或「jobhunt mode both」（只能增加，不能拿掉）。`,
+  modeUnset: "這個資料夾還沒選要找哪裡的工作。用「jobhunt mode us」（美國）、「jobhunt mode tw」（台灣）或「jobhunt mode both」（兩邊）。",
+  modeBad: (what: string) => `不認得「${what}」。只能是 us（美國）、tw（台灣）或 both（兩邊）。`,
+  modeNoKit: "這個資料夾不是合一版（沒有 .kit 資料夾），沒辦法換規則。請下載新版的求職資料夾。",
+  modeNarrow: (name: string) => `這個資料夾已經是「找${name}的工作」，只能增加市場，不能拿掉。資料都還在，只是不會換規則。`,
+  modeNotPlain: (path: string) => `「${path}」不是一般的檔案或資料夾（可能是捷徑），為了安全沒有換規則。`,
 };
 
 export type CliText = typeof ZH;
@@ -36,6 +44,14 @@ const EN: CliText = {
   alreadyRunning: "The app is already open. Opening it in your browser again.",
   started: "The app is open in your browser. Close this window when you are done.",
   startedNoOpen: "The app is ready. Open the address below in your browser. Close this window when you are done.",
+  modeNames: { us: "the United States", tw: "Taiwan", both: "the United States and Taiwan" },
+  modeInstalled: (name) => `The rules for looking for work in ${name} are installed. Read AGENTS.md again in full (it now holds the full rules) and continue with its first-time steps.`,
+  modeNow: (name) => `This folder looks for work in ${name}. To change it use "jobhunt mode us", "jobhunt mode tw" or "jobhunt mode both" (you can add a market, not remove one).`,
+  modeUnset: 'This folder does not know yet where you look for work. Use "jobhunt mode us" (United States), "jobhunt mode tw" (Taiwan) or "jobhunt mode both".',
+  modeBad: (what) => `Unknown choice "${what}". Use us (United States), tw (Taiwan) or both.`,
+  modeNoKit: "This folder is not the one-for-all kit (it has no .kit folder), so its rules cannot be changed. Please download the new job-search folder.",
+  modeNarrow: (name) => `This folder already looks for work in ${name}. A market can be added, not removed. All your files are still there; nothing was changed.`,
+  modeNotPlain: (path) => `"${path}" is not a plain file or folder (it may be a shortcut), so for safety the rules were not changed.`,
 };
 
 export const TABLES: Record<Language, CliText> = { "zh-TW": ZH, en: EN };

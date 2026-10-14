@@ -18,6 +18,7 @@ const ZH = {
   pdfWord: "履歷",
   versionFailTitle: "這個版本現在排不出來",
   versionFailMsg: "履歷資料（resume.yaml）或這份客製履歷有問題。請先到「履歷」頁看程式檢查的結果，或請 AI 修好再回來。",
+  modeNarrow: "這個資料夾已經選過了，只能增加市場（例如從「台灣」改成「兩邊都找」），不能拿掉。",
   photoFormat: "這張照片不能用，請換一張 .jpg 或 .png 的照片。",
   photoBig: "這張照片檔案太大，請換一張小一點的。",
 };
@@ -38,6 +39,7 @@ const EN: typeof ZH = {
   pdfWord: "Resume",
   versionFailTitle: "This version cannot be drawn right now",
   versionFailMsg: "There is a problem with the resume data (resume.yaml) or with this tailored resume. Look at the program check on the Resumes page first, or ask the AI to fix it, then come back.",
+  modeNarrow: 'This folder already has a choice. You can add a market (for example from "Taiwan" to "Both"), not remove one.',
   photoFormat: "This photo can't be used. Please choose a .jpg or .png picture.",
   photoBig: "This photo file is too big. Please choose a smaller one.",
 };

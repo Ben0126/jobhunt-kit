@@ -43,9 +43,10 @@ export function programName(platform: string = process.platform, arch: string = 
 }
 
 /** The release file name for this kit and computer (release.yml): job-hunt-windows.zip, job-hunt-us-mac-apple.zip ... */
-export function assetName(market: Market, platform: string = process.platform, arch: string = process.arch): string | null {
+export function assetName(market: Market | "one", platform: string = process.platform, arch: string = process.arch): string | null {
   const os = platform === "win32" ? "windows" : platform === "darwin" ? (arch === "arm64" ? "mac-apple" : "mac-intel") : null;
-  return os ? `${market === "us" ? "job-hunt-us" : "job-hunt"}-${os}.zip` : null;
+  // the one-for-all kit has its own name, so an older one-market folder's update never picks it up
+  return os ? `${market === "one" ? "jobhunt-kit" : market === "us" ? "job-hunt-us" : "job-hunt"}-${os}.zip` : null;
 }
 
 export const downloadUrl = (asset: string) => `https://github.com/${REPO}/releases/latest/download/${asset}`;
@@ -108,7 +109,8 @@ export function createUpdateChecker(o: UpdateOptions): UpdateChecker {
     }
     if (!updateCheckEnabled(cfg)) return null;
     const market = marketFromConfig(cfg).market;
-    const zip = assetName(market, platform, arch), program = programName(platform, arch);
+    const kind = /^one/.test(String((cfg as any)?.kit_format ?? "")) ? "one" : market;
+    const zip = assetName(kind, platform, arch), program = programName(platform, arch);
     if (!zip || !program) return null;
 
     const cachePath = o.folder.updatePath;

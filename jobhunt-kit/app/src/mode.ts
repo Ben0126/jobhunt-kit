@@ -88,3 +88,12 @@ export function withLanguage(configText: string, language: "en" | "zh-TW"): stri
   const body = configText.length && !configText.endsWith("\n") ? configText + nl : configText;
   return `${body}language: ${language}${nl}`;
 }
+
+/** The market a job is for. One market: that one. Both: the target's own `market:` (us or tw), else its base_variant
+ * (en… is the US, anything else Taiwan). An English resume for a Taiwan employer says `market: tw`. */
+export function marketForTarget(target: any, markets: MarketId[], lead: MarketId): MarketId {
+  if (!(markets.includes("us") && markets.includes("tw"))) return lead;
+  const f = String(target?.market ?? "").trim().toLowerCase();
+  if (f === "us" || f === "tw") return f;
+  return /^en(?:[-_]|$)/i.test(String(target?.base_variant ?? "")) ? "us" : "tw";
+}

@@ -47,6 +47,10 @@ async function main(): Promise<number> {
     const { runUpdate } = await import("./selfupdate.ts");
     return runUpdate(argv, dir, { version: VERSION });
   }
+  if (command === "mode") {
+    const { runMode } = await import("./kitinstall.ts");
+    return runMode(argv, dir);
+  }
   if (command === "read") {
     const { runRead } = await import("./docx.ts");
     return runRead(argv, dir);
