@@ -35,7 +35,7 @@ Rules:
 - **Part 3 is a fresh literal translation of the English sentence, not a copy of their words.** Copying their words would hide differences. Check each sentence: every number is the same in parts 1, 2, 3 and 4; each verb has the same strength (never "led" shown back as "helped", or "helped" as "ran"); nothing added, nothing dropped, and no softer or stronger adjective. Brackets with the English word are only for proper names and software names. Verbs, job titles, scope words and quantity words are always translated; if you cannot translate one literally, rewrite the English sentence.
 - Their words already in English: parts 1 and 3 become one line ("Your words (English, so nothing to translate): ..."). If they ask for the translation anyway, give part 3.
 - **No open questions on the card.** Who did it, how much: ask before the card (section 3, `import-resume.md` 5). The card only has yes/no rewording questions with the same meaning (red line 4), original and new side by side, at most 1 or 2. Then answering them does not invalidate the card by "adding new content".
-- **Goes under**: at the end of the first heading line, from the table in 8.2 ("Experience", "Projects & Activities", "Skills & Certifications").
+- **Goes under**: at the end of the first heading line, from the table in 8.2 ("Experience", "Projects & Activities", "Skills", "Certifications").
 - **Numbers**: all in one line, separated by commas, each with their words or "<- old resume, you said it's exact". Include rough ones ("about a dozen <- you said 'a dozen or so'"). None -> "Numbers: none". Dates are listed only when they differ from how they said it (e.g. "Sep 2024 <- you said 'second year, fall'"). If they gave no month, don't write one.
 - **Verb**: if a sentence uses "Handled" or "independently", or the verb comes from the role question, add a line: "Verb: Scheduled <- you said 'I made the schedule myself'" or "Verb: Handled <- you chose 'lead, with help'". No such sentence -> no line.
 - **Removed**: when you changed or dropped something, one line: "Removed: 'managed' (you said the president decided how it was spent)."
@@ -94,9 +94,10 @@ Where it goes:
 |---|---|---|
 | job, internship, student-org | `experience` | Experience |
 | project, volunteer, competition | `projects` | Projects & Activities |
-| cert-language | `skills`, label "Certifications", "Languages" or "Training" | Skills & Certifications |
-| other (software) | `skills`, label "Software" | Skills & Certifications |
-| other (badge, online course) | `skills`, label "Training" | Skills & Certifications |
+| cert-language | `skills`, label "Certifications" or "Training" | Certifications |
+| cert-language (language) | `skills`, label "Languages" | Skills |
+| other (software) | `skills`, label "Software" | Skills |
+| other (badge, online course) | `skills`, label "Training" | Certifications |
 | other (everything else) | by content: job-like -> `experience`, activity-like -> `projects`; dean's list, scholarship, GPA -> `details` of `education` | depends |
 
 How to write it (for the AI, not shown to the user):

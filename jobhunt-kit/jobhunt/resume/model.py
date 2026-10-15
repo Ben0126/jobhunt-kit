@@ -54,7 +54,13 @@ import yaml
 SECTIONS = ("summary", "education", "experience", "projects", "skills")
 BULLET_SECTIONS = ("experience", "projects")
 TITLES = {"summary": "Summary", "education": "Education", "experience": "Experience", "projects": "Projects",
-          "skills": "Skills"}
+          "skills": "Skills", "credentials": "Certifications"}
+# `credentials` is opt-in: only a resume whose section order lists it moves certifications and training out of Skills.
+VALID_SECTIONS = SECTIONS + ("credentials",)
+
+
+def is_credential_line(line: dict) -> bool:
+    return str(line.get("label") or "").strip().lower() in ("certifications", "certification", "training")
 
 
 class ResumeError(Exception):
@@ -81,7 +87,7 @@ def validate(data: dict) -> None:
         raise ResumeError("resume.yaml: define at least one entry under variants:")
     for v, spec in variants.items():
         for s in (spec or {}).get("sections") or []:
-            if s not in SECTIONS:
+            if s not in VALID_SECTIONS:
                 raise ResumeError(f"resume.yaml: variants.{v}.sections has unknown section {s!r}")
     seen = set()
     for sec in BULLET_SECTIONS:
@@ -167,9 +173,12 @@ def resolve(data: dict, variant: str) -> dict:
                                  if in_variant(b, variant)]
                 items.append(it)
             sec["items"] = items
-        elif kind == "skills":
+        elif kind in ("skills", "credentials"):
+            split = "credentials" in order
             sec["lines"] = [{"label": l.get("label", ""), "items": list(l.get("items") or [])}
-                            for l in data.get("skills") or [] if in_variant(l, variant)]
+                            for l in data.get("skills") or []
+                            if in_variant(l, variant) and (not split or is_credential_line(l) == (kind == "credentials"))
+                            and (kind != "credentials" or l.get("items"))]
         if sec.get("items") == [] or sec.get("lines") == []:
             continue
         out["sections"].append(sec)

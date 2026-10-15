@@ -59,9 +59,9 @@ a { color: #000; text-decoration: none; }
 </table>
 {% if p.bullets %}<ul>{% for t in p.bullets %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
-{% elif sec.kind == "skills" %}
+{% elif sec.kind in ("skills", "credentials") %}
 {% for l in sec.lines %}
-<p class="skill"><b>{{ l.label }}:</b> {{ l["items"] | join(", ") }}</p>
+{% if sec.kind == "credentials" and (l.label | lower) in ("certifications", "certification") %}<p class="skill">{{ l["items"] | join(", ") }}</p>{% else %}<p class="skill"><b>{{ l.label }}:</b> {{ l["items"] | join(", ") }}</p>{% endif %}
 {% endfor %}
 {% endif %}
 {% endfor %}

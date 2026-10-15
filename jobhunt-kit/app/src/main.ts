@@ -51,6 +51,10 @@ async function main(): Promise<number> {
     const { runMode } = await import("./kitinstall.ts");
     return runMode(argv, dir);
   }
+  if (command === "resume-sections") {
+    const { runResumeSections } = await import("./resumesections.ts");
+    return runResumeSections(argv, dir);
+  }
   if (command === "read") {
     const { runRead } = await import("./docx.ts");
     return runRead(argv, dir);

@@ -26,6 +26,8 @@ You never produce PDF, Word or image files yourself: the jobhunt program's resum
 
 (There is no template question: the template is always `us`.)
 
+**Older folder (resume.yaml has no `credentials` in `sections:`)**: the template now prints Certifications and Training as their own last section, but an older `resume.yaml` still lists the old layout. If the program is in the folder, run `jobhunt resume-sections` (it only lists the lines it would change). Show the user those lines in plain words ("Certifications and Training will move to the end of your resume"), and only after they agree run `jobhunt resume-sections --yes`. Never edit `sections:` yourself for this. If it says it cannot (list not on one line, unreadable), tell them and carry on with the old layout: one Skills & Certifications section.
+
 ## 2. Work out what the resume prints
 
 From `resume.yaml` and `targets/<id>.yaml`, by these rules (the program uses the same rules):
@@ -39,7 +41,7 @@ From `resume.yaml` and `targets/<id>.yaml`, by these rules (the program uses the
 - **Bullet text**: the `bullet_overrides` entry for that `id` if there is one, else the `resume.yaml` sentence.
 - **Title**: if `role` is an empty string, delete the whole `<span class="role">` (or it prints a dangling ", ").
 - **Dates**: exactly as `dates` in `resume.yaml` ("May 2024 – Aug 2025", "Expected May 2027", "Present"). No change of format. An empty string: delete that date div.
-- **Skills & Certifications**: if `skills_order` exists, print each line with the items word for word; otherwise use `skills` from `resume.yaml`, one category per line, items separated by commas. A line whose `items` is empty does not print.
+- **Skills**: if `skills_order` exists, print each line with the items word for word; otherwise use `skills` from `resume.yaml`, one category per line, items separated by commas. A line whose `items` is empty does not print. Lines labeled `Certifications` or `Training` do **not** go here: they print in the **Certifications** section, which is always the last section (after Projects & Activities), one line per label. The `Certifications` line prints **without its label** (the heading already says it): `<li>CPR certified, First Aid</li>`. A `Training` line keeps its label: `<li><span class="label">Training:</span> ...</li>`. No such line, or all empty: delete the whole Certifications section from the template (the program does the same).
 - **Basics**: name, phone, email and "City, State" from `basics`, and a link such as `linkedin.com/in/xxx` as visible text if `basics.links` has one. Delete the whole `<li>` of anything missing. No street address.
 
 **Copy only; never add.** Do not add: skills you thought of, requirements the posting wants that they lack, adjectives like "passionate learner", school names they did not give, titles you translated yourself.

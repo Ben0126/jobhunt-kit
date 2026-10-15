@@ -265,7 +265,8 @@ function fillUs(tail = ""): string {
       `    <div class="entry">\n      <div class="entry-head">\n        <div class="entry-title">City Library<span class="role">Volunteer</span></div>\n        <div class="entry-date">Sep 2024 – Dec 2024</div>\n      </div>\n      <ul>\n        <li>Shelved books.</li>\n      </ul>\n    </div>`,
   );
   h = h.replace(/\n  <section class="block">\s*<h2>Projects &amp; Activities<\/h2>[\s\S]*?<\/section>\n/, "\n");
-  h = h.replace(/\n  <section class="block">\s*<h2>Skills &amp; Certifications<\/h2>[\s\S]*?<\/section>\n/, "\n");
+  h = h.replace(/\n  <section class="block">\s*<h2>Skills<\/h2>[\s\S]*?<\/section>\n/, "\n");
+  h = h.replace(/\n  <section class="block">\s*<h2>Certifications<\/h2>[\s\S]*?<\/section>\n/, "\n");
   h = h.replace("</main>", `${tail}</main>`);
   if (/\{\{/.test(h.replace(/<!--[\s\S]*?-->/g, ""))) throw new Error(`test filler left a slot: ${/\{\{[^}]*\}\}/.exec(h.replace(/<!--[\s\S]*?-->/g, ""))?.[0]}`);
   return h;
@@ -290,7 +291,7 @@ test("範本 resume-us.html：Letter、一頁提醒、沒有照片、沒有中�
   expect(tplUs).not.toContain("Country");
   expect(tplUs).toContain("Save as PDF"); // English print hints
   expect(tplUs).toContain("A US resume should be one page");
-  for (const h of ["Summary", "Education", "Experience", "Projects &amp; Activities", "Skills &amp; Certifications"]) expect(tplUs).toContain(`<h2>${h}</h2>`);
+  for (const h of ["Summary", "Education", "Experience", "Projects &amp; Activities", "Skills", "Certifications"]) expect(tplUs).toContain(`<h2>${h}</h2>`);
   expect(scriptsOf(tplUs).length).toBe(1);
 });
 
@@ -339,10 +340,15 @@ test("美國版：認不出範本時猜英文版，不猜深色抬頭；台灣�
   expect(templateFor(changed, { template: "fancy" }, "us")).toEqual({ kind: "en", how: "guess" });
 });
 
-test("範本 resume-us.html 印出來的字（標題）和英文版範本一樣，只有聯絡欄位的說明不同", () => {
+test("範本 resume-us.html 印出來的字（標題）和英文版範本一樣，只有聯絡欄位的說明不同；例外：US 把 Certifications 獨立成最後一區（2026-10-14 決定），Skills 標題不再有「& Certifications」", () => {
   const en = readFileSync(join(import.meta.dir, "..", "..", "jobhunt", "scaffold", "workspace-general", "templates", "resume-en.html"), "utf-8");
   const words = (h: string) => templateWords(h).sort();
-  expect(words(tplUs)).toEqual(words(en));
+  const usAsEn = words(tplUs)
+    .filter((w) => w !== "Certifications")
+    .map((w) => (w === "Skills" ? "Skills & Certifications" : w))
+    .sort();
+  expect(usAsEn).toEqual(words(en));
+  expect(words(tplUs)).toContain("Certifications");
 });
 
 // ---------------------------------------------------------------- workspace-us/jobhunt.yaml

@@ -331,7 +331,9 @@ export function jobId(text, existing = [], today = new Date()) {
 
 export const SECTIONS = ["summary", "education", "experience", "projects", "skills"];
 export const BULLET_SECTIONS = ["experience", "projects"];
-export const TITLES = { summary: "Summary", education: "Education", experience: "Experience", projects: "Projects", skills: "Skills" };
+export const TITLES = { summary: "Summary", education: "Education", experience: "Experience", projects: "Projects", skills: "Skills", credentials: "Certifications" };
+/** Skills lines that move to the `credentials` section (printed last) when a resume lists that section in its order. */
+export const isCredentialLine = (l) => ["certifications", "certification", "training"].includes(String((l && l.label) || "").trim().toLowerCase());
 
 export class RuleError extends Error {}
 
@@ -402,8 +404,10 @@ export function resolve(data, variant) {
         const { bullets, variants, ...rest } = it;
         return { ...structuredClone(rest), bullets: (bullets || []).filter((b) => inVariant(b, variant)).map((b) => squash(b.text)) };
       });
-    } else if (kind === "skills") {
-      sec.lines = (data.skills || []).filter((l) => inVariant(l, variant)).map((l) => ({ label: l.label || "", items: [...(l.items || [])] }));
+    } else if (kind === "skills" || kind === "credentials") {
+      // only when `credentials` is in the order do certifications and training leave Skills; otherwise one section, as before
+      const split = order.includes("credentials");
+      sec.lines = (data.skills || []).filter((l) => inVariant(l, variant) && (!split || isCredentialLine(l) === (kind === "credentials")) && (kind !== "credentials" || (l.items || []).length > 0)).map((l) => ({ label: l.label || "", items: [...(l.items || [])] }));
     }
     if ((sec.items && !sec.items.length) || (sec.lines && !sec.lines.length)) continue;
     out.sections.push(sec);

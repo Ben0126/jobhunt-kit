@@ -148,3 +148,31 @@ def test_custom_renderer_module(workspace):
     cfg = config.load(workspace)
     (r,) = build.build(cfg, ["swe"])
     assert r.ok and r.pages == 1 and r.version == "V3.1.0-draft"      # jobhunt.yaml + module uncommitted
+
+
+def _credentials_data(sections):
+    return {
+        "basics": {"name": "Jane Doe"},
+        "variants": {"en": {"title": "English"}},
+        "sections": sections,
+        "education": [{"school": "State University", "degree": "B.A.", "dates": "2026"}],
+        "skills": [
+            {"label": "Software", "items": ["Excel"]},
+            {"label": "Certifications", "items": ["CPR certified"]},
+            {"label": "Languages", "items": ["Spanish (native)"]},
+            {"label": "Training", "items": []},
+        ],
+    }
+
+
+def test_credentials_section_is_opt_in_and_prints_last():
+    # same rules as web/js/core/rules.js (app/tests/credentials.test.ts): listed in the order -> Certifications/Training leave Skills
+    split = model.resolve(_credentials_data(["skills", "education", "credentials"]), "en")
+    assert [s["kind"] for s in split["sections"]] == ["skills", "education", "credentials"]
+    assert [l["label"] for l in split["sections"][0]["lines"]] == ["Software", "Languages"]
+    assert [l["label"] for l in split["sections"][2]["lines"]] == ["Certifications"]  # Training has no items: not printed
+    assert split["sections"][2]["title"] == "Certifications"
+    # not listed (older folders, the Taiwan variant): one skills section with every line, as before
+    old = model.resolve(_credentials_data(["skills", "education"]), "en")
+    assert [l["label"] for l in old["sections"][0]["lines"]] == ["Software", "Certifications", "Languages", "Training"]
+    model.validate(_credentials_data(["skills", "credentials"]) | {"variants": {"en": {"sections": ["skills", "credentials"]}}})

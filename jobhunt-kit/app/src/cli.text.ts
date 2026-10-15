@@ -25,6 +25,19 @@ const ZH = {
   modeNoKit: "這個資料夾不是合一版（沒有 .kit 資料夾），沒辦法換規則。請下載新版的求職資料夾。",
   modeNarrow: (name: string) => `這個資料夾已經是「找${name}的工作」，只能增加市場，不能拿掉。資料都還在，只是不會換規則。`,
   modeNotPlain: (path: string) => `「${path}」不是一般的檔案或資料夾（可能是捷徑），為了安全沒有換規則。`,
+  sectionsUsage: (cmd: string) => `用法：${cmd} resume-sections（只列出會改哪幾行，不會改檔案）；${cmd} resume-sections --yes（確定要改才加）。`,
+  sectionsNotUs: "這一步只用在美國版的履歷（要找美國工作的資料夾）。這個資料夾不用做，什麼都沒改。",
+  sectionsNoFile: "找不到 resume.yaml（履歷資料）。還沒有履歷資料的話，不用做這一步。",
+  sectionsNotPlain: "resume.yaml 不是一般的檔案（可能是捷徑），為了安全沒有改。",
+  sectionsAlready: "你的 resume.yaml 已經是新的排法了（Certifications 在最後一區），什麼都不用改。",
+  sectionsNoList: "你的 resume.yaml 沒有自己寫區塊順序（用預設順序），不用改。",
+  sectionsUnsupported: "你的 resume.yaml 的區塊順序（sections）不是一行寫完的格式，程式不敢自己改。請請 AI 照 workspace 範本的寫法，在 sections 最後加上 credentials。沒有改任何東西。",
+  sectionsUnreadable: "程式讀不懂你的 resume.yaml，或改完會和原本不一樣，所以什麼都沒改。請請 AI 看一下這個檔案。",
+  sectionsPreview: "會改這幾行（其他地方一個字都不動）：",
+  sectionsNote: (name: string) => `提醒：版本「${name}」有自己寫的區塊順序，這次沒動它。`,
+  sectionsNotYet: (cmd: string) => `還沒改。要改的話，確定後再執行：${cmd} resume-sections --yes`,
+  sectionsDone: (backup: string) => `改好了。改之前的檔案留了一份在 ${backup}。Certifications 和 Training 之後會印在履歷最後一區。`,
+  sectionsFailed: "寫檔失敗，沒有改到 resume.yaml。請再試一次。",
 };
 
 export type CliText = typeof ZH;
@@ -52,6 +65,19 @@ const EN: CliText = {
   modeNoKit: "This folder is not the one-for-all kit (it has no .kit folder), so its rules cannot be changed. Please download the new job-search folder.",
   modeNarrow: (name) => `This folder already looks for work in ${name}. A market can be added, not removed. All your files are still there; nothing was changed.`,
   modeNotPlain: (path) => `"${path}" is not a plain file or folder (it may be a shortcut), so for safety the rules were not changed.`,
+  sectionsUsage: (cmd) => `Usage: ${cmd} resume-sections (only lists the lines it would change; changes no file); ${cmd} resume-sections --yes (add this when you are sure).`,
+  sectionsNotUs: "This step is only for a United States resume (a folder that looks for work in the United States). Nothing to do here, and nothing was changed.",
+  sectionsNoFile: "resume.yaml (your resume data) was not found. If you have no resume data yet there is nothing to do.",
+  sectionsNotPlain: "resume.yaml is not a plain file (it may be a shortcut), so for safety it was not changed.",
+  sectionsAlready: "Your resume.yaml already has the new layout (Certifications is the last section). Nothing to change.",
+  sectionsNoList: "Your resume.yaml does not list its own section order (it uses the default one). Nothing to change.",
+  sectionsUnsupported: "The section order (sections) in your resume.yaml is not on a single line, so the program will not edit it by itself. Ask the AI to add credentials at the end of sections, as in the workspace template. Nothing was changed.",
+  sectionsUnreadable: "The program could not read your resume.yaml, or the edit would have changed something else too, so nothing was changed. Ask the AI to look at the file.",
+  sectionsPreview: "These lines would change (nothing else is touched):",
+  sectionsNote: (name) => `Note: the version "${name}" has its own section order, and it was left alone.`,
+  sectionsNotYet: (cmd) => `Nothing was changed yet. When you are sure, run: ${cmd} resume-sections --yes`,
+  sectionsDone: (backup) => `Done. A copy of the file as it was before is in ${backup}. Certifications and Training now print in the last section of the resume.`,
+  sectionsFailed: "The file could not be written, so resume.yaml was not changed. Please try again.",
 };
 
 export const TABLES: Record<Language, CliText> = { "zh-TW": ZH, en: EN };

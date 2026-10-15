@@ -140,7 +140,7 @@
     </ul>
   </header>
 
-  <!-- Section order: Summary, Skills & Certifications, Education, Experience, Projects & Activities (skills first so a reader sees at once what you can do) -->
+  <!-- Section order: Summary, Skills, Education, Experience, Projects & Activities, Certifications (skills first so a reader sees at once what you can do; certifications and training go last) -->
 
   <section class="block">
     <h2>Summary</h2>
@@ -148,9 +148,9 @@
   </section>
 
   <section class="block">
-    <h2>Skills &amp; Certifications</h2>
+    <h2>Skills</h2>
     <ul class="skills">
-      <!-- repeat: one li per category, for example Languages: / Certifications: / Software: -->
+      <!-- repeat: one li per category, for example Software: / Languages: (not Certifications or Training: those go in the last section) -->
       <li><span class="label">{{Label}}:</span> {{item, item}}</li>
       <!-- end repeat -->
     </ul>
@@ -202,6 +202,17 @@
       </ul>
     </div>
     <!-- end repeat -->
+  </section>
+
+  <!-- Last section: only the lines labeled Certifications and Training (formal credentials, online courses, badges). Delete the whole section if there are none.
+       The Certifications line prints WITHOUT its label (the heading already says it): <li>{{item, item}}</li>. A Training line keeps its label: <li><span class="label">Training:</span> {{item, item}}</li>. -->
+  <section class="block">
+    <h2>Certifications</h2>
+    <ul class="skills">
+      <!-- repeat: one li per line -->
+      <li>{{item, item}}</li>
+      <!-- end repeat -->
+    </ul>
   </section>
 
 </main>

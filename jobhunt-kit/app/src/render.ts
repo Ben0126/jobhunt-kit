@@ -17,10 +17,10 @@ const SOURCE: Record<TemplateKind, string> = { tw: tplTw, "tw-classic": tplTwCla
 const ZH = (k: TemplateKind) => k === "tw" || k === "tw-classic";
 
 const TITLES_ZH: Record<string, string> = {
-  summary: "自我介紹", education: "學歷", experience: "工作與社團經歷", projects: "專題與活動", skills: "專長、證照與語言",
+  summary: "自我介紹", education: "學歷", experience: "工作與社團經歷", projects: "專題與活動", skills: "專長、證照與語言", credentials: "證照與進修",
 };
 const TITLES_EN: Record<string, string> = {
-  summary: "Summary", education: "Education", experience: "Experience", projects: "Projects & Activities", skills: "Skills & Certifications",
+  summary: "Summary", education: "Education", experience: "Experience", projects: "Projects & Activities", skills: "Skills & Certifications", credentials: "Certifications",
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -42,9 +42,10 @@ function entry(title: string, role: string, dates: string, sub: string, bullets:
 
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.map(line).filter(Boolean) : v ? [line(v)] : []);
 
-function section(kind: TemplateKind, sec: any): string {
+/** `split`: the resume lists a `credentials` section, so Skills no longer holds certifications ("Skills", not "Skills & Certifications"). */
+function section(kind: TemplateKind, sec: any, split = false): string {
   const zh = ZH(kind);
-  const title = (zh ? TITLES_ZH : TITLES_EN)[sec.kind] ?? sec.title ?? sec.kind;
+  const title = split && sec.kind === "skills" && !zh ? "Skills" : (zh ? TITLES_ZH : TITLES_EN)[sec.kind] ?? sec.title ?? sec.kind;
   let body = "";
   if (sec.kind === "summary") body = `<p class="summary">${esc(line(sec.text))}</p>`;
   else if (sec.kind === "education")
@@ -53,10 +54,11 @@ function section(kind: TemplateKind, sec: any): string {
     body = (sec.items || []).map((e: any) => entry(line(e.org), line(e.role), line(e.dates), line(e.location), strs(e.bullets))).join("");
   else if (sec.kind === "projects")
     body = (sec.items || []).map((e: any) => entry(line(e.name), "", line(e.dates), "", strs(e.bullets))).join("");
-  else if (sec.kind === "skills") {
+  else if (sec.kind === "skills" || sec.kind === "credentials") {
     const join = zh ? "、" : ", ";
     const items = (sec.lines || []).map((l: any) => {
-      const label = line(l.label);
+      // the Certifications section's own heading already says "Certifications": that line prints without its label
+      const label = sec.kind === "credentials" && /^certifications?$/i.test(line(l.label)) ? "" : line(l.label);
       const text = strs(l.items).join(join);
       // 中文範本：類別後面接全形「：」，項目直接接；英文範本：「Label:」後面一個空白
       return label
@@ -84,7 +86,8 @@ function header(kind: TemplateKind, b: any, photo: boolean): string {
 /** `doc` is R.resolve(...)'s result. `photo`: draw the template's photo frame (the viewer fills it in, or hides it). */
 export function renderResume(kind: TemplateKind, doc: any, opts: { photo?: boolean } = {}): string {
   const name = line(doc?.basics?.name);
-  const body = (doc?.sections || []).map((s: any) => section(kind, s)).join("");
+  const split = (doc?.sections || []).some((s: any) => s.kind === "credentials");
+  const body = (doc?.sections || []).map((s: any) => section(kind, s, split)).join("");
   return (
     `<!DOCTYPE html><html lang="${ZH(kind) ? "zh-Hant-TW" : "en"}"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(name)}</title>${styleOf(kind)}</head>` +

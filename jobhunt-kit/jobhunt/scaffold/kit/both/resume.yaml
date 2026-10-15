@@ -28,14 +28,15 @@ variants:
   en: {title: English, major: 1}
   tw: {title: 中文履歷, major: 2, one_page: false, sections: [summary, education, experience, projects, skills]}
 
-sections: [summary, skills, education, experience, projects]   # skills before education: a reader sees at once what you can do
+sections: [summary, skills, education, experience, projects, credentials]   # skills before education: a reader sees at once what you can do; credentials (Certifications and Training lines of `skills`) print last
 
 section_titles:
   summary: Summary
   education: Education
   experience: Experience
   projects: Projects & Activities
-  skills: Skills & Certifications
+  skills: Skills
+  credentials: Certifications
 
 # Summary: leave empty here. Each resume's summary lives in targets/<id>.yaml, and counts only after the user confirmed it.
 summary:

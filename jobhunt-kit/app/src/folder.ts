@@ -63,7 +63,7 @@ export function resolveDataDir(argv: string[], execPath = process.execPath): str
  * else would let them read Word files or write checks/ in another folder unasked. Development (bun src/main.ts) and
  * opening the UI keep the flag. */
 export function dirFlagRefused(command: string | undefined, argv: string[], execPath = process.execPath): boolean {
-  return (command === "check" || command === "read" || command === "update" || command === "mode") && isCompiledBinary(execPath) && argv.some((a) => /^--(?:dir|folder)(?:=|$)/.test(a));
+  return (command === "check" || command === "read" || command === "update" || command === "mode" || command === "resume-sections") && isCompiledBinary(execPath) && argv.some((a) => /^--(?:dir|folder)(?:=|$)/.test(a));
 }
 
 export function looksLikeJobhuntFolder(dir: string): boolean {

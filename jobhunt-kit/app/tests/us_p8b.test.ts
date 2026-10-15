@@ -422,8 +422,8 @@ test("M6: Arabic-Indic digits are read as digits", async () => {
 
 // ---- M7: what the printed resume file may say
 
-async function resumeFileMessages(o: { resume?: string; target?: string; swap?: [string, string][] }): Promise<string[]> {
-  const dir = usFolder({ resume: o.resume, extra: { "targets/t1.yaml": o.target ?? TARGET("Marketing graduate.") } });
+async function resumeFileMessages(o: { resume?: string; target?: string; swap?: [string, string][]; extra?: Record<string, string> }): Promise<string[]> {
+  const dir = usFolder({ resume: o.resume, extra: { "targets/t1.yaml": o.target ?? TARGET("Marketing graduate."), ...o.extra } });
   const tpl = readFileSync(join(import.meta.dir, "..", "..", "jobhunt", "scaffold", "workspace-us", "templates", "resume-us.html"), "utf-8");
   const body = `<main class="page" id="page">
   <header class="top"><h1 class="name">Ana Ribeiro</h1><ul class="contact"><li>ana.ribeiro@gmail.com</li></ul></header>
@@ -462,6 +462,32 @@ test("M7: the printed file may not carry a title, employer or place through an e
   // a location that is an organization (two commas) is refused, a plain place is fine
   expect(has(await rd(usFolder({ resume: edit(RESUME, "    role: Sales Associate\n", '    role: Sales Associate\n    location: "Amazon HQ, Seattle, WA"\n') })), "not a plain place")).toBe(true);
   await rdOk(usFolder({ resume: edit(RESUME, "    role: Sales Associate\n", '    role: Sales Associate\n    location: "Columbus, OH"\n') }));
+});
+
+// ---- the Certifications section (last): its `Certifications` line prints without a label, `Training` keeps one
+
+const CPR_CARD: Card = { title: "CPR", conf: "Certifications: CPR certified" };
+const COURSE_CARD: Card = { title: "Course", conf: "Training: Google Sheets course (online)" };
+const WITH_CREDENTIALS = edit(
+  edit(RESUME, "sections: [summary, education, experience, projects, skills]", "sections: [summary, education, experience, projects, skills, credentials]"),
+  "variants: [en]}\n`".slice(0, 0) + "  - {label: Languages,",
+  "  - {label: Certifications, items: [CPR certified], sources: [S-008], variants: [en]}\n  - {label: Training, items: [Google Sheets course (online)], sources: [S-009], variants: [en]}\n  - {label: Languages,",
+);
+const credentialsFile = (certLine: string): { resume: string; extra: Record<string, string>; swap: [string, string][] } => ({
+  resume: WITH_CREDENTIALS,
+  extra: { "me/stories/S-008.md": story("S-008", CPR_CARD), "me/stories/S-009.md": story("S-009", COURSE_CARD) },
+  swap: [
+    ["Skills &amp; Certifications", "Skills"],
+    ["</section>\n</main>", `</section>\n  <section class="block"><h2>Certifications</h2><ul class="skills">${certLine}<li><span class="label">Training:</span> Google Sheets course (online)</li></ul></section>\n</main>`],
+  ],
+});
+
+test("Certifications section: the label-less Certifications line and the labeled Training line pass the resume-file check", async () => {
+  expect(await resumeFileMessages(credentialsFile("<li>CPR certified</li>"))).toEqual([]);
+});
+
+test("Certifications section: an item that is not on a confirmed card is still refused there", async () => {
+  expect((await resumeFileMessages(credentialsFile("<li>CPR certified, Salesforce Certified Administrator</li>"))).length).toBeGreaterThan(0);
 });
 
 // ---- M8: the label of a skills line
