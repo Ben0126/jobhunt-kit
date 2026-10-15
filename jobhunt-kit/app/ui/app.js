@@ -15,6 +15,58 @@ function enStamp(s) {
 const TEXT = {
   "zh-TW": {
     pageTitle: "求職小幫手",
+    guideTitle: "第一次用？照這 5 步走",
+    guideIntro: "你跟 AI 的對話，在 Claude 或 Codex 的視窗裡進行。這個頁面是你的儀表板：看進度、檢查履歷、存成 PDF。AI 不會編經歷，每一段都要你確認過才會進履歷。",
+    guideSayLabel: "對 AI 說：",
+    guideStepWord: (n) => `第 ${n} 步`,
+    guideNow: "現在做這個",
+    guideDone: "完成",
+    guideLater: "之後",
+    guideGoResumes: "去「履歷」頁",
+    guideGoProgress: "去「進度」頁",
+    guideGoJobs: "去「職缺」頁",
+    guideAllDone: "5 步都走過了。之後每遇到一個新職缺，重複第 4、5 步就好。",
+    guideWhere: { us: "「職缺」頁，或公司官網", tw: "104 或公司官網", both: "「職缺」頁（美國）、104（台灣）或公司官網" },
+    guideSteps: [
+      {
+        title: "把你做過的事告訴 AI",
+        body: "打工、社團、專題、志工、實習都算。有舊履歷最快：把文字貼給 AI，或把 Word 檔放進資料夾裡的 inbox（放之前先刪掉生日、身分證、地址）。沒有舊履歷也行，AI 會一題一題問你。",
+        say: ["幫我看 inbox 裡的履歷", "我沒有舊履歷，請一題一題問我做過哪些事"],
+      },
+      {
+        title: "一張一張確認",
+        body: "AI 整理好一段，就給你一張「確認卡」。內容沒錯，打「確認 S-003」（只回「好」不算）；有錯，說哪裡要改。沒確認的內容不會進履歷。",
+        say: ["幫我確認還沒確認的經歷"],
+      },
+      {
+        title: "看看你的履歷",
+        body: "確認過的經歷會排成一份通用版履歷，在「履歷」頁看得到。哪裡不對，回去跟 AI 說；滿意再存成 PDF。",
+        say: [],
+      },
+      {
+        title: "找一個想投的職缺，針對它微調履歷",
+        body: (where) => `先在${where}找到職缺。把職缺內容貼給 AI，先問適不適合，再請它針對這個職缺改履歷。改好的版本會出現在「履歷」頁，不會動到通用版。`,
+        say: ["這個職缺適合我嗎？（接著貼上職缺內容）", "幫我針對這個職缺改履歷"],
+      },
+      {
+        title: "投出去之後記下來",
+        body: "自己到公司網站或求職網站投遞。投完跟 AI 說一聲，它會記在「進度」頁，之後提醒你什麼時候該追蹤。",
+        say: ["我投了某某公司的某某職缺"],
+      },
+    ],
+    guideStatus: {
+      stories: (n) => `已整理 ${n} 段經歷`,
+      noStories: "還沒有任何經歷",
+      waitStep1: "等第 1 步",
+      confirmedLeft: (done, left) => `已確認 ${done} 段，還有 ${left} 段沒確認`,
+      confirmed: (n) => `已確認 ${n} 段`,
+      resumeReady: "通用版履歷已經排好",
+      resumeNotYet: "確認第一段經歷後會出現",
+      tailored: (n) => `已有 ${n} 份針對職缺的履歷`,
+      noTailored: "還沒有針對職缺的履歷",
+      applied: (n) => `已記錄 ${n} 筆`,
+      noApplied: "還沒有記錄",
+    },
     offline: "連不到程式。程式的視窗是不是被關掉了？請再點兩下程式打開。",
     genericError: "出了點問題，請再試一次。",
     gotIt: "知道了",
@@ -207,6 +259,58 @@ const TEXT = {
   },
   en: {
     pageTitle: "Job Search Helper",
+    guideTitle: "First time here? Follow these 5 steps",
+    guideIntro: "You talk to the AI in the Claude or Codex window. This page is your dashboard: see your progress, check your resume, save it as a PDF. The AI never makes up experience. Every piece goes on your resume only after you confirm it.",
+    guideSayLabel: "Say to the AI:",
+    guideStepWord: (n) => `Step ${n}`,
+    guideNow: "Do this now",
+    guideDone: "Done",
+    guideLater: "Later",
+    guideGoResumes: "Open the Resumes tab",
+    guideGoProgress: "Open the Progress tab",
+    guideGoJobs: "Open the Jobs tab",
+    guideAllDone: "You have been through all 5 steps. For every new job, repeat steps 4 and 5.",
+    guideWhere: { us: "the Jobs tab or a company's own site", tw: "104 or a company's own site", both: "the Jobs tab (United States), 104 (Taiwan) or a company's own site" },
+    guideSteps: [
+      {
+        title: "Tell the AI what you have done",
+        body: "Part-time jobs, clubs, class projects, volunteering and internships all count. An old resume is the fastest start: paste its text to the AI, or put the Word file in the folder's inbox (delete your date of birth, ID numbers and address first). No old resume is fine too; the AI asks you one question at a time.",
+        say: ["Look at the resume in my inbox", "I have no old resume. Ask me what I have done, one question at a time"],
+      },
+      {
+        title: "Confirm each one",
+        body: 'For each experience the AI gives you a confirmation card. If it is right, type "confirm S-003" (just "ok" does not count). If something is wrong, say what to change. Anything you have not confirmed stays off your resume.',
+        say: ["Help me confirm the experiences I have not confirmed yet"],
+      },
+      {
+        title: "Look at your resume",
+        body: "Your confirmed experience is laid out as a general resume on the Resumes tab. If something is off, tell the AI. When you like it, save it as a PDF.",
+        say: [],
+      },
+      {
+        title: "Find a job you want, then tune your resume for it",
+        body: (where) => `Find a posting on ${where}. Paste its text to the AI, ask if it fits, then ask it to tailor your resume to that job. The tailored version shows up on the Resumes tab and does not touch the general one.`,
+        say: ["Does this job fit me? (then paste the posting)", "Tailor my resume for this job"],
+      },
+      {
+        title: "After you apply, write it down",
+        body: "Apply yourself, on the company's site or a job board. Then tell the AI. It records it on the Progress tab and reminds you when to follow up.",
+        say: ["I applied to [company] for [role]"],
+      },
+    ],
+    guideStatus: {
+      stories: (n) => `${n} written up`,
+      noStories: "No experience yet",
+      waitStep1: "Waiting for step 1",
+      confirmedLeft: (done, left) => `${done} confirmed, ${left} still waiting`,
+      confirmed: (n) => `${n} confirmed`,
+      resumeReady: "The general resume is ready",
+      resumeNotYet: "It appears after you confirm your first experience",
+      tailored: (n) => `${n} tailored`,
+      noTailored: "No tailored resume yet",
+      applied: (n) => `${n} recorded`,
+      noApplied: "Nothing recorded yet",
+    },
     offline: "Cannot reach the program. Was its window closed? Open the program again.",
     genericError: "Something went wrong. Please try again.",
     gotIt: "Got it",
@@ -420,7 +524,7 @@ let INFO = LANG === "en" ? { market: "us", paper: "letter", markets: ["us"], mod
 const tabKnown = () =>
   !INFO.modeSet
     ? ["start", "nokey"]
-    : ["progress", ...(INFO.markets.includes("us") ? ["jobs"] : []), "resumes", ...(INFO.markets.includes("tw") ? ["104"] : []), "nokey"];
+    : ["guide", "progress", ...(INFO.markets.includes("us") ? ["jobs"] : []), "resumes", ...(INFO.markets.includes("tw") ? ["104"] : []), "nokey"];
 
 const ACTIVE = ["todo", "applied", "oa", "interview", "offer"];
 const CLOSED = ["rejected", "ghosted", "withdrawn"];
@@ -590,9 +694,13 @@ async function checkUpdate() {
 
 // ---- 分頁
 /** The tab the address asks for, or "progress" when it is unknown (or hidden for this country). */
+/** Where the bare address lands: a folder with nothing confirmed and nothing tracked yet starts on the guide, everyone else on Progress. */
+function defaultTab() {
+  return GUIDE && GUIDE.confirmed === 0 && GUIDE.applications === 0 ? "guide" : "progress";
+}
 function currentTab() {
   if (token && !INFO.modeSet) return "start";
-  const tab = token ? (location.hash.replace("#", "") || "progress") : "nokey";
+  const tab = token ? (location.hash.replace("#", "") || defaultTab()) : "nokey";
   return tabKnown().includes(tab) ? tab : "progress";
 }
 
@@ -604,6 +712,7 @@ function showTab() {
     if (a.dataset.tab === known) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
+  if (known === "guide") loadGuide();
   if (known === "progress") loadBoard();
   if (known === "resumes") loadResumes();
   if (known === "104") load104();
@@ -617,7 +726,7 @@ $("start-form").addEventListener("submit", async (e) => {
   const markets = v === "both" ? ["us", "tw"] : [v];
   try {
     await api("POST", "/api/mode", { markets });
-    location.hash = "#progress";
+    location.hash = "#guide";
     location.reload();
   } catch (err) {
     fail(err);
@@ -631,6 +740,77 @@ $("lang-switch").addEventListener("click", async () => {
     fail(err);
   }
 });
+
+// ---- 開始用（第一次用的導覽）
+async function loadGuide() {
+  try {
+    GUIDE = await api("GET", "/api/guide");
+    renderGuide(GUIDE);
+    loaded();
+  } catch (e) {
+    fail(e);
+  }
+}
+
+function renderGuide(g) {
+  const S = T.guideStatus;
+  const us = INFO.markets.includes("us");
+  const where = T.guideWhere[us && INFO.markets.includes("tw") ? "both" : us ? "us" : "tw"];
+  const plan = [
+    { done: g.stories > 0, status: g.stories > 0 ? S.stories(g.stories) : S.noStories },
+    {
+      done: g.stories > 0 && g.confirmed > 0 && g.drafts === 0,
+      status: g.stories === 0 ? S.waitStep1 : g.drafts ? S.confirmedLeft(g.confirmed, g.drafts) : S.confirmed(g.confirmed),
+    },
+    { done: g.bullets > 0, status: g.bullets > 0 ? S.resumeReady : S.resumeNotYet, go: ["resumes", T.guideGoResumes] },
+    { done: g.tailored > 0, status: g.tailored > 0 ? S.tailored(g.tailored) : S.noTailored, go: us ? ["jobs", T.guideGoJobs] : null },
+    { done: g.applications > 0, status: g.applications > 0 ? S.applied(g.applications) : S.noApplied, go: ["progress", T.guideGoProgress] },
+  ];
+  const now = plan.findIndex((x) => !x.done);
+  $("guide").replaceChildren(
+    h("h2", {}, T.guideTitle),
+    h("p", { class: "lead" }, T.guideIntro),
+    ...T.guideSteps.map((text, i) => {
+      const st = plan[i];
+      const state = st.done ? "done" : i === now ? "now" : "later";
+      return h(
+        "details",
+        { class: `step ${state}`, open: state === "now" },
+        h(
+          "summary",
+          {},
+          h("span", { class: "num" }, st.done ? "✓" : String(i + 1)),
+          h("span", { class: "ttl" }, h("span", { class: "stepword" }, T.guideStepWord(i + 1)), " ", text.title),
+          h("span", { class: `pill ${st.done ? "ok" : i === now ? "wait" : ""}` }, st.done ? T.guideDone : i === now ? T.guideNow : T.guideLater),
+        ),
+        h(
+          "div",
+          { class: "stepbody" },
+          h("p", { class: "status" }, st.status),
+          h("p", {}, typeof text.body === "function" ? text.body(where) : text.body),
+          ...text.say.map((words) => {
+            const btn = h(
+              "button",
+              {
+                type: "button",
+                onclick: async () => {
+                  if (await copyText(words)) {
+                    btn.textContent = T.copied;
+                    btn.classList.add("done");
+                  } else notice(T.copyFailed, true);
+                },
+              },
+              T.copy,
+            );
+            return h("div", { class: "say" }, h("span", { class: "hint" }, T.guideSayLabel), h("q", {}, words), btn);
+          }),
+          st.go ? h("p", {}, h("a", { class: "gobtn", href: `#${st.go[0]}` }, st.go[1])) : null,
+        ),
+      );
+    }),
+    ...(now === -1 ? [h("p", { class: "result ok" }, T.guideAllDone)] : []),
+  );
+}
 
 // ---- 進度看板
 let board = null;
@@ -674,6 +854,8 @@ async function loadBoard() {
 }
 
 let infoCache = null;
+/** What /api/guide says (counts only); null until it answers, or when it cannot. */
+let GUIDE = null;
 async function folderInfo() {
   if (!infoCache) infoCache = await api("GET", "/api/info").catch(() => null);
   return infoCache;
@@ -1766,6 +1948,9 @@ folderInfo().then((info) => {
   for (const a of document.querySelectorAll('.tabs a[data-tab="jobs"]')) a.hidden = !INFO.markets.includes("us");
   // until they say where they look for work, the start screen is the only page
   document.querySelector(".tabs").hidden = !INFO.modeSet;
+  // a bare address lands on the guide for a brand-new folder: ask before choosing the page
+  return token && INFO.modeSet && !location.hash ? api("GET", "/api/guide").then((g) => void (GUIDE = g), () => {}) : null;
+}).then(() => {
   showTab();
   if (token) checkUpdate();
 });

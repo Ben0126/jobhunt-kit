@@ -49,6 +49,10 @@ def main() -> int:
 
             page.get_by_text("兩邊都找").click()
             page.get_by_role("button", name="開始").click()
+            # a brand-new folder lands on the guide, with step 1 as "now"
+            expect(page.locator("#page-guide")).to_be_visible()
+            expect(page.locator(".step.now")).to_have_count(1)
+            page.locator('.tabs a[data-tab="progress"]').click()
             expect(page.locator("#page-progress")).to_be_visible()
             expect(page.locator('.tabs a[data-tab="104"]')).to_be_visible()
             expect(page.locator('.tabs a[data-tab="jobs"]')).to_be_visible()

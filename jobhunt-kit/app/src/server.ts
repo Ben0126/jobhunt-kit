@@ -193,6 +193,38 @@ function frontMatter(text: string): any {
   }
 }
 
+export type GuideInfo = { stories: number; confirmed: number; drafts: number; bullets: number; tailored: number };
+
+/** For the first-time guide: how far along the folder is (experiences told / confirmed, bullets in resume.yaml, tailored resumes).
+ * Counts only; the page decides which step is "now". Applications come from the board, not from here. */
+export async function guideInfo(folder: Folder): Promise<GuideInfo> {
+  let stories = 0;
+  let confirmed = 0;
+  let drafts = 0;
+  for (const name of folder.list("me/stories", "file")) {
+    if (!/\.md$/i.test(name)) continue;
+    let text: string | null = null;
+    try {
+      text = await folder.readText(`me/stories/${name}`);
+    } catch {}
+    const fm = text ? frontMatter(text) : null;
+    const st = fm ? String(fm.status ?? "").trim() : "";
+    if (st === "draft") drafts++;
+    else if (st === "confirmed") confirmed++;
+    else continue; // deleted or unreadable: not part of the story
+    stories++;
+  }
+  let bullets = 0;
+  try {
+    const r: any = await folder.readYaml("resume.yaml");
+    if (r && typeof r === "object")
+      for (const sec of Object.values(r))
+        if (Array.isArray(sec)) for (const it of sec) if (it && Array.isArray(it.bullets)) bullets += it.bullets.filter((b: any) => b && b.text != null).length;
+  } catch {}
+  const tailored = folder.list("targets", "file").filter((n) => /\.ya?ml$/i.test(n)).length;
+  return { stories, confirmed, drafts, bullets, tailored };
+}
+
 export type Rewrite = { bullet: string; before: string | null; after: string; parts: DiffPart[] };
 export type ResumeInfo = {
   drafts: { id: string; title: string }[];
@@ -642,6 +674,8 @@ export function startServer(opts: {
           if (!name || !existsSync(idx)) return json({ available: false, facts: null });
           return json({ available: true, facts: h1bLookup(idx, [name])[name] ?? null });
         }
+        case "GET /api/guide":
+          return json({ ...(await guideInfo(folder)), applications: (await apps.board()).rows.length });
         case "GET /api/resume-info":
           return json(await resumeInfo(folder));
         case "GET /api/versions":

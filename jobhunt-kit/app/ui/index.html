@@ -11,6 +11,7 @@
 <header class="top">
   <h1>求職小幫手</h1>
   <nav class="tabs" aria-label="分頁">
+    <a href="#guide" data-tab="guide">開始用</a>
     <a href="#progress" data-tab="progress">進度</a>
     <a href="#resumes" data-tab="resumes">履歷</a>
     <a href="#jobs" data-tab="jobs" hidden>職缺</a>
@@ -32,6 +33,10 @@
       <label class="choice"><input type="radio" name="mode" value="both"><span class="t">兩邊都找</span><span class="d">經歷只整理一份。以英文為主；要投 104 或需要中文履歷時，再加上中文。</span></label>
       <div class="actions"><button type="submit" class="primary">開始</button></div>
     </form>
+  </section>
+
+  <section id="page-guide" class="page guide" hidden>
+    <div id="guide"></div>
   </section>
 
   <section id="page-progress" class="page" hidden>

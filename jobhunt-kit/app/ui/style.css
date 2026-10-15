@@ -296,3 +296,24 @@ table.jobs td.sponsor { white-space: nowrap; color: var(--muted); }
 .start-form .choice .t { font-weight: 700; font-size: 18px; }
 .start-form .choice .d { color: var(--muted); font-size: 14px; }
 .start-form .choice:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* ---- 開始用（第一次用的導覽） */
+.guide { max-width: 760px; }
+.guide h2 { font-size: 22px; margin: 8px 0 8px; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 12px; }
+.step.now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.step.later { opacity: .8; }
+.step summary { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; font-size: 18px; font-weight: 600; }
+.step summary::-webkit-details-marker { display: none; }
+.step .num { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; background: #ecebe6; color: var(--muted); }
+.step.now .num { background: var(--accent); color: var(--accent-ink); }
+.step.done .num { background: #e3f1ea; color: #1d5b3f; }
+.step .ttl { flex: 1; }
+.step .stepword { color: var(--muted); font-size: 13px; font-weight: 400; margin-right: 4px; }
+.stepbody { padding: 0 16px 16px 56px; }
+.stepbody p { margin: 0 0 8px; }
+.stepbody .status { color: var(--muted); font-size: 13px; }
+.say { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.say q { background: #f1f0eb; border-radius: var(--radius); padding: 4px 12px; }
+.gobtn { display: inline-block; padding: 4px 16px; border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent); font-weight: 600; text-decoration: none; }
+.gobtn:hover { background: #e7f3ef; }
